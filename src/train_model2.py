@@ -48,6 +48,8 @@ class Learner2(object):
 
         self.k = args.c_inv
         self.load_to_eval = args.load_to_eval
+        self.split_mode = getattr(args, 'split_mode', 'competition')
+        self.es_frac = getattr(args, 'es_frac', 0.1)
 
 
     def train(self):
@@ -64,9 +66,32 @@ class Learner2(object):
             all_dat = pd.read_csv('../rec_datasets/WM_KuaiRand/KuaiRand_subset.csv') 
             all_dat = cal_ground_truth(all_dat, self.dat_name)
 
-            train_dat = all_dat[(all_dat['date']<=20220421) & (all_dat['date']>=20220408)]
-            vali_dat = all_dat[(all_dat['date']<=20220428) & (all_dat['date']>=20220422)]
-            test_dat = all_dat[(all_dat['date']<=20220508) & (all_dat['date']>=20220429)]
+            if self.split_mode == 'cwm':
+                # Original paper split. Reproduces Table 5, but vali overlaps the
+                # competition validation half and test IS the competition test half.
+                # Reproduction checks only - never for competition runs.
+                train_dat = all_dat[(all_dat['date']<=20220421) & (all_dat['date']>=20220408)]
+                vali_dat = all_dat[(all_dat['date']<=20220428) & (all_dat['date']>=20220422)]
+                test_dat = all_dat[(all_dat['date']<=20220508) & (all_dat['date']>=20220429)]
+            else:
+                # Competition split. Early stopping gets a time-ordered tail of the
+                # training period, so the competition validation half is never used
+                # to select anything. The test half is never materialised at all.
+                train_all = all_dat[(all_dat['date']>=20220408) & (all_dat['date']<=20220421)]
+                train_all = train_all.sort_values('time_ms', kind='mergesort')
+                es_cut = int(len(train_all) * (1 - self.es_frac))
+                train_dat = train_all.iloc[:es_cut]
+                vali_dat = train_all.iloc[es_cut:]
+
+                later = all_dat[(all_dat['date']>=20220422) & (all_dat['date']<=20220508)]
+                later = later.sort_values('time_ms', kind='mergesort')
+                test_dat = later.iloc[:len(later)//2].copy()   # competition VALIDATION half
+                del later
+
+                print('[split_mode=competition] train %d (%d-%d) | early-stop %d (%d-%d) | report-on-val %d (%d-%d)' % (
+                    len(train_dat), train_dat['date'].min(), train_dat['date'].max(),
+                    len(vali_dat), vali_dat['date'].min(), vali_dat['date'].max(),
+                    len(test_dat), test_dat['date'].min(), test_dat['date'].max()))
 
         elif self.dat_name == 'WeChat':
             all_dat = pd.read_csv('../rec_datasets/WM_WeChat/WeChat_subset.csv')

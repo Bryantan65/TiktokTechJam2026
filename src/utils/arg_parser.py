@@ -35,6 +35,15 @@ def config_param_parser():
     parser.add_argument('--batch_size', type=int, default=512)
     parser.add_argument('--patience', type=int, default=5, help="waiting patience for early stop")
     parser.add_argument('--drop_out', type=float, default=0.1)
+
+    # TechJam Track 2 splits. 'competition' is the default: early stopping uses a
+    # time-ordered tail of the training period, reported metrics use the
+    # competition validation half, and the held-out test half is never loaded.
+    # 'cwm' restores the paper's original split and reproduces Table 5, but it
+    # reads the competition test half - use it only for reproduction checks.
+    parser.add_argument('--split_mode', type=str, default='competition', choices=['competition', 'cwm'])
+    parser.add_argument('--es_frac', type=float, default=0.1,
+                        help='fraction of the training period held out for early stopping')
     return parser
 
 

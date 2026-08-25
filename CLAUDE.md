@@ -1,0 +1,74 @@
+# CLAUDE.md
+
+TechJam 2026 Track 2. Build an agent that autonomously improves this pipeline.
+Vendored from the CWM paper repo (hyz20/CWM, arXiv 2406.07932); `upstream` still
+points there. See `RESULTS.md` for the results ledger.
+
+## Run it
+
+```bash
+cd src
+../.venv/Scripts/python.exe prepare_data.py --group_num 60 --windows_size 3 --eps 0.5 --dat_name KuaiRand --is_load 0
+../.venv/Scripts/python.exe main.py --fout ../rec_datasets/WM_KuaiRand/<name> --dat_name KuaiRand \
+    --model_name FM --label_name CWM --sigma 2 --c_inv 40 --randseed 61 --load_to_eval 0
+../.venv/Scripts/python.exe comp/evaluate_comp.py --fout ../rec_datasets/WM_KuaiRand/<name> --split val
+```
+
+`.venv` = Python 3.12 / torch 2.6.0+cu124 / pandas 3.0.5 / numpy 2.5.2.
+`--load_to_eval 1` re-scores a saved checkpoint without retraining (seconds).
+Training ~6 min on the RTX 3060 Ti; scoring ~10 s.
+
+## Splits — never touch test
+
+`train 04-09..04-21` · `val = first 50% by time_ms of 04-22..05-08` · `test = last 50%`.
+
+`--split_mode competition` (default) early-stops on a time-ordered tail of the
+training period and never loads the test half. `--split_mode cwm` restores the
+paper's split — it reads the competition test half, so use it only for
+reproduction checks.
+
+`comp/evaluate_comp.py` refuses `--split test` without `--allow_test`.
+
+## Scoring
+
+Label `is_click`, NDCG@10 and Recall@50, score = mean of per-metric absolute
+delta over the baseline. Unknowns are config switches in `comp/evaluate_comp.py`
+(`candidate_set`, `zero_positive`, `split_point`) — do not hardcode them.
+
+Baselines and the reference-ranker table live in `RESULTS.md`.
+
+## Facts that will mislead you
+
+- **NDCG@10's floor is ~0.775, not 0.** Random scores 0.7749 (median 4
+  candidates/user, 46% positives). A one-line item-CTR heuristic gets 0.8269.
+  Read all NDCG@10 numbers against that floor.
+- **Recall@50 is degenerate** under `candidate_set=impressions` — every ranker
+  scores ~0.9999, because 99.8% of users have fewer than 50 impressions. Half
+  the score is currently a constant.
+- **`zero_positive` swings NDCG@10 by 0.15** (`skip` 0.8412 vs `zero` 0.6901).
+  Never compare numbers computed under different settings.
+- **CWM optimises watch time, not clicks.** `long_view2` ⊂ `is_click`
+  (P(click|long_view)=0.995), which is why a watch-time model scores at all.
+  27% of clicks are *not* long views — that gap is the obvious headroom.
+- The console prints the real AUC under a field labelled `GAUC`; the field
+  labelled `AUC` is a hardcoded zero (`train_model2.py:255`).
+- Data starts **04-09**, not 04-08 — the filename is nominal.
+- Seed variance has never been measured. One seed (61). Do not treat small
+  deltas as real until it is.
+
+## Repo gotchas
+
+- `pre_kuairand.py:99` hardcodes retained columns; `is_click` and `time_ms` were
+  added by us. Features come from a fixed list in `summary_dat.py`, so extra
+  columns never reach training.
+- `evaluate.py:8` imports a `model.trans_model` that does not exist — commented
+  out; the names are unused. Several other `.pyc` files reference absent sources.
+- `torchfm` (pytorch-fm) is a required dependency the README omits.
+- Never commit `rec_datasets/` (620MB) or `techjaminfo*.docx` (pre-release
+  material under Early Bird access). Both are gitignored.
+
+## Open — pending the 28 Aug webinar
+
+Candidate set (impressions vs full catalogue — decides whether Recall@50 means
+anything), zero-positive convention, official baseline scores, ε/N, compute
+budget, submission schema, exact click definition.
