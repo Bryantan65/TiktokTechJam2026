@@ -60,7 +60,7 @@ Baselines and the reference-ranker table live in `RESULTS.md`.
   the metric wants P(watch > 7s) — a calibration/threshold problem, not a
   wrong-objective problem.
 - The console prints the real AUC under a field labelled `GAUC`; the field
-  labelled `AUC` is a hardcoded zero (`train_model2.py:280`, passes `0,0` before
+  labelled `AUC` is a hardcoded zero (`train_model2.py:_test_and_save`, passes `0,0` before
   `gauc_val`). The `_result.csv` writes `gauc_val` into a column named `AUC`.
 - `long_view2` is **derived**, not a dataset column: `cal_ground_truth.py:29`
   thresholds `play_time_truncate` at its own 70th percentile. The raw data ships
