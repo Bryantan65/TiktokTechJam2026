@@ -154,9 +154,12 @@ Three conclusions:
    impressions. Half the competition score is currently a constant.
 2. **NDCG@10's floor is ~0.775, not 0.** CWM sits ~28% up the usable range.
 3. **A one-line popularity heuristic reaches 78% of CWM's lift** over random.
-   CWM's counterfactual watch-time machinery is worth +0.014 NDCG@10 over it —
-   evidence that the baseline is optimising the wrong objective for this
-   metric, and the most likely source of agent improvement.
+   CWM's counterfactual watch-time machinery is worth only +0.014 NDCG@10 over
+   it. Note this is *not* because CWM optimises the wrong objective — see the
+   `is_click` definition in `CLAUDE.md`: for 73% of rows `is_click` is itself a
+   watch-time threshold (`play_time > 7s`), so CWM is well aligned. The gap is
+   that CWM ranks by *continuous* watch time while the metric wants
+   P(watch > 7s), and that the label mixes two UI regimes under one name.
 
 ---
 

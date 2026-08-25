@@ -47,11 +47,24 @@ Baselines and the reference-ranker table live in `RESULTS.md`.
   the score is currently a constant.
 - **`zero_positive` swings NDCG@10 by 0.15** (`skip` 0.8412 vs `zero` 0.6901).
   Never compare numbers computed under different settings.
-- **CWM optimises watch time, not clicks.** `long_view2` ⊂ `is_click`
-  (P(click|long_view)=0.995), which is why a watch-time model scores at all.
-  27% of clicks are *not* long views — that gap is the obvious headroom.
+- **`is_click` is mostly NOT a click.** Per kuairand.com it is UI-dependent: a
+  real click in the two-column UI, but `valid_play` in the single-column UI —
+  `play_time >= duration` (≤7s) or `play_time > 7s`. Verified: 96.5% agreement
+  with that rule. `tab 1` (73% of rows, CTR 0.53) is single-column; `tab 0` (11%,
+  CTR 0.09) is two-column. So the label is a **mixture of two regimes** under one
+  name, and `tab` is the feature that separates them.
+- Consequently `is_click` and `long_view` are thresholds on the *same* quantity
+  (7s vs 18s), which is why P(click|long_view)=0.995 — near-tautological, not
+  causal. CWM predicting watch time is therefore well aligned with the metric,
+  not misaligned. The lever is that CWM ranks by *continuous* watch time while
+  the metric wants P(watch > 7s) — a calibration/threshold problem, not a
+  wrong-objective problem.
 - The console prints the real AUC under a field labelled `GAUC`; the field
-  labelled `AUC` is a hardcoded zero (`train_model2.py:255`).
+  labelled `AUC` is a hardcoded zero (`train_model2.py:280`, passes `0,0` before
+  `gauc_val`). The `_result.csv` writes `gauc_val` into a column named `AUC`.
+- `long_view2` is **derived**, not a dataset column: `cal_ground_truth.py:29`
+  thresholds `play_time_truncate` at its own 70th percentile. The raw data ships
+  a different column called `long_view`.
 - Data starts **04-09**, not 04-08 — the filename is nominal.
 - Seed variance has never been measured. One seed (61). Do not treat small
   deltas as real until it is.
