@@ -1,0 +1,26 @@
+# Datasets — downloaded separately, never committed (KuaiRand-Pure alone is ~195MB)
+rec_datasets/*
+!rec_datasets/.gitkeep
+
+# Agent run outputs
+logs/
+checkpoints/
+*.pt
+*.pth
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Local
+firebase-debug.log
+
+# Pre-release competition material — Early Bird access, not for public release
+techjaminfo*.docx
+*.docx
+
+# Local backups
+*.bak

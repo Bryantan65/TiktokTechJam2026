@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.metrics import roc_auc_score
 from utils.metrics import NDCG,Precision, MRR, MRR_nobi
 from sklearn.metrics import log_loss, mean_squared_error, mean_absolute_error, ndcg_score
-from model.trans_model import Use_inverse_model, TransModel_inverse
+# from model.trans_model import Use_inverse_model, TransModel_inverse
 
 
 def _get_pred(data_ld, model):
@@ -153,7 +153,7 @@ def cal_group_metric(df,model,posi,data_ld, label_name=None):
         df['pred'] = pred
 
     df['rank'] = df.groupby('user_id')['pred'].rank(method='first', ascending=False)
-    temp = df.groupby('user_id').apply(lambda x: x.sort_values('rank', ascending=True))
+    temp = df.sort_values(['user_id', 'rank'], ascending=True)  # pandas>=2.2: groupby.apply drops group key
     temp.reset_index(drop=True, inplace=True)
     temp_group = temp.groupby('user_id')
     group_df = temp_group['long_view2'].apply(list).reset_index()
@@ -196,7 +196,7 @@ def cal_gauc(df,model,data_ld):
     pred = _get_pred(data_ld, model)
     df['pred'] = pred
     df['rank'] = df.groupby('user_id')['pred'].rank(method='first', ascending=False)
-    temp = df.groupby('user_id').apply(lambda x: x.sort_values('rank', ascending=True))
+    temp = df.sort_values(['user_id', 'rank'], ascending=True)  # pandas>=2.2: groupby.apply drops group key
     temp.reset_index(drop=True, inplace=True)
     temp_group = temp.groupby('user_id')
     group_df = temp_group['long_view2'].apply(list).reset_index()
@@ -212,7 +212,7 @@ def cal_ndcg1(df,model,data_ld,label_name):
     pred = _get_pred(data_ld, model)
     df['pred'] = pred
     df['rank'] = df.groupby('user_id')['pred'].rank(method='first', ascending=False)
-    temp = df.groupby('user_id').apply(lambda x: x.sort_values('rank', ascending=True))
+    temp = df.sort_values(['user_id', 'rank'], ascending=True)  # pandas>=2.2: groupby.apply drops group key
     temp.reset_index(drop=True, inplace=True)
     temp_group = temp.groupby('user_id')
     group_df = temp_group['long_view2'].apply(list).reset_index()
@@ -251,7 +251,7 @@ def cal_ndcg2(df,model,c_model,data_ld):
     # df['pred'] = df['pred_m'] + df['pred_c']
 
     df['rank'] = df.groupby('user_id')['pred'].rank(method='first', ascending=False)
-    temp = df.groupby('user_id').apply(lambda x: x.sort_values('rank', ascending=True))
+    temp = df.sort_values(['user_id', 'rank'], ascending=True)  # pandas>=2.2: groupby.apply drops group key
     temp.reset_index(drop=True, inplace=True)
     temp_group = temp.groupby('user_id')
     group_df = temp_group['long_view2'].apply(list).reset_index()
@@ -268,7 +268,7 @@ def cal_vwt1(df,model,data_ld,label_name):
     pred = _get_pred(data_ld, model)
     df['pred'] = pred
     df['rank'] = df.groupby('user_id')['pred'].rank(method='first', ascending=False)
-    temp = df.groupby('user_id').apply(lambda x: x.sort_values('rank', ascending=True))
+    temp = df.sort_values(['user_id', 'rank'], ascending=True)  # pandas>=2.2: groupby.apply drops group key
     temp.reset_index(drop=True, inplace=True)
     temp_group = temp.groupby('user_id')
     # group_df = temp_group['long_view2'].apply(list).reset_index()

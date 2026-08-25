@@ -97,7 +97,7 @@ def pre_kuairand():
     # df_sel_dat = df_kuaiRand_interaction_standard[(df_kuaiRand_interaction_standard['duration_ms']<=240) & (df_kuaiRand_interaction_standard['duration_ms']>=5)]
     df_sel_dat = df_kuaiRand_interaction_standard[(df_kuaiRand_interaction_standard['duration_ms']>=5) & (df_kuaiRand_interaction_standard['duration_ms']<=400)]
     df_sel_dat = df_sel_dat[['date','user_id','video_id','author_id','music_id','tag_pop','video_type','upload_type',
-                            'tab','is_like','is_follow','is_comment','is_forward','is_profile_enter','is_hate',
+                            'tab','is_click','time_ms','is_like','is_follow','is_comment','is_forward','is_profile_enter','is_hate',
                             'profile_stay_time','comment_stay_time','follow_user_num_range','register_days_range',
                             'fans_user_num_range','friend_user_num_range','user_active_degree','duration_ms','play_time_truncate','play_time_ms']]
     df_sel_dat['tag_pop'] =  df_sel_dat['tag_pop'].apply(lambda x: 999 if pd.isna(x) else x)
