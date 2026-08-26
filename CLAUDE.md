@@ -14,7 +14,8 @@ cd src
 ../.venv/Scripts/python.exe comp/evaluate_comp.py --fout ../models/<name> --split val
 ```
 
-`.venv` = Python 3.12 / torch 2.6.0+cu124 / pandas 3.0.5 / numpy 2.5.2.
+Setup: see `requirements.txt` (torch installs separately — the CUDA build
+is not on PyPI). `.venv` = Python 3.12 / torch 2.6.0+cu124 / pandas 3.0.5.
 `--load_to_eval 1` re-scores a saved checkpoint without retraining (seconds).
 Training ~6 min on the RTX 3060 Ti; scoring ~10 s.
 

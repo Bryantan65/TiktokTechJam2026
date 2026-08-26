@@ -1,0 +1,22 @@
+# TechJam 2026 Track 2 — Python 3.12
+#
+# torch is NOT listed below: the CUDA build cannot be resolved from PyPI, and
+# installing it from here would silently give you the CPU wheel. Install it
+# first, then this file:
+#
+#   python -m venv .venv
+#   .venv/Scripts/python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cu124
+#   .venv/Scripts/python.exe -m pip install -r requirements.txt
+#
+# Verify:  python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+# Expect:  2.6.0+cu124 True
+#
+# torchfm (pytorch-fm) supplies every model layer in src/model/ and is omitted
+# from the upstream README. Without it nothing imports.
+
+torchfm==0.7.0
+numpy==2.5.2
+pandas==3.0.5
+scikit-learn==1.9.0
+scipy==1.18.1
+tqdm==4.70.0
