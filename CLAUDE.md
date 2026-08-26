@@ -24,14 +24,25 @@ modify it.
 
 ## The number to beat
 
-Test-set primary. **Beat the FM row.**
+**The agent only ever sees `valid`.** Test is refused by the harness and is
+scored once, at the end. Compare against the **valid** column — the README's
+ladder table shows test only, and mixing the two makes a +0.0018 gain look like
++0.009.
 
-| | GAUC | nDCG@5 | primary |
-| --- | --- | --- | --- |
-| random (self-check) | 0.4996 | 0.4511 | 0.4753 |
-| item popularity | 0.6308 | 0.5121 | 0.5715 |
-| **FM (official baseline)** | **0.6610** | **0.5282** | **0.5946** |
-| oracle ceiling | 1.0000 | 0.7289 | **0.8645** |
+Primary = mean(GAUC, nDCG@5). From `kuairand-starter-kit/baseline_scores.json`:
+
+| | valid primary | test primary |
+| --- | --- | --- |
+| random (self-check) | 0.4834 | 0.4753 |
+| item popularity | 0.5807 | 0.5715 |
+| **FM (official baseline)** | **0.6016** | **0.5946** |
+| oracle ceiling | 0.8484 | 0.8645 |
+
+**Agent target: beat `valid` 0.6015 by ≥ 0.002, i.e. reach 0.6035.**
+
+FM's valid detail: GAUC 0.6674, nDCG@5 0.5357. Note the oracle ceiling is
+*lower* on valid than test, so valid is not simply the easier split — FM is at
+70.9% of ceiling on valid vs 68.8% on test.
 
 Baseline config: FM, `k=16 lr=0.001 batch=8192 max_epochs=40 patience=4`,
 fields `[user_id, video_id, author_id, tab, dur_bucket]`. Runs in **~40 s on one
