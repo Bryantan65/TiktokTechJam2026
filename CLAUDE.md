@@ -66,8 +66,10 @@ Baselines and the reference-ranker table live in `RESULTS.md`.
   thresholds `play_time_truncate` at its own 70th percentile. The raw data ships
   a different column called `long_view`.
 - Data starts **04-09**, not 04-08 — the filename is nominal.
-- Seed variance has never been measured. One seed (61). Do not treat small
-  deltas as real until it is.
+- **Seed noise is σ = 0.0007** on NDCG@10 (4 seeds, R5 in `RESULTS.md`). A change
+  must gain **≥ 0.0016** over the baseline mean to clear 2σ; use ≥ 0.002 when
+  comparing two single runs. Baseline mean is **0.839988**, not any one run.
+  Recall@50's σ is 0.000016 — it is a constant.
 
 ## Repo gotchas
 

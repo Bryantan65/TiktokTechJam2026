@@ -15,4 +15,8 @@ sigma=2
 modelname="FM"
 labelname="CWM"
 
-CUDA_VISIBLE_DEVICES=0 python main.py --fout ../rec_datasets/WM_KuaiRand/${modelname}_${labelname}_test_${c_inv}_${sigma}_${randseed} --dat_name ${dataname} --model_name ${modelname} --label_name ${labelname} --sigma ${sigma} --c_inv ${c_inv}  --randseed ${randseed} --load_to_eval 0
+# --split_mode cwm pins this to the paper's original split so it reproduces
+# Table 3 (KuaiRand/FM: AUC 0.735, nDCG@3 0.486). Note it reads the competition
+# test half - reproduction only. Competition runs use the default, --split_mode
+# competition. See CLAUDE.md.
+CUDA_VISIBLE_DEVICES=0 python main.py --fout ../rec_datasets/WM_KuaiRand/${modelname}_${labelname}_test_${c_inv}_${sigma}_${randseed} --dat_name ${dataname} --model_name ${modelname} --label_name ${labelname} --sigma ${sigma} --c_inv ${c_inv}  --randseed ${randseed} --load_to_eval 0 --split_mode cwm

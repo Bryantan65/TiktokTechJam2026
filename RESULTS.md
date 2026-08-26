@@ -191,6 +191,49 @@ Cost: 19 epochs to early-stop, ~27s/epoch (~8.5 min); scoring 6.05s.
 
 ---
 
+## R5 — seed variance ← **the significance threshold**
+
+Four runs, identical config, seeds 61-64, `--split_mode competition`. Measures
+the noise floor so improvements can be told apart from lucky initialisation.
+
+| | |
+| --- | --- |
+| Date | 2026-08-26 01:05 +0800 |
+| By | `human` |
+| Artifacts | `baseline_val_compsplit.json`, `seed_{62,63,64}.json` |
+
+| seed | NDCG@10 | Recall@50 |
+| --- | --- | --- |
+| 61 | 0.839985 | 0.999913 |
+| 62 | 0.840063 | 0.999909 |
+| 63 | 0.840839 | 0.999903 |
+| 64 | 0.839067 | 0.999877 |
+
+```
+NDCG@10    mean 0.839988   σ 0.000726   range 0.001773
+Recall@50  σ 0.000016      (confirms it is a constant, not a metric)
+```
+
+**Significance rule.** One new run vs this 4-run mean has a difference SE of
+~0.0008, so a change must gain **≥ 0.0016 (2σ)** to be credible. For
+single-run vs single-run comparisons use ≥ 0.002.
+
+**Proposed convergence rule**, pending the organisers' ε/N: `ε = 0.0015`,
+`N = 3` consecutive iterations.
+
+**Context — real effects dwarf the noise:** item-CTR → CWM is +0.014 (~19σ),
+random → CWM is +0.065 (~89σ). The metric is sensitive enough to detect genuine
+modelling gains.
+
+**Revises R4's leakage claim:** R2 (leaky, 0.8412) vs the clean mean (0.8400) is
+0.0012 ≈ 1.7σ — suggestive, *not* significant at 2σ. The split fix was
+methodologically necessary regardless, but its measured effect is not
+distinguishable from noise on this evidence.
+
+Cost: 3 training runs, ~8.5 min each (seed 61 already existed).
+
+---
+
 ## Open — affects every number above
 
 Pending organiser confirmation (28 Aug webinar). All are config switches in
