@@ -1,0 +1,20 @@
+{
+  "ndcg@10": 0.8390666204476149,
+  "recall@50": 0.9998773326957452,
+  "n_users": 23194,
+  "n_rows": 142736,
+  "users_with_no_positive": 4166,
+  "median_candidates_per_user": 4.0,
+  "status": "ok",
+  "error": null,
+  "gpu_seconds": 6.6,
+  "split": "val",
+  "config": {
+    "label": "is_click",
+    "ndcg_k": 10,
+    "recall_k": 50,
+    "split_point": 0.5,
+    "candidate_set": "impressions",
+    "zero_positive": "skip"
+  }
+}

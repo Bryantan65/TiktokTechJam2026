@@ -9,9 +9,9 @@ points there. See `RESULTS.md` for the results ledger.
 ```bash
 cd src
 ../.venv/Scripts/python.exe prepare_data.py --group_num 60 --windows_size 3 --eps 0.5 --dat_name KuaiRand --is_load 0
-../.venv/Scripts/python.exe main.py --fout ../rec_datasets/WM_KuaiRand/<name> --dat_name KuaiRand \
+../.venv/Scripts/python.exe main.py --fout ../models/<name> --dat_name KuaiRand \
     --model_name FM --label_name CWM --sigma 2 --c_inv 40 --randseed 61 --load_to_eval 0
-../.venv/Scripts/python.exe comp/evaluate_comp.py --fout ../rec_datasets/WM_KuaiRand/<name> --split val
+../.venv/Scripts/python.exe comp/evaluate_comp.py --fout ../models/<name> --split val
 ```
 
 `.venv` = Python 3.12 / torch 2.6.0+cu124 / pandas 3.0.5 / numpy 2.5.2.

@@ -48,7 +48,7 @@ baseline: it measures `long_view2`, not `is_click`.
 | Config | FM backbone, CWM loss, `sigma=2 c_inv=40 randseed=61` (`src/run.sh` defaults) |
 | Split | CWM's own: train 04-08..04-21, val 04-22..04-28, test 04-29..05-08 |
 | Label | `long_view2` |
-| Artifact | `rec_datasets/WM_KuaiRand/FM_CWM_test_40_2_61_result.csv` |
+| Artifact | `models/FM_CWM_test_40_2_61_result.csv` |
 
 | Metric | Published (Table 5) | Ours | Δ |
 | --- | --- | --- | --- |
@@ -83,7 +83,7 @@ Cost: 13 epochs to early-stop, ~28s/epoch, ~6 min total.
 > See R4.
 
 > The console prints this AUC under a field labelled `GAUC`; the field labelled
-> `AUC` is a hardcoded zero. See `train_model2.py:255`.
+> `AUC` is a hardcoded zero. See `train_model2.py:_test_and_save`.
 
 ---
 
@@ -101,7 +101,7 @@ looked up. Replace it if the Starter Kit publishes an official figure.
 | Model | same checkpoint as R1 (`FM_CWM_test_40_2_61_model.pt`) |
 | Split | **validation** = first 50% by `time_ms` of 04-22..05-08 |
 | Label | `is_click` |
-| Artifact | `rec_datasets/WM_KuaiRand/baseline_val_comp.json` |
+| Artifact | `models/baseline_val_comp.json` |
 
 | Metric | Value |
 | --- | --- |
@@ -175,7 +175,7 @@ longer sees the competition validation half, and the test half is never loaded.
 | Commit | `a8ca5b3` + split fix |
 | Config | FM / CWM loss / `sigma=2 c_inv=40 randseed=61`, `--split_mode competition --es_frac 0.1` |
 | Split | train 04-09..04-17 (992,048) · early-stop 04-17..04-21 (110,228) · report on competition val 04-22..04-30 (142,736) |
-| Artifact | `rec_datasets/WM_KuaiRand/baseline_val_compsplit.json` |
+| Artifact | `models/baseline_val_compsplit.json` |
 
 | Metric | R4 (clean) | R2 (leaky) | Δ |
 | --- | --- | --- | --- |

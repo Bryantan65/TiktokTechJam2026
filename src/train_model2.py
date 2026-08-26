@@ -63,7 +63,7 @@ class Learner2(object):
 
     def _load_and_spilt_dat(self):
         if self.dat_name == 'KuaiRand':
-            all_dat = pd.read_csv('../rec_datasets/WM_KuaiRand/KuaiRand_subset.csv') 
+            all_dat = pd.read_csv('../rec_datasets/processed/KuaiRand_subset.csv') 
             all_dat = cal_ground_truth(all_dat, self.dat_name)
 
             if self.split_mode == 'cwm':

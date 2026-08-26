@@ -27,7 +27,7 @@ from utils.data_wrapper import Wrap_Dataset
 from utils.summary_dat import make_feature, cal_field_dims
 from comp.metrics import ndcg_at_k, recall_at_k, aggregate
 
-SUBSET = '../rec_datasets/WM_KuaiRand/KuaiRand_subset.csv'
+SUBSET = '../rec_datasets/processed/KuaiRand_subset.csv'
 
 FEATURE_COLS = ['user_id', 'follow_user_num_range', 'register_days_range',
                 'fans_user_num_range', 'friend_user_num_range', 'user_active_degree',

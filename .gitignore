@@ -24,3 +24,8 @@ techjaminfo*.docx
 
 # Local backups
 *.bak
+
+# Trained models: weights are large and reproducible, so ignored.
+# The small score files (models/*.json, models/*_result.csv) ARE tracked on
+# purpose — they are the evidence behind every number in RESULTS.md.
+models/*.pt

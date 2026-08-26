@@ -46,7 +46,7 @@ def main():
         print('Cal Ground Truth Labels...')
         kuairand_dat = cal_ground_truth(kuairand_dat, dat_name)
 
-        kuairand_dat.to_csv('../rec_datasets/WM_KuaiRand/KuaiRand_subset.csv')
+        kuairand_dat.to_csv('../rec_datasets/processed/KuaiRand_subset.csv')
         print(kuairand_dat.head(10))
 
 
