@@ -39,6 +39,11 @@ CPU core** — iterations are cheap, so favour many small experiments.
 
 Seed std is **0.0008** on every metric (5 seeds, organiser-measured).
 
+**Verified on this machine (2026-08-27, seed 0):** random self-check test primary
+**0.4757** vs 0.4753; FM test primary **0.5953** vs 0.5946, valid **0.6015** vs
+0.6016. All within seed noise, so our numbers are comparable to the official
+ones. Run takes 50 s; valid peaks at **epoch 7** and overfits after.
+
 ## Facts that will mislead you
 
 - **nDCG@5's ceiling is 0.729, not 1.0.** 27.1% of test users have no positives
@@ -103,7 +108,8 @@ counterfactual watch time and evaluates on a `long_view2` it reconstructs
 itself. Useful as an advanced reference for direction 4.
 
 It has been ported to a modern stack and reproduces the paper (AUC 0.7357 vs
-0.735, nDCG@3 0.4848 vs 0.486). Setup in `requirements.txt`; `torchfm` is a
+0.735, nDCG@3 0.4848 vs 0.486) — which the Starter Kit says most teams will not
+manage, so direction 4 is comparatively cheap for us. Setup in `requirements.txt`; `torchfm` is a
 required dependency the upstream README omits.
 
 Its `--split_mode cwm` matches the **official** split. `--split_mode
@@ -113,9 +119,9 @@ time" wording and is **superseded** — do not use it.
 ## Superseded — ignore anything that says otherwise
 
 Work predating the Starter Kit assumed label `is_click`, metrics NDCG@10 and
-Recall@50, and a 50/50-by-time split. All wrong. `RESULTS.md` entries R1-R5
-predate the kit; R1 (the reproduction check against the paper) is still valid on
-its own terms, the rest are not comparable to official numbers.
+Recall@50, and a 50/50-by-time split. All wrong, and the old `RESULTS.md` has
+been removed. The agent's own `LEDGER.md` and `logs/iterations/` are the results
+record from iteration 1 onward.
 
 ## Repo gotchas
 
