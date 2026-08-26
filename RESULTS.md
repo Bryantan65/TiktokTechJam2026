@@ -1,5 +1,21 @@
 # Results ledger
 
+> ## ⚠️ R1-R5 predate the official Starter Kit and measure the wrong task
+>
+> They assumed label `is_click`, metrics NDCG@10 / Recall@50, and a
+> 50/50-by-time split. The Starter Kit specifies label `long_view`, metrics
+> GAUC / nDCG@5, and date-based splits matching CWM's original cuts.
+>
+> - **R1** (reproduction vs the published paper) is still valid on its own terms.
+> - **R2-R5** are not comparable to any official number. R5's method — measuring
+>   seed variance to set a significance threshold — was sound, and the organisers
+>   independently report std 0.0008 against our measured 0.0007.
+> - The `--split_mode competition` work is superseded: CWM's original split *is*
+>   the official split.
+>
+> See `CLAUDE.md` and `kuairand-starter-kit/README.en.md` for the real task.
+> New entries start at R6, scored by `kuairand-starter-kit/evaluate.py`.
+
 Curated reference numbers for TechJam 2026 Track 2. One row per result that
 something else gets compared against.
 
