@@ -63,8 +63,7 @@ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
         seed=0, device='cpu', verbose=True):
     enc, dim = encode(splits)
     Xtr, ytr, _ = enc['train']
-    Xva, yva, uva = enc['valid']
-    Xte, yte, ute = enc['test']
+    Xva, yva, uva = enc['valid']       # early stopping only; test is never read here
 
     model = TorchFM(dim, k=k, seed=seed).to(device)
     # l2 in the baseline is applied to V and W but not to b, so b gets its own
@@ -113,13 +112,16 @@ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
                 break
 
     model.load_state_dict(best_state)
-    return {'valid': evaluate(uva, yva, model.predict(Xva, device=device)),
-            'test': evaluate(ute, yte, model.predict(Xte, device=device))}
+    return model, enc
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+    ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test'],
+                    help='which split to write predictions for')
+    ap.add_argument('--out', default=None,
+                    help='write predictions here as .npy, one score per row')
     ap.add_argument('--k', type=int, default=16)
     ap.add_argument('--lr', type=float, default=0.001)
     ap.add_argument('--epochs', type=int, default=40)
@@ -132,10 +134,24 @@ if __name__ == '__main__':
     splits = load(a.data_dir)
     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
 
-    res = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device)
-    print(f"\n=== torch_fm (seed={a.seed}, device={a.device}) ===")
-    for sp in ('valid', 'test'):
-        r = res[sp]
-        print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
-              f"| primary {r['primary']:.4f}")
-    print("\n  official baseline: valid primary 0.6016 | test primary 0.5946")
+    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+                     device=a.device, verbose=a.out is None)
+
+    X, y, users = enc[a.split]
+    scores = model.predict(X, device=a.device)
+
+    if a.out:
+        # Harness mode: emit predictions only. The harness owns the labels and
+        # does the scoring, so a solution can neither grade itself nor pick
+        # which split it is graded on.
+        np.save(a.out, scores.astype(np.float64))
+        print(f"wrote {len(scores):,d} predictions for split={a.split}")
+    else:
+        # Standalone mode: report, for a human running this directly.
+        print(f"\n=== torch_fm (seed={a.seed}, device={a.device}) ===")
+        for sp in ('valid', 'test'):
+            Xs, ys, us = enc[sp]
+            r = evaluate(us, ys, model.predict(Xs, device=a.device))
+            print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+                  f"| primary {r['primary']:.4f}")
+        print("\n  official baseline: valid primary 0.6016 | test primary 0.5946")

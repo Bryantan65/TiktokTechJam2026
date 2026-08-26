@@ -2,8 +2,13 @@
 rec_datasets/*
 !rec_datasets/.gitkeep
 
-# Agent run outputs
-logs/
+# Agent run outputs. logs/iterations/*.json is a REQUIRED DELIVERABLE
+# (run-log requirements: hypothesis, diff, metrics, error/recovery), so it is
+# tracked. ~1-3KB per iteration.
+logs/*
+!logs/iterations/
+logs/iterations/*
+!logs/iterations/*.json
 checkpoints/
 *.pt
 *.pth
