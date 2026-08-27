@@ -41,6 +41,17 @@ DATA_DIR = os.path.join(ROOT, 'rec_datasets', 'KuaiRand-Pure', 'data')
 TIMEOUT = 900          # 15 min; a correct run takes ~30s, so this is a hang
 _SPLIT_CACHE = {}
 
+# How many seeds each experiment is scored on. Every ledger row used to be a
+# single draw: measured 2026-08-27, one solution scored 0.603999 / 0.603210 /
+# 0.602734 on seeds 0/1/2 - a 0.0013 swing from changing nothing. The agent was
+# meanwhile deciding between experiments that differed by 0.0003, so five
+# consecutive iterations resolved nothing at all. Averaging n seeds shrinks the
+# error on the mean by sqrt(n), which is what makes a small margin readable.
+#
+# Cost is linear: ~40 s per seed on one core. Set HARNESS_SEEDS=1 to go back to
+# single-seed scoring (faster, and what the organisers' epsilon assumes).
+N_SEEDS = int(os.environ.get('HARNESS_SEEDS', 3))
+
 
 def _splits(data_dir):
     if data_dir not in _SPLIT_CACHE:
@@ -60,14 +71,61 @@ def syntax_check(path):
         return 'cannot read solution: %s' % exc
 
 
+def _run_one(solution, split, data_dir, seed, timeout, n_rows):
+    """Execute the solution once. Returns (scores, error, stdout, stderr).
+
+    scores is None whenever error is set. Every failure mode a solution can
+    reach is converted to a string here, so the caller never has to catch.
+    """
+    out_fd, out_path = tempfile.mkstemp(suffix='.npy')
+    os.close(out_fd)
+    try:
+        cmd = [sys.executable, solution, '--data_dir', data_dir,
+               '--split', split, '--out', out_path, '--seed', str(seed)]
+        try:
+            proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
+                                  timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return None, 'timeout after %ds (seed %d)' % (timeout, seed), '', ''
+
+        stdout = '\n'.join(proc.stdout.strip().splitlines()[-15:])
+        stderr = '\n'.join(proc.stderr.strip().splitlines()[-25:])
+        if proc.returncode != 0:
+            return None, 'exited %d (seed %d)' % (proc.returncode, seed), \
+                   stdout, stderr
+
+        try:
+            scores = np.load(out_path)
+        except Exception as exc:                       # noqa: BLE001
+            return None, 'could not read predictions (seed %d): %s: %s' % (
+                seed, type(exc).__name__, exc), stdout, stderr
+
+        scores = np.asarray(scores, dtype=np.float64).ravel()
+        if len(scores) != n_rows:
+            return None, ('wrote %d scores, split has %d rows (seed %d)'
+                          % (len(scores), n_rows, seed)), stdout, stderr
+        if not np.isfinite(scores).all():
+            return None, 'predictions contain NaN or Inf (seed %d)' % seed, \
+                   stdout, stderr
+        return scores, None, stdout, stderr
+    finally:
+        try:
+            os.remove(out_path)
+        except OSError:
+            pass
+
+
 def run_experiment(solution, hypothesis='', parent=None, by='agent',
-                   split='valid', data_dir=DATA_DIR, seed=0, timeout=TIMEOUT):
+                   split='valid', data_dir=DATA_DIR, seed=0, timeout=TIMEOUT,
+                   n_seeds=None):
     """Run one solution, score it, log it. Always returns a dict; never raises.
 
     `split` is chosen by the harness, never by the solution - a solution cannot
     ask to be scored on test.
     """
     t0 = time.time()
+    n_seeds = N_SEEDS if n_seeds is None else n_seeds
+    seeds = list(range(seed, seed + n_seeds))
     rec = {
         'iteration': ledger.next_iteration(),
         'solution': os.path.relpath(solution, ROOT).replace('\\', '/'),
@@ -76,6 +134,7 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
         'by': by,
         'split': split,
         'seed': seed,
+        'seeds': seeds,
         'timestamp': ledger.stamp(),
         'status': 'error',
         'error': None,
@@ -120,84 +179,78 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
         ledger.write(rec)
         return rec
 
-    out_fd, out_path = tempfile.mkstemp(suffix='.npy')
-    os.close(out_fd)
-    try:
-        cmd = [sys.executable, solution, '--data_dir', data_dir,
-               '--split', split, '--out', out_path, '--seed', str(seed)]
-        try:
-            proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
-                                  timeout=timeout)
-        except subprocess.TimeoutExpired:
-            rec['error'] = 'timeout after %ds' % timeout
+    rows = _splits(data_dir)[split]
+    uids = [r[1] for r in rows]
+    labels = [r[6] for r in rows]
+
+    per_seed = []
+    for s in seeds:
+        scores, err, stdout, stderr = _run_one(solution, split, data_dir, s,
+                                               timeout, len(rows))
+        if stdout:
+            rec['stdout_tail'] = stdout
+        if err:
+            # One seed failing means the solution is broken, not unlucky.
+            # Report it immediately rather than averaging over the survivors:
+            # a mean of the runs that happened to work is not a measurement of
+            # anything, and it would hide a solution that fails 1 time in 3.
+            rec['error'] = err
+            if stderr:
+                rec['stderr_tail'] = stderr
+            rec['seeds_completed'] = len(per_seed)
             rec['seconds'] = round(time.time() - t0, 1)
             ledger.write(rec)
             return rec
 
-        rec['stdout_tail'] = '\n'.join(proc.stdout.strip().splitlines()[-15:])
-        if proc.returncode != 0:
-            rec['error'] = 'exited %d' % proc.returncode
-            rec['stderr_tail'] = '\n'.join(proc.stderr.strip().splitlines()[-25:])
-            rec['seconds'] = round(time.time() - t0, 1)
-            ledger.write(rec)
-            return rec
+        res = evaluate(uids, labels, scores)
+        per_seed.append({'seed': s,
+                         'GAUC': round(res['GAUC'], 6),
+                         'nDCG@5': round(res['nDCG@5'], 6),
+                         'primary': round(res['primary'], 6)})
+        if s == seeds[0]:
+            # Fingerprint the first seed's predictions. Identical output from
+            # different code means nothing was actually tested - the change was
+            # computed and then discarded. Scoring it anyway records a no-op as
+            # evidence about the technique.
+            rec['predictions_hash'] = hashlib.sha256(
+                np.ascontiguousarray(scores.astype(np.float64))).hexdigest()[:12]
+            rec.update({'users': res['users'], 'rows': res['rows']})
 
-        rows = _splits(data_dir)[split]
-        try:
-            scores = np.load(out_path)
-        except Exception as exc:                       # noqa: BLE001
-            rec['error'] = 'could not read predictions: %s: %s' % (
-                type(exc).__name__, exc)
-            rec['seconds'] = round(time.time() - t0, 1)
-            ledger.write(rec)
-            return rec
+    def _mean(key):
+        return round(sum(p[key] for p in per_seed) / len(per_seed), 6)
 
-        scores = np.asarray(scores, dtype=np.float64).ravel()
-        if len(scores) != len(rows):
-            rec['error'] = ('wrote %d scores, split has %d rows'
-                            % (len(scores), len(rows)))
-            rec['seconds'] = round(time.time() - t0, 1)
-            ledger.write(rec)
-            return rec
-        if not np.isfinite(scores).all():
-            rec['error'] = 'predictions contain NaN or Inf'
-            rec['seconds'] = round(time.time() - t0, 1)
-            ledger.write(rec)
-            return rec
+    def _std(key):
+        if len(per_seed) < 2:
+            return None
+        m = sum(p[key] for p in per_seed) / len(per_seed)
+        var = sum((p[key] - m) ** 2 for p in per_seed) / (len(per_seed) - 1)
+        return round(var ** 0.5, 6)
 
-        # Fingerprint the predictions themselves. Identical output from
-        # different code means nothing was actually tested - the change was
-        # computed and then discarded. Scoring it anyway records a no-op as
-        # evidence about the technique.
-        rec['predictions_hash'] = hashlib.sha256(
-            np.ascontiguousarray(scores.astype(np.float64))).hexdigest()[:12]
+    # The headline numbers are means across seeds, so verdict() and converged()
+    # act on a measurement rather than on one draw. primary_std is what says
+    # whether a margin is readable at all: a gap smaller than it is not a
+    # result, and the agent is shown both.
+    rec.update({'status': 'ok', 'error': None,
+                'GAUC': _mean('GAUC'),
+                'nDCG@5': _mean('nDCG@5'),
+                'valid_primary': _mean('primary'),
+                'primary_std': _std('primary'),
+                'per_seed': per_seed})
 
-        res = evaluate([r[1] for r in rows], [r[6] for r in rows], scores)
-        rec.update({'status': 'ok', 'error': None,
-                    'GAUC': round(res['GAUC'], 6),
-                    'nDCG@5': round(res['nDCG@5'], 6),
-                    'valid_primary': round(res['primary'], 6),
-                    'users': res['users'], 'rows': res['rows']})
-
-        twin, why = ledger.find_twin(rec['predictions_hash'], rec,
-                                     exclude_iteration=rec['iteration'])
-        if twin is not None:
-            rec['status'] = 'no-op'
-            rec['no_op_twin'] = twin['iteration']
-            rec['error'] = (
-                'no-op: %s as iteration %d (%s). Different code, same model - '
-                'nothing was actually tested. Common cause: the new method ran '
-                'but a "keep the best checkpoint" rule discarded its result, so '
-                'the final model is the parent. Check that your change reaches '
-                'the model that gets saved. This is NOT evidence about the '
-                'technique.'
-                % (why, twin['iteration'],
-                   os.path.basename(twin.get('solution', '?'))))
-    finally:
-        try:
-            os.remove(out_path)
-        except OSError:
-            pass
+    twin, why = ledger.find_twin(rec['predictions_hash'], rec,
+                                 exclude_iteration=rec['iteration'])
+    if twin is not None:
+        rec['status'] = 'no-op'
+        rec['no_op_twin'] = twin['iteration']
+        rec['error'] = (
+            'no-op: %s as iteration %d (%s). Different code, same model - '
+            'nothing was actually tested. Common cause: the new method ran '
+            'but a "keep the best checkpoint" rule discarded its result, so '
+            'the final model is the parent. Check that your change reaches '
+            'the model that gets saved. This is NOT evidence about the '
+            'technique.'
+            % (why, twin['iteration'],
+               os.path.basename(twin.get('solution', '?'))))
 
     rec['seconds'] = round(time.time() - t0, 1)
     rec['verdict'] = ledger.verdict(rec['valid_primary'], rec['status'])
@@ -213,9 +266,12 @@ if __name__ == '__main__':
     ap.add_argument('--hypothesis', default='')
     ap.add_argument('--parent', default=None)
     ap.add_argument('--by', default='human')
-    ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--seed', type=int, default=0, help='first seed')
+    ap.add_argument('--n_seeds', type=int, default=None,
+                    help='seeds to average over (default: HARNESS_SEEDS or 3)')
     ap.add_argument('--data_dir', default=DATA_DIR)
     a = ap.parse_args()
     print(json.dumps(run_experiment(a.solution, hypothesis=a.hypothesis,
                                     parent=a.parent, by=a.by, seed=a.seed,
+                                    n_seeds=a.n_seeds,
                                     data_dir=a.data_dir), indent=2))

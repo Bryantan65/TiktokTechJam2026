@@ -12,7 +12,8 @@ within-user video ranking for the KuaiRand-Pure dataset.
 
 ## Target
 Valid primary (mean of GAUC and nDCG@5) >= 0.6035.
-Baseline: 0.6015. Epsilon: 0.002. Seed noise: 0.0008.
+Baseline: 0.6015. Epsilon: 0.002.
+Every score you see is a mean over 3 random seeds, reported with its spread.
 
 ## Metrics
 - GAUC: per-user AUC, weighted by positive count. Users with all-positive \
@@ -30,7 +31,7 @@ Solutions emit PREDICTIONS ONLY — never compute metrics. The harness scores.
 
 ## Starting point
 solutions/001_torch_fm.py — PyTorch FM with pointwise BCEWithLogitsLoss.
-Valid primary: 0.6014. Peaks at epoch 7-11, overfits after.
+Valid primary: 0.6014 (3-seed mean; this model is unusually stable, +/- 0.0002). Peaks at epoch 7-11, overfits after.
 Fields: [user_id, video_id, author_id, tab, dur_bucket], k=16, lr=0.001, \
 batch=8192, patience=4.
 
@@ -62,8 +63,11 @@ What this means for you:
 - Each iteration tells you the current improvement over the last 3 experiments.
   When it is small, your next experiment should come from a **different one of
   the 7 directions** — not another variant of the current best.
-- Differences below 0.0016 (2x the 0.0008 seed noise) are not results. Two
-  variants 0.0003 apart are the same experiment run twice.
+- Every experiment is trained on 3 different random seeds and the scores are
+  averaged. The `+/-` column is how much that model wobbles between seeds -
+  **the resolution of your instrument.** A difference smaller than it is not a
+  difference. Measured: the previous best had +/- 0.0006 while five consecutive
+  experiments differed by 0.0003, so all five resolved nothing.
 
 ## Dead ends — do NOT try these
 - More static features (all 13 CWM fields): 0.5940 vs 0.5950 — no gain.
@@ -75,7 +79,7 @@ within-user ranking.
 - (user_id, video_id) is NOT unique — 3.06% duplicated, up to 12x.
 - long_view rate varies by tab: 4.1% (tab 0) to 48.3% (tab 4).
 - tab 1 is 73.7% of rows at 37.9% positive rate.
-- A correct run takes ~30-50 seconds. Iterations are cheap.
+- A correct run takes ~2 minutes (3 seeds x ~40 s). Iterations are cheap.
 - log_random_4_22_to_5_08_pure.csv must NOT be trained on.
 
 ## Workflow
@@ -130,7 +134,7 @@ the metric ranks within a user, so cross-user pairs teach nothing about it.
 - Write the COMPLETE solution file every time — it must run standalone.
 - Whole file for a new idea. Targeted edit (copy parent, change one thing) \
 for a bugfix or parameter tweak.
-- Prefer many small experiments over one big change. Compute is cheap (~40s a
+- Prefer many small experiments over one big change. Compute is cheap (~2 min a
   run), but tokens are not: every extra tool round resends the whole
   conversation. Run ONE experiment per turn, then stop and let the next
   iteration begin with a clean, current message.
@@ -165,18 +169,25 @@ def _ledger_table() -> str:
         'GAUC and nDCG@5 are shown separately on purpose - they often move in',
         'opposite directions, and primary is just their mean.',
         '',
-        '| # | parent | GAUC | nDCG@5 | primary | delta | verdict | hypothesis |',
-        '|---|---|---|---|---|---|---|---|',
+        '`primary` is the MEAN across seeds and `+/-` is its standard deviation.',
+        '**Two experiments closer together than their +/- have not been told',
+        'apart** - treating that gap as a result is reading noise. To beat a',
+        'number you must beat it by more than the +/-, not by any amount.',
+        '',
+        '| # | parent | GAUC | nDCG@5 | primary | +/- | delta | verdict | hypothesis |',
+        '|---|---|---|---|---|---|---|---|---|',
     ]
     notes = []
     for r in recs:
         p = r.get('valid_primary')
-        lines.append('| %d | %s | %s | %s | %s | %s | %s | %s |' % (
+        sd = r.get('primary_std')
+        lines.append('| %d | %s | %s | %s | %s | %s | %s | %s | %s |' % (
             r.get('iteration', 0),
             r.get('parent') or '-',
             fmt(r.get('GAUC')),
             fmt(r.get('nDCG@5')),
             fmt(p),
+            ('%.6f' % sd) if sd is not None else '--',
             ('%+.4f' % (p - ledger.BASELINE_VALID)) if p is not None else '--',
             r.get('verdict', '?'),
             (r.get('hypothesis') or '').replace('|', '/')[:100],

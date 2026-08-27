@@ -1,0 +1,22 @@
+{
+  "iteration": 14,
+  "solution": "solutions/001_torch_fm.py",
+  "hypothesis": "3-seed harness check: baseline re-scored",
+  "parent": null,
+  "by": "human",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T16:19:29+08:00",
+  "status": "duplicate",
+  "error": "identical source already run at iteration 1 (valid_primary 0.6014)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "6108dd2fd381",
+  "verdict": "duplicate"
+}

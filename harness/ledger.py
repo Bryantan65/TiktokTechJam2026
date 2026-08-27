@@ -47,11 +47,13 @@ HEADER = """# Experiment ledger
 One line per experiment, read in full by the agent every iteration. Full
 records in `logs/iterations/NNN.json`; the code for each is `solutions/NNN_*.py`.
 
-`delta` is validation primary against the reproduced official baseline
-(**0.6015**). A result counts only at **>= +0.002** (the official epsilon).
+`valid` is the **mean** validation primary across seeds; `+/-` is its standard
+deviation across those seeds. `delta` is against the reproduced official
+baseline (**0.6015**); a result counts only at **>= +0.002** (the official
+epsilon). Two rows closer together than their `+/-` have not been told apart.
 
-| # | parent | hypothesis | valid | delta | verdict | by |
-|---|---|---|---|---|---|---|
+| # | parent | hypothesis | valid | +/- | delta | verdict | by |
+|---|---|---|---|---|---|---|---|
 """
 
 
@@ -325,11 +327,13 @@ def write(record):
             fh.write(HEADER)
 
     p = record.get('valid_primary')
-    line = '| %d | %s | %s | %s | %s | %s | %s |\n' % (
+    sd = record.get('primary_std')
+    line = '| %d | %s | %s | %s | %s | %s | %s | %s |\n' % (
         record['iteration'],
         record.get('parent') or '-',
         (record.get('hypothesis') or '').replace('|', '/')[:90],
         ('%.4f' % p) if p is not None else '--',
+        ('%.4f' % sd) if sd is not None else '--',
         ('%+.4f' % (p - BASELINE_VALID)) if p is not None else '--',
         record.get('verdict', '?'),
         record.get('by', 'agent'),
