@@ -99,7 +99,55 @@ def find_by_hash(h):
     return _hash_index.get(h)
 
 
+def find_twin(predictions_hash, metrics, exclude_iteration=None):
+    """A previous record that produced the same model, or None.
+
+    Different code producing the same output means nothing was actually tested.
+    Seen in practice: solutions that warm up with BCE, fine-tune with a new
+    loss, then keep whichever checkpoint scored best - the warmup always won,
+    so the final model was the parent and three separate "experiments" scored
+    0.601400 to six decimal places. Those entered the ledger as evidence that
+    the new losses did not help, which is not what happened.
+
+    Bit-identical predictions are the strong signal, but two runs of the same
+    code in separate processes differ in the last float bits (torch reductions
+    are not deterministic across processes), so that alone misses real no-ops.
+    Identical GAUC *and* nDCG@5 to six decimals is the practical test: three
+    independent metrics agreeing exactly is not a coincidence.
+    """
+    for rec in _load_all():
+        if exclude_iteration is not None and rec.get('iteration') == exclude_iteration:
+            continue
+        if rec.get('status') not in ('ok', 'no-op'):
+            continue
+        if predictions_hash and rec.get('predictions_hash') == predictions_hash:
+            return rec, 'identical predictions'
+        if all(rec.get(k) is not None and rec.get(k) == metrics.get(k)
+               for k in ('GAUC', 'nDCG@5')):
+            return rec, 'identical GAUC and nDCG@5'
+    return None, None
+
+
+def _load_all():
+    if not os.path.isdir(LOG_DIR):
+        return []
+    out = []
+    for name in sorted(os.listdir(LOG_DIR)):
+        if not name.endswith('.json'):
+            continue
+        try:
+            with open(os.path.join(LOG_DIR, name)) as fh:
+                out.append(json.load(fh))
+        except (ValueError, OSError):
+            continue
+    return out
+
+
 def verdict(primary, status):
+    if status == 'no-op':
+        return 'no-op'          # not a result; the change never reached the model
+    if status == 'duplicate':
+        return 'duplicate'
     if status != 'ok' or primary is None:
         return 'failed'
     delta = primary - BASELINE_VALID

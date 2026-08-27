@@ -87,6 +87,14 @@ as bugs until proven otherwise:
 When that happens, your NEXT action is to re-read your own solution and check
 the implementation, not to abandon the direction. Say so in the hypothesis.
 
+**status "no-op"** means your solution produced the SAME MODEL as an earlier
+one - identical metrics to six decimals. Your change was computed and then
+thrown away, so nothing was tested. The usual cause: you warm up with one loss,
+fine-tune with a new one, and keep whichever checkpoint scored best on valid -
+the warmup wins, so the saved model is the parent. Fix the code so the change
+reaches the model that gets saved (for example, evaluate and save only during
+the phase you are testing). A no-op is never evidence about a technique.
+
 Common self-check: are you actually using the label? A ranking loss that never
 reads `y` is comparing arbitrary rows, not positives against negatives. For
 pairwise losses the pairs must be (positive, negative) **from the same user** —

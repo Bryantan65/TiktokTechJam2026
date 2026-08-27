@@ -30,6 +30,14 @@ MODEL = os.environ.get('AGENT_MODEL', 'gpt-4o')
 INPUT_COST_PER_M = float(os.environ.get('AGENT_INPUT_COST_PER_M', 2.50))
 OUTPUT_COST_PER_M = float(os.environ.get('AGENT_OUTPUT_COST_PER_M', 10.00))
 
+# The gpt-5.6 family (sol/terra/luna) refuses function tools on
+# /v1/chat/completions unless reasoning_effort is 'none':
+#   "Function tools with reasoning_effort are not supported ... use
+#    /v1/responses or set reasoning_effort to 'none'."
+# Set AGENT_REASONING_EFFORT=none to use them here. Left unset for models that
+# accept tools natively (gpt-5.5 and earlier), which keeps reasoning on.
+REASONING_EFFORT = os.environ.get('AGENT_REASONING_EFFORT') or None
+
 
 def _role(m):
     """Messages are a mix of plain dicts and SDK objects."""
@@ -202,11 +210,18 @@ def run_loop(supervised: bool = False, max_iter: int = 100) -> None:
             tool_rounds += 1
             try:
                 with _Spinner('thinking'):
+                    # No temperature: the gpt-5.6 family rejects anything but
+                    # the default (400 "does not support 0.7 with this model").
+                    # Diversity across iterations comes from the ledger
+                    # changing, not from sampling noise.
+                    kwargs = {}
+                    if REASONING_EFFORT:
+                        kwargs['reasoning_effort'] = REASONING_EFFORT
                     response = client.chat.completions.create(
                         model=MODEL,
                         messages=messages,
                         tools=TOOL_SCHEMAS,
-                        temperature=0.7,
+                        **kwargs,
                     )
             except Exception as e:
                 print(f'  API error: {e}')

@@ -18,6 +18,7 @@ authority.
 """
 import argparse
 import ast
+import hashlib
 import json
 import os
 import subprocess
@@ -164,12 +165,34 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
             ledger.write(rec)
             return rec
 
+        # Fingerprint the predictions themselves. Identical output from
+        # different code means nothing was actually tested - the change was
+        # computed and then discarded. Scoring it anyway records a no-op as
+        # evidence about the technique.
+        rec['predictions_hash'] = hashlib.sha256(
+            np.ascontiguousarray(scores.astype(np.float64))).hexdigest()[:12]
+
         res = evaluate([r[1] for r in rows], [r[6] for r in rows], scores)
         rec.update({'status': 'ok', 'error': None,
                     'GAUC': round(res['GAUC'], 6),
                     'nDCG@5': round(res['nDCG@5'], 6),
                     'valid_primary': round(res['primary'], 6),
                     'users': res['users'], 'rows': res['rows']})
+
+        twin, why = ledger.find_twin(rec['predictions_hash'], rec,
+                                     exclude_iteration=rec['iteration'])
+        if twin is not None:
+            rec['status'] = 'no-op'
+            rec['no_op_twin'] = twin['iteration']
+            rec['error'] = (
+                'no-op: %s as iteration %d (%s). Different code, same model - '
+                'nothing was actually tested. Common cause: the new method ran '
+                'but a "keep the best checkpoint" rule discarded its result, so '
+                'the final model is the parent. Check that your change reaches '
+                'the model that gets saved. This is NOT evidence about the '
+                'technique.'
+                % (why, twin['iteration'],
+                   os.path.basename(twin.get('solution', '?'))))
     finally:
         try:
             os.remove(out_path)
