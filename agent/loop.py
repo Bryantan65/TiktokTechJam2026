@@ -38,6 +38,13 @@ OUTPUT_COST_PER_M = float(os.environ.get('AGENT_OUTPUT_COST_PER_M', 10.00))
 # accept tools natively (gpt-5.5 and earlier), which keeps reasoning on.
 REASONING_EFFORT = os.environ.get('AGENT_REASONING_EFFORT') or None
 
+# Hard stops. Without these nothing bounds an unattended run: --max-iter counts
+# agent loop passes, but one pass can call run_experiment up to MAX_TOOL_ROUNDS
+# times. The first real run did 9 experiments and $3.34 inside a single
+# "iteration".
+MAX_EXPERIMENTS = int(os.environ.get('AGENT_MAX_EXPERIMENTS', 40))
+MAX_COST_USD = float(os.environ.get('AGENT_MAX_COST_USD', 15.0))
+
 
 def _role(m):
     """Messages are a mix of plain dicts and SDK objects."""
@@ -61,10 +68,22 @@ def _truncate(messages, keep_last=20):
     return messages          # no safe cut point; keep everything this round
 
 
+def _console_supports_unicode():
+    """Windows consoles often use cp1252, which cannot encode braille frames.
+    Writing them raises UnicodeEncodeError inside the spinner thread and spams
+    tracebacks through the whole run."""
+    try:
+        '⠋'.encode(sys.stdout.encoding or 'ascii')
+        return True
+    except (UnicodeEncodeError, LookupError, AttributeError):
+        return False
+
+
 class _Spinner:
     """Animated spinner with elapsed time for long-running tool calls."""
 
-    FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+    FRAMES = (['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+              if _console_supports_unicode() else ['|', '/', '-', '\\'])
 
     def __init__(self, label: str):
         self._label = label
@@ -81,19 +100,25 @@ class _Spinner:
         self._stop.set()
         self._thread.join()
         elapsed = time.time() - self._t0
-        sys.stdout.write(f'\r    {self._label} done ({elapsed:.0f}s)'
-                         '                    \n')
-        sys.stdout.flush()
+        try:
+            sys.stdout.write(f'\r    {self._label} done ({elapsed:.0f}s)'
+                             '                    \n')
+            sys.stdout.flush()
+        except Exception:          # noqa: BLE001  cosmetic only
+            pass
 
     def _spin(self):
         i = 0
         while not self._stop.is_set():
-            elapsed = time.time() - self._t0
-            frame = self.FRAMES[i % len(self.FRAMES)]
-            sys.stdout.write(
-                f'\r    {frame} {self._label} [{elapsed:.0f}s]'
-                '          ')
-            sys.stdout.flush()
+            try:
+                elapsed = time.time() - self._t0
+                frame = self.FRAMES[i % len(self.FRAMES)]
+                sys.stdout.write(
+                    f'\r    {frame} {self._label} [{elapsed:.0f}s]'
+                    '          ')
+                sys.stdout.flush()
+            except Exception:      # noqa: BLE001  cosmetic only - never kill a run
+                return
             i += 1
             self._stop.wait(0.15)
 
@@ -139,7 +164,14 @@ class TokenTracker:
 
 
 def _execute_tool(client, name: str, args: dict,
-                  search_count: int) -> tuple[str, int]:
+                  search_count: int, budget=None) -> tuple[str, int]:
+    if name == 'run_experiment' and budget is not None:
+        stop = budget()
+        if stop:
+            # Refused as a normal tool result, so the agent sees a message and
+            # can wrap up rather than the loop dying mid-turn.
+            return json.dumps({'error': stop, 'status': 'budget_exhausted'}), search_count
+
     if name == 'web_search':
         if search_count >= 1:
             return json.dumps({
@@ -185,11 +217,29 @@ def run_loop(supervised: bool = False, max_iter: int = 100) -> None:
 
     messages = [{'role': 'system', 'content': system_prompt()}]
 
+    def _budget_check():
+        """Reason to stop running experiments, or None. Checked before each."""
+        done = ledger.totals()['iterations']
+        if done >= MAX_EXPERIMENTS:
+            return ('experiment budget exhausted: %d of %d run. Stop proposing '
+                    'experiments and summarise what you found.'
+                    % (done, MAX_EXPERIMENTS))
+        if tokens.total_cost() >= MAX_COST_USD:
+            return ('cost budget exhausted: $%.2f of $%.2f spent. Stop '
+                    'proposing experiments and summarise what you found.'
+                    % (tokens.total_cost(), MAX_COST_USD))
+        return None
+
     print(f'=== Agent loop started (supervised={supervised}, '
-          f'max_iter={max_iter}) ===\n')
+          f'max_iter={max_iter}, max_experiments={MAX_EXPERIMENTS}, '
+          f'max_cost=${MAX_COST_USD:.2f}) ===\n')
 
     iteration = 0
     while iteration < max_iter:
+        stop = _budget_check()
+        if stop:
+            print('\nStopping: %s' % stop)
+            break
         if ledger.converged():
             print('\nConverged: 3 consecutive ok experiments without '
                   'improvement > 0.002.')
@@ -247,7 +297,8 @@ def run_loop(supervised: bool = False, max_iter: int = 100) -> None:
                     except json.JSONDecodeError:
                         args = {}
                     result, search_count = _execute_tool(
-                        client, tc.function.name, args, search_count)
+                        client, tc.function.name, args, search_count,
+                        budget=_budget_check)
                     if tc.function.name == 'run_experiment':
                         try:
                             ran_iterations.append(json.loads(result)['iteration'])
