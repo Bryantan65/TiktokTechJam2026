@@ -199,6 +199,14 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
                 rec['stderr_tail'] = stderr
             rec['seeds_completed'] = len(per_seed)
             rec['seconds'] = round(time.time() - t0, 1)
+            # The run log has to carry this too. A solution crash is an "error
+            # event" under the run-log requirements, but events.jsonl only ever
+            # saw API-level failures, so a run whose best robustness moment was
+            # crash -> diagnose -> fix showed no trace of it there.
+            ledger.log_event('solution_error', rec['error'],
+                             iteration=rec['iteration'],
+                             solution=os.path.basename(solution),
+                             stderr_tail=(stderr or '')[-600:])
             ledger.write(rec)
             return rec
 
@@ -251,6 +259,24 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
             'technique.'
             % (why, twin['iteration'],
                os.path.basename(twin.get('solution', '?'))))
+
+    # Recovery is the half that gets scored. An experiment that scores while its
+    # parent did not is the agent routing around a failure, which is the exact
+    # behaviour the Robustness criterion asks about - and it was previously only
+    # inferable by reading the parent chain by hand.
+    if rec['status'] == 'ok' and parent is not None:
+        try:
+            prior = json.load(open(os.path.join(
+                ledger.LOG_DIR, '%04d.json' % int(parent))))
+        except (ValueError, OSError, TypeError):
+            prior = None
+        if prior is not None and prior.get('status') not in ('ok', None):
+            ledger.log_event(
+                'solution_recovered',
+                'iteration %s scored %.6f after its parent %s failed (%s)'
+                % (rec['iteration'], rec['valid_primary'], parent,
+                   (prior.get('error') or '')[:120]),
+                iteration=rec['iteration'], recovered_from=int(parent))
 
     rec['seconds'] = round(time.time() - t0, 1)
     rec['verdict'] = ledger.verdict(rec['valid_primary'], rec['status'])

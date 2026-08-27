@@ -1,0 +1,57 @@
+{
+  "iteration": 4,
+  "solution": "solutions/004_bpr_fm_3neg.py",
+  "hypothesis": "improve 3: one sampled negative per positive is a noisy approximation to BPR; sample three same-user negatives per positive so each epoch covers more pairwise constraints. If the gain in 003 is from ranking alignment rather than luck, denser pair sampling should improve or stabilize it.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T17:41:49+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602712,
+  "GAUC": 0.669071,
+  "nDCG@5": 0.536353,
+  "source_hash": "5f4ed9f4c4ac",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "1dc17053d5fb",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000884,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668997,
+      "nDCG@5": 0.536291,
+      "primary": 0.602644
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667709,
+      "nDCG@5": 0.536019,
+      "primary": 0.601864
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670508,
+      "nDCG@5": 0.536748,
+      "primary": 0.603628
+    }
+  ],
+  "seconds": 93.7,
+  "verdict": "noise",
+  "delta": 0.001212,
+  "tokens_in": 41240,
+  "tokens_out": 2717,
+  "tokens_cached": 28544,
+  "cost_usd": 0.159262,
+  "model": "gpt-5.5",
+  "agent_iteration": 3,
+  "wall_seconds": 127.1,
+  "recovery_events": []
+}

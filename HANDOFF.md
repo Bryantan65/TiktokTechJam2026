@@ -4,7 +4,7 @@ State, decisions, and what's next. **`CLAUDE.md` holds the task facts** — labe
 metrics, splits, baselines, dead ends. This file holds the *decisions* and the
 reasoning behind them, which is the part that's expensive to reconstruct.
 
-Last updated: 2026-08-27, tag `autonomy-run-1` (commit `5d9eb77`).
+Last updated: 2026-08-27, after record run 2.
 
 ---
 
@@ -20,20 +20,27 @@ Last updated: 2026-08-27, tag `autonomy-run-1` (commit `5d9eb77`).
 ✅ robustness: API retry, run log, atomic writes
 ✅ measurement: 3-seed scoring, spread shown to the agent
 ✅ convergence: fires correctly, floored at 8 experiments
-⬜ record run — fresh ledger, one uninterrupted process
+✅ search policy: draft / improve / debug, refine before pivot
+✅ **record run 2 — converged past target, +0.0031**
+⬜ score on test, once
+⬜ write the submission
 ```
 
-**The ledger is reset.** It holds one row: the human-run control at
-`0.601413 ± 0.000154`. Everything before that is archived —
-`logs/shakedown-01/`, `logs/shakedown-02/`, `logs/void-run-1/` — and none of it
-counts toward the autonomy claim. Code is frozen at tag `autonomy-run-1`.
+**Record run 2 is the result.** One uninterrupted process, no human
+intervention, terminated on the organisers' convergence rule.
 
-The best score ever seen is 0.603999 from shakedown 02, but that was a single
-seed and inflated. On three seeds the same solution means **0.603314 ± 0.000639**,
-a gain of **+0.0019** over the control rather than +0.0025 — real (p ≈ 0.03) but
-under ε. That is what has actually been demonstrated.
+```
+submission candidate   logs/record-run-2/solutions/008_time_features_two_bpr_bce.py
+valid primary          0.604598 +/- 0.000497   (3-seed mean)
+delta vs baseline      +0.0031                  target was +0.0020
+stopped                converged, +0.000975 across the last 3
+cost                   $1.63, 1205 s compute, 9 iterations (8 scored)
+```
 
-Spend to date across all runs: ~440k in / 34k out, ~$2.9.
+Full write-up in `logs/record-run-2/README.md`. The ledger is reset again to the
+control, so a further run starts clean.
+
+Spend across every run to date: ~810k in / 66k out, ~$4.5.
 
 ### What's built
 
@@ -68,16 +75,18 @@ which is stronger evidence than the final number alone. Runtime: 50 s numpy,
 
 **Target: valid 0.6035** (baseline 0.6015 + the official ε of 0.002).
 
-### The three archived runs
+### The five runs
 
-None of these is the record run. Each is kept because it is the evidence behind
-a fix, and deleting them would leave the fixes looking like guesses.
+Each archive is kept because it is the evidence behind a fix, and deleting them
+would leave the fixes looking like guesses.
 
 | | what it was | what it produced |
 | --- | --- | --- |
 | `logs/shakedown-01/` | 9 experiments, first debugging run | 4 bugs in the agent loop |
 | `logs/shakedown-02/` | 12 experiments, single-seed | 8 faults; see its README |
 | `logs/void-run-1/` | 3 experiments, stopped deliberately | the convergence floor |
+| `logs/record-run-1/` | 8 experiments, converged | the search policy (depth-2 star) |
+| **`logs/record-run-2/`** | **9 experiments, converged at +0.0031** | **the result** |
 
 **shakedown-02** is the one worth reading. Twelve experiments, all inside
 direction 1, ending in five consecutive tweaks of one loss weight across a
@@ -95,12 +104,39 @@ scoring rendered BPR as +0.0014 against a 0.0004 spread where single-seed would
 have shown a bare 0.603113; and the interrupt handler logged `interrupted` then
 `run_end` instead of the log simply stopping.
 
+**record-run-1** converged legitimately but its whole tree was `2,2,2,2,2,2` —
+six first drafts off one node, nothing refined. That produced the draft / improve
+/ debug policy.
+
+**record-run-2** is the first run whose tree is a tree:
+
+```
+1 → 2 → 3 ─┬─ 4
+           ├─ 5
+           └─ 6 → 7 → 8 → 9
+```
+
 ### What is actually demonstrated
 
-Direction 1 (change the loss) beats the baseline. BPR-family losses give
-**+0.0014 to +0.0019** on three seeds, real but under ε. Directions 2-7 have
-never been reached: shakedown-02 never left direction 1, and void-run-1 was
-stopped as it entered direction 6.
+**BPR blended with pointwise BCE, plus temporal context.** Plain BPR gives
++0.0018; blending a calibrated pointwise term gives +0.0021; averaging two
+independent BPR components +0.0024; adding hour/day features +0.0031. The
+ensemble also has the tightest seed spread of any agent solution (0.00024 against
+a typical 0.0005-0.0009), which is what averaging should do.
+
+**Listwise softmax is genuinely wrong here, not a bug.** Three independently
+written implementations across three runs: -0.0051, -0.0026, -0.0056. A full
+softmax over a user's impressions assumes exactly one relevant item, but this
+data is 33% positive, so a user's positives compete against each other.
+
+**Time features are weak on their own and better on top of an ensemble.**
+record-run-1 found nothing from them on plain BPR; record-run-2 got +0.0007 at
+~1.4σ on top of the ensemble. Suggestive, not established.
+
+**Sequences, multi-task and raw watch-time added nothing** (record-run-1, all
+correctly implemented and all inside their spreads). Raw watch time was actively
+harmful at -0.0375, because `long_view` is watch time *relative to duration* —
+ranking by raw play time favours long videos.
 
 ---
 
@@ -467,11 +503,61 @@ The general lesson, which cost two runs to learn: **a stopping rule has two
 failure modes and fixing one exposes the other.** The first version could never
 stop; the second could stop before anything had been tried.
 
+### The rule cannot tell steady progress from being stuck
+
+Both record runs converged at **exactly 8 scored experiments** — the first moment
+the floor allowed. In record-run-2 the agent was still improving when it was
+stopped:
+
+```
+#7  +0.0021        window  #7,#8,#9  best 0.604598
+#8  +0.0031        before  #1..#6    best 0.603623
+#9  +0.0028                          improvement +0.000975  (need 0.002)
+```
+
+Three consecutive real gains, and the rule declared a plateau, because it only
+counts single steps of at least ε. Refinement almost never produces a single
++0.002 jump; it produces a sequence of smaller ones. So the rule structurally
+penalises the behaviour that Innovation rewards.
+
+This is not ours to fix — ε and N are organiser-fixed. It is the substance of
+`docs/email-convergence-question.md`, which asks whether refinement iterations
+are meant to count toward N at all. Note the answer could go against us: if they
+say the rule applies from the first opportunity, our 8-experiment floor has to
+go.
+
 **Backstops raised to 80 experiments / $15.** Neither should ever fire. What
 they actually guard is a crash loop: `converged()` counts only *scored*
 experiments, so an agent whose solutions all fail never converges.
 `MAX_EXPERIMENTS` counts every ledger row, errors included, and is the only
 thing bounding that case.
+
+---
+
+## Logging error and recovery events
+
+`recovery_events` was populated only by `_event()`, which was wired exclusively
+into the API-error paths. A *solution* crash never reached it — so every record
+in record-run-2 read `recovery_events: []`, including the one that crashed, and
+`events.jsonl` showed no trace of the run's single best robustness moment.
+
+Nothing was lost: the error, traceback, diagnosis and causal link were all in the
+iteration records (`#2 status: error` + `stderr_tail`, `#3 parent: 2` + a
+`debug 2` hypothesis). It was a rendering gap, not a data gap — which is why the
+backfill was possible.
+
+`harness/run.py` now emits two events itself rather than relying on the loop:
+
+- `solution_error` when an experiment fails to score, with the traceback
+- `solution_recovered` when an experiment scores while its parent did not
+
+record-run-2's log was backfilled from its records, with those entries flagged
+`backfilled: true` so the reconstruction is never mistaken for a live capture.
+
+**The general point:** a log built to prove one thing was silently failing to
+record the very thing it existed for, and an empty field read as "nothing went
+wrong" rather than "this was never wired up". Absence of an event is only
+evidence if something was actually watching.
 
 ---
 
@@ -565,22 +651,20 @@ authoritative. Mitigation is mechanical: the agent's write access is
 
 ## Next
 
-1. **Launch the record run.** `python -m agent`, no flags. Everything that was
-   blocking it is closed. Budget two or three attempts — the first clean run
-   usually fails on something never seen in development, and it already has
-   once. Do not schedule it for the last night.
-2. **Score on test, once.** Only after the run converges, and only the
-   validation-best solution.
-3. **Write the submission.** The three deliverables the run log already
-   supports: total tokens and compute (`ledger.totals()`), error and recovery
-   events (`logs/events.jsonl`), and per-iteration hypothesis + metrics
-   (`logs/iterations/`).
+1. **Score `008_time_features_two_bpr_bce.py` on test. Once.** It is the
+   validation-best checkpoint at convergence, which is what the rules say is
+   scored. Not #9 — richer time buckets came in 0.0003 lower, inside the spread.
+2. **Send `docs/email-convergence-question.md`.** The answer to question 2
+   affects any further run, and could require removing our 8-experiment floor.
+3. **Write the submission.** The deliverables the logs already support:
+   total tokens and compute (`ledger.totals()`), error and recovery events
+   (`logs/record-run-2/events.jsonl`), per-iteration hypothesis and metrics
+   (`logs/record-run-2/`), and the search tree via the `parent` chain.
 
-Resolved since the last revision: the seeds question (3-seed scoring, shipped),
-the `load()` contract (documented in the prompt, including that `hourmin` and
-the feedback signals are *not* in the tuple), and whether search should fire
-(yes, on the first iteration of a new direction — it fired immediately in
-void-run-1 and is now logged).
+Optional, if there is time: another record run. The search policy has only been
+exercised once, and record-run-2 stopped while still improving — a second run
+with the same code might go further, or might confirm the plateau. Either is
+worth knowing, and it costs ~$1.60.
 
 ---
 
@@ -593,10 +677,16 @@ void-run-1 and is now logged).
 - ~~Search provenance~~ — searches now log query and result to
   `logs/events.jsonl`, so a finding survives history compaction whether or not
   the agent cites it.
-- **Directions 2-7 are still unproven.** Every experiment across three archived
-  runs sits in direction 1. The record run is the first with a convergence rule
-  that pushes it out, and that is untested at length — void-run-1 was stopped
-  just as it entered direction 6.
+- ~~Directions 2-7 unproven~~ — record-run-1 tested six of the seven; only the
+  loss change (direction 1) and, weakly, time features (6) do anything.
+- **The +0.0007 attributed to time features is ~1.4σ.** The absolute level of
+  record-run-2's best is solid; that specific increment is not established, and
+  record-run-1 found time features gave nothing on plain BPR. If a further run
+  reproduces it on top of an ensemble, that is an interaction worth stating; one
+  observation is not.
+- **The search policy has been exercised exactly once.** record-run-2's tree is
+  the shape we wanted, but a single run is a single sample of the agent's
+  behaviour, not evidence that the policy reliably produces it.
 - **A solution already in the ledger cannot be re-measured in place.** The
   source-hash guard returns `duplicate`. Fine for a fresh ledger; use
   `harness/seedsweep.py` (which writes nothing) to re-measure anything old.
@@ -608,3 +698,6 @@ void-run-1 and is now logged).
 - **Spinner rendering is only fixed for width.** If the terminal is *resized*
   mid-run the padding is recomputed each frame, so it self-corrects, but a
   narrower window mid-write can still leave one stale row.
+- **Prompt hygiene:** the agent's search queries have included the phrase
+  "citation URL", leaked from the prompt line asking it to cite. Harmless, but it
+  dilutes the query.

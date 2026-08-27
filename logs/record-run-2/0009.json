@@ -1,0 +1,57 @@
+{
+  "iteration": 9,
+  "solution": "solutions/009_time_richer_buckets.py",
+  "hypothesis": "improve 8: node 8 shows temporal signal; add half-hour plus coarser daypart/weekend buckets so FM can learn both fine and shared time effects rather than only 24 isolated hours.",
+  "parent": "8",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T18:00:01+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604297,
+  "GAUC": 0.671023,
+  "nDCG@5": 0.53757,
+  "source_hash": "4862b65304e5",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "be1ce9c54d79",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 6.1e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670961,
+      "nDCG@5": 0.53771,
+      "primary": 0.604336
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67091,
+      "nDCG@5": 0.537543,
+      "primary": 0.604226
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671197,
+      "nDCG@5": 0.537458,
+      "primary": 0.604328
+    }
+  ],
+  "seconds": 235.0,
+  "verdict": "KEPT",
+  "delta": 0.002797,
+  "tokens_in": 57986,
+  "tokens_out": 5742,
+  "tokens_cached": 38784,
+  "cost_usd": 0.287662,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 304.5,
+  "recovery_events": []
+}

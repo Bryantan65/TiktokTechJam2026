@@ -1,0 +1,57 @@
+{
+  "iteration": 8,
+  "solution": "solutions/008_time_features_two_bpr_bce.py",
+  "hypothesis": "draft 6: add temporal context to the current best FM ensemble, using hour/day categorical features from the raw logs as recommended for time-aware FMs (search citation: web_search result on temporal context features for factorization machines). Temporal effects may explain within-user tab/date drift not captured by static IDs.",
+  "parent": "7",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T17:54:54+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604598,
+  "GAUC": 0.671418,
+  "nDCG@5": 0.537778,
+  "source_hash": "96c410b0281b",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "dcd7710ccf4d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000497,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671722,
+      "nDCG@5": 0.537799,
+      "primary": 0.604761
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670706,
+      "nDCG@5": 0.537374,
+      "primary": 0.60404
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671826,
+      "nDCG@5": 0.538161,
+      "primary": 0.604994
+    }
+  ],
+  "seconds": 237.5,
+  "verdict": "KEPT",
+  "delta": 0.003098,
+  "tokens_in": 64656,
+  "tokens_out": 7203,
+  "tokens_cached": 47616,
+  "cost_usd": 0.325098,
+  "model": "gpt-5.5",
+  "agent_iteration": 7,
+  "wall_seconds": 350.5,
+  "recovery_events": []
+}

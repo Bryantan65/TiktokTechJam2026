@@ -1,0 +1,57 @@
+{
+  "iteration": 5,
+  "solution": "solutions/005_listwise_fm.py",
+  "hypothesis": "improve 3: test the other standard ranking-loss variant under direction 1, a same-user listwise softmax loss logsumexp(all)-logsumexp(positives), instead of sampled BPR pairs. This should reduce pair-sampling noise and align directly with within-user ranking lists.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T17:43:59+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.59586,
+  "GAUC": 0.659241,
+  "nDCG@5": 0.532479,
+  "source_hash": "63ccd9fb1dc1",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "5a7145645f77",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000432,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.659877,
+      "nDCG@5": 0.5328,
+      "primary": 0.596339
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.658623,
+      "nDCG@5": 0.532379,
+      "primary": 0.595501
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.659224,
+      "nDCG@5": 0.532257,
+      "primary": 0.595741
+    }
+  ],
+  "seconds": 143.8,
+  "verdict": "worse",
+  "delta": -0.00564,
+  "tokens_in": 36676,
+  "tokens_out": 2882,
+  "tokens_cached": 24448,
+  "cost_usd": 0.159824,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 180.9,
+  "recovery_events": []
+}

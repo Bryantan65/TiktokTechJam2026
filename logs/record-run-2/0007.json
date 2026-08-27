@@ -1,0 +1,57 @@
+{
+  "iteration": 7,
+  "solution": "solutions/007_two_bpr_bce_ensemble.py",
+  "hypothesis": "improve 6: node 6's blend works and BPR is the higher-variance component; average two independently sampled BPR FMs before adding the BCE signal to reduce sampling/initialization noise without changing the successful objective mix.",
+  "parent": "6",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T17:50:13+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603933,
+  "GAUC": 0.670587,
+  "nDCG@5": 0.53728,
+  "source_hash": "45b2bda8a4ec",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "ac97f95c4d07",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000256,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670094,
+      "nDCG@5": 0.537247,
+      "primary": 0.60367
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670986,
+      "nDCG@5": 0.537376,
+      "primary": 0.604181
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67068,
+      "nDCG@5": 0.537218,
+      "primary": 0.603949
+    }
+  ],
+  "seconds": 168.8,
+  "verdict": "KEPT",
+  "delta": 0.002433,
+  "tokens_in": 44087,
+  "tokens_out": 4811,
+  "tokens_cached": 29568,
+  "cost_usd": 0.231709,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 233.4,
+  "recovery_events": []
+}

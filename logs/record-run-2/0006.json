@@ -1,0 +1,57 @@
+{
+  "iteration": 6,
+  "solution": "solutions/006_bpr_bce_ensemble.py",
+  "hypothesis": "improve 3: BPR improves ranking but may lose some calibrated pointwise signal; blend standardized scores from the current BPR FM with a separately trained BCE FM at a conservative 0.25 weight. This is the most direct way to combine node 3's GAUC lift with baseline's stable signal before convergence stops the run.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T17:47:02+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603623,
+  "GAUC": 0.670148,
+  "nDCG@5": 0.537099,
+  "source_hash": "75899016d22f",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "5c5bcfb4c364",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000238,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669628,
+      "nDCG@5": 0.537467,
+      "primary": 0.603548
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670665,
+      "nDCG@5": 0.537115,
+      "primary": 0.60389
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67015,
+      "nDCG@5": 0.536714,
+      "primary": 0.603432
+    }
+  ],
+  "seconds": 122.4,
+  "verdict": "KEPT",
+  "delta": 0.002123,
+  "tokens_in": 39008,
+  "tokens_out": 3515,
+  "tokens_cached": 25472,
+  "cost_usd": 0.185866,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 164.2,
+  "recovery_events": []
+}
