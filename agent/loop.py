@@ -15,6 +15,10 @@ import ledger  # noqa: E402
 from agent.tools import TOOL_SCHEMAS, TOOL_DISPATCH, do_web_search  # noqa: E402
 from agent.prompt import system_prompt, build_user_message  # noqa: E402
 
+# Must run before the constants below, which read the environment at import
+# time. load_dotenv() inside run_loop() would be too late for them.
+load_dotenv(os.path.join(ROOT, '.env'))
+
 MAX_TOOL_ROUNDS = 20
 
 # Model and pricing are configurable because model IDs and prices change often
@@ -168,8 +172,7 @@ def _summarize_args(name: str, args: dict) -> str:
 
 
 def run_loop(supervised: bool = False, max_iter: int = 100) -> None:
-    load_dotenv(os.path.join(ROOT, '.env'))
-    client = OpenAI()
+    client = OpenAI()          # .env is loaded at import, above
     tokens = TokenTracker()
 
     messages = [{'role': 'system', 'content': system_prompt()}]
