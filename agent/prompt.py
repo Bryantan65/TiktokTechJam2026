@@ -35,6 +35,29 @@ Valid primary: 0.6014 (3-seed mean; this model is unusually stable, +/- 0.0002).
 Fields: [user_id, video_id, author_id, tab, dur_bucket], k=16, lr=0.001, \
 batch=8192, patience=4.
 
+## The data contract — check this before writing a loader
+`data.load(data_dir)` returns `{'train': [...], 'valid': [...], 'test': [...]}`
+where each row is a plain **tuple, not a DataFrame**:
+
+    (date, user_id, video_id, author_id, tab, duration_ms, label)
+      0        1         2         3       4        5        6
+
+`date` is an int like 20220422. There is **no `hourmin` and no other column** in
+these tuples. Anything else — `hourmin`, `play_time_ms`, `is_click`, `is_like`
+and the rest of the 12 feedback signals — is only in the raw CSVs, which you
+must read yourself with `csv.DictReader`:
+
+    rec_datasets/KuaiRand-Pure/data/log_standard_4_08_to_4_21_pure.csv
+    rec_datasets/KuaiRand-Pure/data/log_standard_4_22_to_5_08_pure.csv
+    rec_datasets/KuaiRand-Pure/data/video_features_basic_pure.csv
+
+Row order matters: the two log files are read in the order above and original
+file order is preserved, which is what `row_id` and your output array index
+against. If you build your own row list, build it the same way.
+
+Directions 3 (multi-task) and 6 (time features) both need columns outside the
+tuple, so both start with reading the CSV. Budget an iteration for that.
+
 ## 7 known directions (ranked by likely payoff)
 1. **Change the loss** — pointwise logloss -> pairwise (BPR) or listwise \
 (softmax over user impressions). Aligns objective with ranking metrics. \
@@ -97,10 +120,19 @@ Each iteration:
 5. Interpret the result in 2-3 sentences. Stop; the next iteration starts with
    a fresh, up-to-date message.
 
-## web_search
-- The 7 directions above are your default. Search ONLY when going beyond them.
+## web_search — use it when you START A NEW DIRECTION
+You are a research agent, and published methods are explicitly in scope. The 7
+directions are *topics*, not implementations: "DIN-style attention" and
+"censored regression" each have a standard formulation that is easy to get
+subtly wrong from memory, and a wrong implementation records a false negative
+against a direction that actually works.
+
+- **Search on the first iteration of any direction you have not tried before.**
+  That is the moment the information is worth most.
+- Do NOT search to tune a variant of something already working. You know how.
 - Maximum 1 search per iteration.
-- When you use a search result, include the citation URL in your hypothesis.
+- **Put the citation URL in your hypothesis.** Nothing else records it, and an
+  uncited finding is gone by the next iteration.
 
 ## Interpreting a bad result — read this before concluding anything
 A poor score is more often YOUR BUG than a fact about the method. Treat these

@@ -268,6 +268,13 @@ def _execute_tool(client, name: str, args: dict,
         query = args.get('query', '')
         print(f'    [web_search] {query}')
         result = do_web_search(client, query)
+        # Log the query and result to the run log. The only rule for provenance
+        # was a prompt line asking the agent to copy the citation URL into its
+        # hypothesis, which nothing enforces - and history compaction now drops
+        # the tool message after one iteration, so an uncited finding is gone.
+        # "What the agent chose to try and why" is what Innovation is scored on;
+        # a search it acted on is part of the why.
+        ledger.log_event('web_search', query, result=str(result)[:2000])
         return result, search_count
 
     if name in TOOL_DISPATCH:

@@ -182,9 +182,13 @@ TOOL_SCHEMAS = [
             'name': 'web_search',
             'description': (
                 'Search the web for research papers, implementations, or '
-                'techniques. Limited to 1 search per iteration. Use ONLY when '
-                'going beyond the 7 known directions. Include the citation URL '
-                'in your hypothesis.'
+                'techniques. Use this on the FIRST iteration of any direction '
+                'you have not tried before - a standard method implemented from '
+                'memory is easy to get subtly wrong, and a wrong implementation '
+                'records a false negative against a direction that works. Do '
+                'not use it to tune a variant of something already working. '
+                'Limited to 1 search per iteration. Put the citation URL in '
+                'your hypothesis - nothing else records it.'
             ),
             'parameters': {
                 'type': 'object',
