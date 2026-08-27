@@ -1,0 +1,57 @@
+{
+  "iteration": 6,
+  "solution": "solutions/006_din_history_bpr_fm.py",
+  "hypothesis": "Add a DIN-style target-aware attention term over each user\u2019s prior positive video history (DIN uses attention over behavior sequences; see https://arxiv.org/abs/2005.12981). This should add missing within-user preference signal while preserving the BPR objective and avoiding valid-label leakage by using only train-history for valid/test.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T17:04:07+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602903,
+  "GAUC": 0.669294,
+  "nDCG@5": 0.536511,
+  "source_hash": "0b1a628d01ad",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "6591dbf346a4",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000591,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669889,
+      "nDCG@5": 0.537105,
+      "primary": 0.603497
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668555,
+      "nDCG@5": 0.536076,
+      "primary": 0.602316
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669438,
+      "nDCG@5": 0.536352,
+      "primary": 0.602895
+    }
+  ],
+  "seconds": 318.8,
+  "verdict": "noise",
+  "delta": 0.001403,
+  "tokens_in": 56499,
+  "tokens_out": 4923,
+  "tokens_cached": 41472,
+  "cost_usd": 0.243561,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 396.9,
+  "recovery_events": []
+}

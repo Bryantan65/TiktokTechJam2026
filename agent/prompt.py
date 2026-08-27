@@ -78,19 +78,52 @@ more than 0.002 across the last 3 scored experiments. That is the organisers'
 rule, not a suggestion, and it is checked in code before every iteration.
 
 What this means for you:
-- **A flat result is a signal to change direction, not to change a constant.**
-  Nudging a weight from 0.10 to 0.05 to 0.025 spends your remaining tries
-  without ever testing a new idea, and then the run ends inside one direction.
 - You are scored on **what you chose to try and why**, not only on the final
-  number. A run that only ever adjusted one hyperparameter answers that badly.
-- Each iteration tells you the current improvement over the last 3 experiments.
-  When it is small, your next experiment should come from a **different one of
-  the 7 directions** — not another variant of the current best.
+  number. A run that only ever adjusted one hyperparameter answers that badly —
+  and so does a run of six unrefined first drafts.
 - Every experiment is trained on 3 different random seeds and the scores are
   averaged. The `+/-` column is how much that model wobbles between seeds -
   **the resolution of your instrument.** A difference smaller than it is not a
-  difference. Measured: the previous best had +/- 0.0006 while five consecutive
+  difference. Measured: one past best had +/- 0.0006 while five consecutive
   experiments differed by 0.0003, so all five resolved nothing.
+
+## How to search — declare an action every iteration
+Your experiments form a TREE. Every one names a `parent`, so the ledger is a
+search trace, not a list. Begin each hypothesis with one of:
+
+- **draft <direction>** — a new idea, branching from the current best node.
+- **improve <n>** — refine node n: the mechanism is sound and you are making it
+  work better.
+- **debug <n>** — node n failed, crashed, or scored far below what the method
+  should give. You are diagnosing it, not replacing it.
+
+### The rule that decides which
+**One implementation is not a test of a method.** DIN, multi-task heads and
+censored watch-time regression each have a standard formulation and many ways to
+get subtly wrong. A first draft that lands flat is evidence about your draft, not
+about the direction.
+
+So:
+- A direction is **not exhausted** until it has had a working implementation
+  AND at least one `improve` or `debug` on top of it. Only then may you write it
+  off and draft elsewhere.
+- **A large negative is a `debug`, always.** Something scoring far below
+  baseline is the most informative node in your tree - it means a strong
+  assumption is wrong. Never leave one undiagnosed to draft something new.
+- Once a direction is genuinely exhausted - implemented, refined, still flat -
+  say so explicitly and draft a different one. Do not keep nudging a constant.
+
+Both failure modes have happened here, so neither is hypothetical:
+
+```
+all depth, no breadth   12 experiments, 1 direction, 5 tweaks of one weight
+all breadth, no depth    8 experiments, 6 directions, 0 refinements, converged
+```
+
+The first mistook noise for a ladder. The second abandoned a -0.0375 result -
+its single most surprising finding - without one diagnostic follow-up. Neither
+is search. **Expand a node while it shows signal; move when it genuinely does
+not.**
 
 ## Dead ends — do NOT try these
 - More static features (all 13 CWM fields): 0.5940 vs 0.5950 — no gain.
@@ -109,16 +142,24 @@ within-user ranking.
 Every iteration's message ALREADY CONTAINS the full ledger and the full source
 of the current best solution. Do not call read_ledger or read_solution to fetch
 them again - each call is a wasted round trip that resends the whole
-conversation. Use those tools only for something not in front of you: an older
-solution you want to compare against, or the full JSON record of a past run.
+conversation. Use those tools only for something not in front of you - most
+often **the node you are about to improve or debug**, when it is not the current
+best. read_solution is the right call there; you cannot refine code you have not
+read.
 
 Each iteration:
 1. Read the ledger and best solution already in this message.
-2. Decide what to try. Explain your hypothesis in 1-2 sentences.
-3. Call write_solution with the complete new solution file.
-4. Call run_experiment to score it.
-5. Interpret the result in 2-3 sentences. Stop; the next iteration starts with
-   a fresh, up-to-date message.
+2. Pick your action - draft / improve / debug - and the node you are expanding.
+   Your hypothesis must start with it, e.g. "improve 4: the time features were
+   raw ints; bucket hour into 6 blocks so the embedding can generalise."
+3. Pass that node number as `parent` to run_experiment. It is what makes the
+   ledger a search trace instead of a list.
+4. Call write_solution with the complete new solution file. Whole file for a
+   draft; copy the parent and change one thing for an improve or a debug.
+5. Call run_experiment to score it.
+6. Interpret the result in 2-3 sentences, and say whether the direction is now
+   exhausted or worth another pass. Stop; the next iteration starts with a
+   fresh, up-to-date message.
 
 ## web_search — use it when you START A NEW DIRECTION
 You are a research agent, and published methods are explicitly in scope. The 7
@@ -238,6 +279,26 @@ def _ledger_table() -> str:
     if notes:
         lines += ['', 'Runs that did not score:'] + notes
 
+    # Show the shape of the search, not just its results. A flat table makes a
+    # star look identical to a tree: the previous run branched six consecutive
+    # experiments off the same node and never refined one, which is invisible in
+    # a list of scores but obvious the moment you count children per parent.
+    kids: dict = {}
+    for r in recs:
+        p = r.get('parent')
+        if p is not None:
+            kids.setdefault(str(p), []).append(r.get('iteration'))
+    if kids:
+        shape = ', '.join('node %s -> %s' % (p, c) for p, c in sorted(kids.items()))
+        lines += ['', '**Search shape.** %s.' % shape]
+        widest = max(kids.items(), key=lambda kv: len(kv[1]))
+        if len(widest[1]) >= 3 and len(kids) <= 2:
+            lines += [
+                '%d of your experiments branch from node %s and nothing has '
+                'been refined. That is a list of first drafts, not a search. '
+                'Your next action should be an **improve** or a **debug** of a '
+                'node that showed something.' % (len(widest[1]), widest[0])]
+
     st = ledger.convergence_status()
     if st['window_improvement'] is None:
         lines += ['', '**Convergence:** %d scored experiments so far; the rule '
@@ -248,8 +309,10 @@ def _ledger_table() -> str:
                   '%d experiments: **%+.6f**, against the %.3f needed to keep '
                   'the run alive (%s).'
                   % (st['n'], st['window_improvement'], st['epsilon'],
-                     'BELOW THRESHOLD - one more experiment without a real gain '
-                     'ends the run, so try a different direction'
+                     'BELOW THRESHOLD - one more experiment without a real '
+                     'gain ends the run. Spend it on whichever node is most '
+                     'likely to move: an undiagnosed failure, or the best '
+                     'idea you have only drafted once'
                      if headroom < 0 else 'still clear')]
     return '\n'.join(lines)
 

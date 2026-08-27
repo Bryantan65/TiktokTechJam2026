@@ -165,11 +165,22 @@ TOOL_SCHEMAS = [
                     },
                     'hypothesis': {
                         'type': 'string',
-                        'description': 'One-line description of what this tests',
+                        'description': (
+                            'What this tests, starting with the action: '
+                            '"draft <direction>", "improve <n>" or "debug <n>". '
+                            'One or two sentences after that.'
+                        ),
                     },
                     'parent': {
                         'type': 'string',
-                        'description': 'Iteration number this builds on, or null',
+                        'description': (
+                            'Iteration number this expands. REQUIRED unless '
+                            'this is the very first experiment. For improve and '
+                            'debug it is the node being refined; for a draft it '
+                            'is the node you branched the code from. Every '
+                            'experiment branching from the same parent means '
+                            'nothing was ever refined.'
+                        ),
                     },
                 },
                 'required': ['solution', 'hypothesis'],

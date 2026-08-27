@@ -1,0 +1,57 @@
+{
+  "iteration": 4,
+  "solution": "solutions/004_time_bpr_fm.py",
+  "hypothesis": "Add temporal context features (date and hour) to the current BPR-FM, motivated by temporal dynamics in recommender systems (Koren 2009: https://dl.acm.org/doi/10.1145/1557019.1557072). The model still optimizes same-user BPR, but can learn time-dependent item/tab biases for train-valid drift and within-user session context.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T16:56:16+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602617,
+  "GAUC": 0.66912,
+  "nDCG@5": 0.536114,
+  "source_hash": "87a3f48256ba",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} base_fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "3b2b308a2822",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000265,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669067,
+      "nDCG@5": 0.535925,
+      "primary": 0.602496
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668935,
+      "nDCG@5": 0.535934,
+      "primary": 0.602435
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669359,
+      "nDCG@5": 0.536483,
+      "primary": 0.602921
+    }
+  ],
+  "seconds": 129.7,
+  "verdict": "noise",
+  "delta": 0.001117,
+  "tokens_in": 47829,
+  "tokens_out": 5078,
+  "tokens_cached": 35328,
+  "cost_usd": 0.232509,
+  "model": "gpt-5.5",
+  "agent_iteration": 3,
+  "wall_seconds": 204.3,
+  "recovery_events": []
+}

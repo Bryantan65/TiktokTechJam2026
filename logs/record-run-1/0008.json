@@ -1,0 +1,57 @@
+{
+  "iteration": 8,
+  "solution": "solutions/008_deepfm_bpr.py",
+  "hypothesis": "Try DeepFM with same-user BPR: the DeepFM paper combines an FM component with a deep component for higher-order feature interactions (https://arxiv.org/abs/1703.04247), which may improve top-5 ranking beyond the low-rank FM without changing the proven pair sampler.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T17:15:27+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603124,
+  "GAUC": 0.669615,
+  "nDCG@5": 0.536633,
+  "source_hash": "9aea3c33c842",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "cbe28d246f59",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000494,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670904,
+      "nDCG@5": 0.536467,
+      "primary": 0.603686
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.66862,
+      "nDCG@5": 0.536898,
+      "primary": 0.602759
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669321,
+      "nDCG@5": 0.536533,
+      "primary": 0.602927
+    }
+  ],
+  "seconds": 118.6,
+  "verdict": "noise",
+  "delta": 0.001624,
+  "tokens_in": 62223,
+  "tokens_out": 3604,
+  "tokens_cached": 45568,
+  "cost_usd": 0.214179,
+  "model": "gpt-5.5",
+  "agent_iteration": 7,
+  "wall_seconds": 177.8,
+  "recovery_events": []
+}

@@ -1,0 +1,57 @@
+{
+  "iteration": 7,
+  "solution": "solutions/007_watchtime_pairwise_fm.py",
+  "hypothesis": "Try a watch-time/CWM-inspired pairwise objective using raw play_time_ms versus duration_ms as a continuous preference signal, rather than only binary long_view labels; censored watch-time modeling is intended for short-video recommendation and should better separate positives near the top. Search reference used: CWM/censored watch-time overview (web result) and implementation will still predict valid from train-only learned parameters.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T17:10:37+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.56396,
+  "GAUC": 0.616264,
+  "nDCG@5": 0.511657,
+  "source_hash": "f1deb10f66fe",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "ccc1389678db",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000458,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.616451,
+      "nDCG@5": 0.512001,
+      "primary": 0.564226
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.615576,
+      "nDCG@5": 0.511286,
+      "primary": 0.563431
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.616765,
+      "nDCG@5": 0.511684,
+      "primary": 0.564224
+    }
+  ],
+  "seconds": 231.9,
+  "verdict": "worse",
+  "delta": -0.03754,
+  "tokens_in": 59677,
+  "tokens_out": 4426,
+  "tokens_cached": 43520,
+  "cost_usd": 0.235325,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 302.2,
+  "recovery_events": []
+}

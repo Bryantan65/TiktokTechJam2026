@@ -1,0 +1,57 @@
+{
+  "iteration": 3,
+  "solution": "solutions/003_listwise_fm.py",
+  "hypothesis": "Try a same-user listwise softmax loss: for each user, minimize logsumexp(all_scores)-mean(score_positive), using all negatives for that user each epoch instead of sampled BPR pairs. This should reduce sampling noise and more directly optimize placing positives above the user\u2019s full impression set.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T16:52:30+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.598912,
+  "GAUC": 0.663189,
+  "nDCG@5": 0.534636,
+  "source_hash": "fbcaf55f4cb0",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "5151b99bcfd1",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000284,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.663035,
+      "nDCG@5": 0.534728,
+      "primary": 0.598882
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.662785,
+      "nDCG@5": 0.534506,
+      "primary": 0.598645
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.663747,
+      "nDCG@5": 0.534674,
+      "primary": 0.59921
+    }
+  ],
+  "seconds": 151.0,
+  "verdict": "worse",
+  "delta": -0.002588,
+  "tokens_in": 36545,
+  "tokens_out": 2799,
+  "tokens_cached": 29568,
+  "cost_usd": 0.133639,
+  "model": "gpt-5.5",
+  "agent_iteration": 2,
+  "wall_seconds": 187.4,
+  "recovery_events": []
+}

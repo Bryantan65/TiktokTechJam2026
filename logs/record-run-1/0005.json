@@ -1,0 +1,57 @@
+{
+  "iteration": 5,
+  "solution": "solutions/005_multitask_bpr_fm.py",
+  "hypothesis": "Train the BPR-FM with shared embeddings plus auxiliary heads for raw feedback labels (click/like/follow/comment/forward and log play time), following multi-task recommendation ideas such as STEM (https://arxiv.org/abs/2308.13537). Auxiliary supervision should regularize item/user embeddings while the saved score is still the main same-user BPR score.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T16:59:34+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602653,
+  "GAUC": 0.669151,
+  "nDCG@5": 0.536155,
+  "source_hash": "1951770f2874",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\naux coverage [1. 1. 1. 1. 1. 1.]\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "9307d3ea9b9d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000393,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669628,
+      "nDCG@5": 0.536465,
+      "primary": 0.603047
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668715,
+      "nDCG@5": 0.535807,
+      "primary": 0.602261
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669111,
+      "nDCG@5": 0.536194,
+      "primary": 0.602652
+    }
+  ],
+  "seconds": 196.1,
+  "verdict": "noise",
+  "delta": 0.001153,
+  "tokens_in": 54942,
+  "tokens_out": 4835,
+  "tokens_cached": 39424,
+  "cost_usd": 0.242352,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 264.1,
+  "recovery_events": []
+}
