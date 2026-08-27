@@ -1,9 +1,10 @@
-"""Baseline FM plus small train-only user-history residuals.
+"""FM with within-user BPR plus a small pointwise BCE auxiliary term.
 
-This tests a cheap user-behavior feature: for a candidate row, add smoothed
-historical positive-rate logits for the same user with the same video/author/tab
-/duration bucket, computed from train only. These vary within a user across the
-items being ranked, unlike pure user first-order effects.
+BPR with two same-user negatives is the current best and gives a strong GAUC,
+but its nDCG@5 is slightly below the one-negative variant.  This keeps the
+ranking objective dominant while adding a light BCE term on the same positive
+and sampled-negative rows to retain some pointwise click calibration that may
+help the very top of each user's list.
 """
 import argparse
 import os
@@ -44,91 +45,100 @@ class TorchFM(torch.nn.Module):
         return np.concatenate(out)
 
 
-def run_fm(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
-           seed=0, device='cpu', verbose=True):
+def build_user_pair_pools(y, users):
+    y = np.asarray(y)
+    users = np.asarray(users)
+    order = np.argsort(users, kind='mergesort')
+    su = users[order]
+    cuts = np.flatnonzero(su[1:] != su[:-1]) + 1
+    starts = np.r_[0, cuts]
+    ends = np.r_[cuts, len(order)]
+
+    pos_chunks, neg_chunks = [], []
+    for s, e in zip(starts, ends):
+        idx = order[s:e]
+        yy = y[idx] > 0.5
+        if yy.any() and (~yy).any():
+            pos_chunks.append(idx[yy].astype(np.int64, copy=False))
+            neg_chunks.append(idx[~yy].astype(np.int64, copy=False))
+    return pos_chunks, neg_chunks
+
+
+def sample_pairs(pos_chunks, neg_chunks, rng, negs_per_pos=2):
+    base = sum(len(p) for p in pos_chunks)
+    n_pairs = base * negs_per_pos
+    pos = np.empty(n_pairs, dtype=np.int64)
+    neg = np.empty(n_pairs, dtype=np.int64)
+    off = 0
+    for p, n in zip(pos_chunks, neg_chunks):
+        m = len(p)
+        for _ in range(negs_per_pos):
+            pos[off:off + m] = p
+            neg[off:off + m] = n[rng.integers(0, len(n), size=m)]
+            off += m
+    perm = rng.permutation(n_pairs)
+    return pos[perm], neg[perm]
+
+
+def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+        seed=0, device='cpu', verbose=True, aux_weight=0.10):
     enc, dim = encode(splits)
-    Xtr, ytr, _ = enc['train']
+    Xtr, ytr, utr = enc['train']
     Xva, yva, uva = enc['valid']
+
+    pos_chunks, neg_chunks = build_user_pair_pools(ytr, utr)
+    if verbose:
+        print(f"eligible users={len(pos_chunks):,d}; pairs/epoch={2 * sum(len(p) for p in pos_chunks):,d}")
+
     model = TorchFM(dim, k=k, seed=seed).to(device)
     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
                             {'params': [model.b], 'weight_decay': 0.0}],
                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
-    lossfn = torch.nn.BCEWithLogitsLoss()
+
     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
-    ytr_t = torch.from_numpy(ytr.astype(np.float32))
     rng = np.random.default_rng(seed)
     best, best_state, bad = -1.0, None, 0
+
     for ep in range(1, epochs + 1):
-        idx = rng.permutation(len(ytr))
+        pidx, nidx = sample_pairs(pos_chunks, neg_chunks, rng, negs_per_pos=2)
         t0 = time.time()
         model.train()
         losses = []
-        for i in range(0, len(idx), bs):
-            sel = torch.from_numpy(idx[i:i + bs])
-            xb = Xtr_t[sel].to(device)
-            yb = ytr_t[sel].to(device)
+        for i in range(0, len(pidx), bs):
+            ps = torch.from_numpy(pidx[i:i + bs])
+            ns = torch.from_numpy(nidx[i:i + bs])
+            xp = Xtr_t[ps].to(device)
+            xn = Xtr_t[ns].to(device)
             opt.zero_grad(set_to_none=True)
-            loss = lossfn(model(xb), yb)
+            sp = model(xp)
+            sn = model(xn)
+            bpr = torch.nn.functional.softplus(sn - sp).mean()
+            # Auxiliary pointwise term on exactly the sampled rows: positives=1, negatives=0.
+            bce_pos = torch.nn.functional.softplus(-sp).mean()
+            bce_neg = torch.nn.functional.softplus(sn).mean()
+            loss = bpr + aux_weight * 0.5 * (bce_pos + bce_neg)
             loss.backward()
             opt.step()
             losses.append(loss.item())
+
         va = evaluate(uva, yva, model.predict(Xva, device=device))
         if verbose:
-            print(f"  epoch {ep:2d} | loss {np.mean(losses):.4f} | valid "
+            print(f"  epoch {ep:2d} | bpr+bce {np.mean(losses):.4f} | valid "
                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+
         if va['primary'] > best + 1e-5:
             best, bad = va['primary'], 0
             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
         else:
             bad += 1
             if bad >= patience:
+                if verbose:
+                    print(f"  early stop at epoch {ep}")
                 break
+
     model.load_state_dict(best_state)
     return model, enc
-
-
-def safe_logit(p):
-    p = np.clip(p, 1e-5, 1.0 - 1e-5)
-    return np.log(p / (1.0 - p)).astype(np.float32)
-
-
-def pair_residual(train_a, train_b, y, pred_a, pred_b, prior, global_mean):
-    train_a = train_a.astype(np.int64)
-    train_b = train_b.astype(np.int64)
-    pred_a = pred_a.astype(np.int64)
-    pred_b = pred_b.astype(np.int64)
-    base = int(max(train_b.max(initial=0), pred_b.max(initial=0))) + 1
-    ktr = train_a * base + train_b
-    kpr = pred_a * base + pred_b
-    keys, inv = np.unique(ktr, return_inverse=True)
-    cnt = np.bincount(inv).astype(np.float32)
-    sm = np.bincount(inv, weights=y.astype(np.float32)).astype(np.float32)
-    rate = (sm + prior * global_mean) / (cnt + prior)
-    vals = safe_logit(rate) - safe_logit(global_mean)
-    pos = np.searchsorted(keys, kpr)
-    # avoid indexing keys with len(keys) for missing right-edge values
-    ok_range = pos < len(keys)
-    out = np.zeros(len(kpr), dtype=np.float32)
-    ok = np.zeros(len(kpr), dtype=bool)
-    ok[ok_range] = keys[pos[ok_range]] == kpr[ok_range]
-    out[ok] = vals[pos[ok]]
-    return out
-
-
-def user_history_residual(enc, split):
-    Xtr, ytr, _ = enc['train']
-    Xp, _, _ = enc[split]
-    y = ytr.astype(np.float32)
-    gm = float(np.mean(y))
-    u_tr = Xtr[:, 0]
-    u_p = Xp[:, 0]
-    # FIELDS: user_id, video_id, author_id, tab, dur_bucket
-    uv = pair_residual(u_tr, Xtr[:, 1], y, u_p, Xp[:, 1], prior=4.0, global_mean=gm)
-    ua = pair_residual(u_tr, Xtr[:, 2], y, u_p, Xp[:, 2], prior=8.0, global_mean=gm)
-    ut = pair_residual(u_tr, Xtr[:, 3], y, u_p, Xp[:, 3], prior=20.0, global_mean=gm)
-    ud = pair_residual(u_tr, Xtr[:, 4], y, u_p, Xp[:, 4], prior=20.0, global_mean=gm)
-    return (0.45 * uv + 0.35 * ua + 0.12 * ut + 0.08 * ud).astype(np.float32)
 
 
 if __name__ == '__main__':
@@ -148,20 +158,18 @@ if __name__ == '__main__':
     splits = load(a.data_dir)
     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
 
-    model, enc = run_fm(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
-                        device=a.device, verbose=a.out is None)
-    X, y, users = enc[a.split]
-    fm_scores = model.predict(X, device=a.device)
-    hist = user_history_residual(enc, a.split)
-    scores = fm_scores + 0.05 * hist
+    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+                     device=a.device, verbose=a.out is None)
 
+    X, y, users = enc[a.split]
+    scores = model.predict(X, device=a.device)
     if a.out:
         np.save(a.out, scores.astype(np.float64))
         print(f"wrote {len(scores):,d} predictions for split={a.split}")
     else:
-        print(f"\n=== fm_user_history_blend (seed={a.seed}, device={a.device}) ===")
+        print(f"\n=== bpr2_bce_aux_fm (seed={a.seed}, device={a.device}) ===")
         for sp in ('valid', 'test'):
             Xs, ys, us = enc[sp]
-            sc = model.predict(Xs, device=a.device) + 0.05 * user_history_residual(enc, sp)
-            r = evaluate(us, ys, sc)
-            print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+            r = evaluate(us, ys, model.predict(Xs, device=a.device))
+            print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+                  f"| primary {r['primary']:.4f}")

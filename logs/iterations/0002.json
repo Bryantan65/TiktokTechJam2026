@@ -1,0 +1,23 @@
+{
+  "iteration": 2,
+  "solution": "solutions/002_bpr_fm.py",
+  "hypothesis": "Replace pointwise BCE with true within-user BPR: sample (positive, negative) pairs from the same training user so the FM is optimized directly for within-user ranking rather than global click calibration.",
+  "parent": "001",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "timestamp": "2026-08-27T14:54:14+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603113,
+  "GAUC": 0.669442,
+  "nDCG@5": 0.536784,
+  "source_hash": "b273552899c9",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "fb098ed3bbc2",
+  "users": 22377,
+  "rows": 124909,
+  "seconds": 31.6,
+  "verdict": "noise",
+  "delta": 0.001613
+}

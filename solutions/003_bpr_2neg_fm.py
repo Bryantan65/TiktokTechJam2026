@@ -1,3 +1,11 @@
+"""FM trained with within-user BPR, sampling two negatives per positive.
+
+Experiment 002 showed that changing BCE to true same-user BPR is beneficial but
+just short of the target.  This is a targeted tweak: keep the model and loss the
+same, but expose each positive to two independently sampled same-user negatives
+per epoch, giving the pairwise objective a less noisy estimate of the user's
+negative set while still remaining cheap.
+"""
 import argparse
 import os
 import sys
@@ -8,16 +16,11 @@ import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'kuairand-starter-kit'))
-from data import load, encode, FIELDS          # noqa: E402  official, unmodified
-from evaluate import evaluate                  # noqa: E402  official, unmodified
+from data import load, encode, FIELDS          # noqa: E402
+from evaluate import evaluate                  # noqa: E402
 
 
 class TorchFM(torch.nn.Module):
-    """Same arithmetic as baseline.py's FM class.
-
-    logits = b + sum(W[x]) + 0.5 * ((sum E)^2 - sum(E^2))
-    """
-
     def __init__(self, dim, k=16, seed=0):
         super().__init__()
         rng = np.random.default_rng(seed)
@@ -42,16 +45,50 @@ class TorchFM(torch.nn.Module):
         return np.concatenate(out)
 
 
-def bpr_loss(pos_scores, neg_scores):
-    """BPR loss for pairwise ranking."""
-    return -torch.log(torch.sigmoid(pos_scores - neg_scores)).mean()
+def build_user_pair_pools(y, users):
+    y = np.asarray(y)
+    users = np.asarray(users)
+    order = np.argsort(users, kind='mergesort')
+    su = users[order]
+    cuts = np.flatnonzero(su[1:] != su[:-1]) + 1
+    starts = np.r_[0, cuts]
+    ends = np.r_[cuts, len(order)]
+
+    pos_chunks, neg_chunks = [], []
+    for s, e in zip(starts, ends):
+        idx = order[s:e]
+        yy = y[idx] > 0.5
+        if yy.any() and (~yy).any():
+            pos_chunks.append(idx[yy].astype(np.int64, copy=False))
+            neg_chunks.append(idx[~yy].astype(np.int64, copy=False))
+    return pos_chunks, neg_chunks
+
+
+def sample_pairs(pos_chunks, neg_chunks, rng, negs_per_pos=2):
+    base = sum(len(p) for p in pos_chunks)
+    n_pairs = base * negs_per_pos
+    pos = np.empty(n_pairs, dtype=np.int64)
+    neg = np.empty(n_pairs, dtype=np.int64)
+    off = 0
+    for p, n in zip(pos_chunks, neg_chunks):
+        m = len(p)
+        for _ in range(negs_per_pos):
+            pos[off:off + m] = p
+            neg[off:off + m] = n[rng.integers(0, len(n), size=m)]
+            off += m
+    perm = rng.permutation(n_pairs)
+    return pos[perm], neg[perm]
 
 
 def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
         seed=0, device='cpu', verbose=True):
     enc, dim = encode(splits)
-    Xtr, ytr, _ = enc['train']
+    Xtr, ytr, utr = enc['train']
     Xva, yva, uva = enc['valid']
+
+    pos_chunks, neg_chunks = build_user_pair_pools(ytr, utr)
+    if verbose:
+        print(f"eligible users={len(pos_chunks):,d}; pairs/epoch={2 * sum(len(p) for p in pos_chunks):,d}")
 
     model = TorchFM(dim, k=k, seed=seed).to(device)
     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
@@ -59,42 +96,30 @@ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
 
     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
-    ytr_t = torch.from_numpy(ytr)
-
     rng = np.random.default_rng(seed)
     best, best_state, bad = -1.0, None, 0
 
     for ep in range(1, epochs + 1):
-        idx = rng.permutation(len(ytr))
+        pidx, nidx = sample_pairs(pos_chunks, neg_chunks, rng, negs_per_pos=2)
         t0 = time.time()
         model.train()
         losses = []
-        for i in range(0, len(idx), bs):
-            sel = torch.from_numpy(idx[i:i + bs])
-            xb = Xtr_t[sel].to(device)
-            yb = ytr_t[sel].to(device)
-
-            # Generate negative samples from the same batch of users
-            neg_idx = []
-            for user in set(Xtr[sel][:, 0]):
-                user_mask = (Xtr[:, 0] == user)
-                user_neg_idx = rng.choice(np.where(user_mask)[0], size=np.sum(user_mask))
-                neg_idx.extend(user_neg_idx)
-            neg_idx = np.array(neg_idx[:len(sel)])  # Match the batch size
-            xb_neg = Xtr_t[neg_idx].to(device)
-
-            pos_scores = model(xb)
-            neg_scores = model(xb_neg)
-
+        for i in range(0, len(pidx), bs):
+            ps = torch.from_numpy(pidx[i:i + bs])
+            ns = torch.from_numpy(nidx[i:i + bs])
+            xp = Xtr_t[ps].to(device)
+            xn = Xtr_t[ns].to(device)
             opt.zero_grad(set_to_none=True)
-            loss = bpr_loss(pos_scores, neg_scores)
+            sp = model(xp)
+            sn = model(xn)
+            loss = torch.nn.functional.softplus(sn - sp).mean()
             loss.backward()
             opt.step()
             losses.append(loss.item())
 
         va = evaluate(uva, yva, model.predict(Xva, device=device))
         if verbose:
-            print(f"  epoch {ep:2d} | loss {np.mean(losses):.4f} | valid "
+            print(f"  epoch {ep:2d} | bpr2 {np.mean(losses):.4f} | valid "
                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
 
@@ -115,10 +140,8 @@ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
-    ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test'],
-                    help='which split to write predictions for')
-    ap.add_argument('--out', default=None,
-                    help='write predictions here as .npy, one score per row')
+    ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test'])
+    ap.add_argument('--out', default=None)
     ap.add_argument('--k', type=int, default=16)
     ap.add_argument('--lr', type=float, default=0.001)
     ap.add_argument('--epochs', type=int, default=40)
@@ -136,15 +159,13 @@ if __name__ == '__main__':
 
     X, y, users = enc[a.split]
     scores = model.predict(X, device=a.device)
-
     if a.out:
         np.save(a.out, scores.astype(np.float64))
         print(f"wrote {len(scores):,d} predictions for split={a.split}")
     else:
-        print(f"\n=== torch_fm (seed={a.seed}, device={a.device}) ===")
+        print(f"\n=== bpr_2neg_fm (seed={a.seed}, device={a.device}) ===")
         for sp in ('valid', 'test'):
             Xs, ys, us = enc[sp]
             r = evaluate(us, ys, model.predict(Xs, device=a.device))
             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
                   f"| primary {r['primary']:.4f}")
-        print("\n  official baseline: valid primary 0.6016 | test primary 0.5946")

@@ -1,0 +1,23 @@
+{
+  "iteration": 3,
+  "solution": "solutions/003_bpr_2neg_fm.py",
+  "hypothesis": "Since 1-negative same-user BPR improved to 0.6031, sample two same-user negatives per positive each epoch to reduce pairwise gradient noise and better cover the user's observed negatives without changing the FM architecture.",
+  "parent": "002",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "timestamp": "2026-08-27T14:55:27+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603272,
+  "GAUC": 0.669911,
+  "nDCG@5": 0.536633,
+  "source_hash": "00fc91aeaf63",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "d279c3dc99e5",
+  "users": 22377,
+  "rows": 124909,
+  "seconds": 29.9,
+  "verdict": "noise",
+  "delta": 0.001772
+}

@@ -54,6 +54,13 @@ def write_solution(filename: str, code: str) -> str:
     except SyntaxError as e:
         return json.dumps({'error': f'SyntaxError: {e.msg} (line {e.lineno})'})
 
+    if os.path.exists(full):
+        # Overwriting silently loses the code behind an already-logged result,
+        # and the ledger would then point at a file that no longer matches.
+        return json.dumps({'error': f'{filename} already exists. Pick a new '
+                                    f'number/name; never overwrite a solution '
+                                    f'that has been run.'})
+
     os.makedirs(SOLUTIONS_DIR, exist_ok=True)
     with open(full, 'w', encoding='utf-8') as f:
         f.write(code)
