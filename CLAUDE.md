@@ -97,9 +97,9 @@ capacity** — which is exactly where an agent's instincts point first.
 5. **Other models** (DeepFM/DCN/xDeepFM) — ranked *below* 1-4, since capacity
    measurably isn't the bottleneck.
 6. **Time features and drift** — `hourmin`, `date`, train-vs-test drift.
-7. **Unbiased validation** — `log_random_4_22_to_5_08_pure.csv` (1.18M rows,
+7. **Unbiased validation** — `log_random_4_22_to_5_08_pure.csv` (1.19M rows,
    randomised exposure) as an extra validation set to detect overfitting to
-   biased traffic.
+   biased traffic. **Never train on it** — see below.
 
 ## Data quirks
 
@@ -108,8 +108,22 @@ capacity** — which is exactly where an agent's instincts point first.
   ≤18s, else `play_time >= 18s`) with **97.8% agreement**.
 - `is_click` is **not** a click for most rows — it is UI-dependent (`valid_play`,
   a 7-second watch threshold, in the single-column UI; a real click in the
-  two-column UI, 96.5% agreement). It is *not* the scored label, but it is a
-  legitimate auxiliary signal under direction 3 above.
+  two-column UI, 96.5% agreement). This defect is one of the reasons the
+  organisers moved the scored label to `long_view`, which is purely a function
+  of watch time and duration and has no such ambiguity. `is_click` remains a
+  legitimate auxiliary signal under direction 3.
+- **`log_random_4_22_to_5_08_pure.csv` must not be trained on** (organisers,
+  2026-08-27). It spans 04-22..05-08 — exactly the valid and test window — so
+  training on it is training on the evaluation period. Fine for analysis and
+  unbiased-evaluation experiments; it must not fit the submitted model.
+- **`long_view` rate varies enormously by `tab`** — 4.1% on tab 0 up to 48.3% on
+  tab 4, a **44-point spread** across the five tabs carrying >=1% of traffic
+  (verified on this data; tab 1 alone is 73.7% of rows at 37.9%, overall 33.2%).
+  The organisers call this genuine heterogeneity between surfaces, not a label
+  defect, and note that *"conditioning on tab is a modelling decision, and a
+  reasonable one."* `tab` is already one of the 5 baseline fields, but only as a
+  plain feature — nothing encourages the model to treat the surfaces
+  differently.
 
 ## The CWM codebase in `src/`
 

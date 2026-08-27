@@ -193,10 +193,9 @@ ranking metric.
 
 ## Open
 
-- **Is `log_random_4_22_to_5_08_pure.csv` trainable?** 1.19M unused rows of
-  randomised exposure, but it spans the same dates as valid and test. The kit
-  suggests it as an unbiased *validation* set (direction 7); whether it may be
-  trained on is unstated. Worth asking.
+- ~~Is `log_random` trainable?~~ **Answered 2026-08-27: no.** Training on it
+  means training on the evaluation period. Analysis and unbiased-evaluation
+  experiments are fine; it must not fit the submitted model.
 - **API key** — not obtained yet.
 - **Branch strategy** — the agent will commit on every iteration. Two humans
   plus an agent on `main` will collide.
