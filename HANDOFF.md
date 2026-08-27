@@ -79,13 +79,11 @@ All twelve sit inside direction 1 (change the loss) — the organisers' own
 top-ranked direction. It never reached direction 2. Two things worth noting
 before reading this as success:
 
-- **The gain is +0.0025 against a 0.0008 seed σ.** That clears 2σ, but only
-  just, and none of it has been confirmed on a second seed. Do that before
-  treating 012 as the baseline for anything.
-- **Iterations 8-12 are the same idea five times.** Sampled softmax with the
-  auxiliary weight nudged: 0.10, 0.05, 0.025. The spread across all five is
-  0.0003, well inside noise. That is the search grinding, not exploring — and it
-  is exactly what `converged()` exists to stop.
+- **The +0.0025 in this table is a single-seed number and it is inflated.**
+  Confirmed on three seeds: the true gain is **+0.0019**, real (p ≈ 0.03) but
+  marginally below ε. See the seed-noise section below.
+- **Iterations 8-12 are the same idea five times**, spread 0.0003 — against a
+  measured per-seed noise of 0.0006 for this model. They resolved nothing.
 
 The one genuinely informative failure is **7 (hard-negative mining, -0.0034)**.
 It is also the only iteration where the agent proposed a mechanism rather than
@@ -313,6 +311,57 @@ it is the evidence, not a byproduct.
 
 ---
 
+## Seed noise — the ladder is smaller than it looks
+
+Measured 2026-08-27, three seeds each, scored outside the ledger (a seed sweep
+is one experiment measured properly, not several experiments):
+
+```
+012_softmax2_bce0025_fm.py        001_torch_fm.py (baseline)
+  seed 0   0.603999                 seed 0   0.601400
+  seed 1   0.603210                 seed 1   0.601574
+  seed 2   0.602734                 seed 2   0.601266
+  mean     0.603314  std 0.000639   mean     0.601414  std 0.000154
+```
+
+**The real improvement is +0.0019, not the +0.0025 in the ledger.** Per seed:
++0.002599 / +0.001636 / +0.001468. Paired across three seeds it is genuinely
+significant (t ≈ 5.4, p ≈ 0.03) — the gain is *real* — but its size was
+inflated by seed 0 being the luckiest draw, and seed 0 is the only seed the
+agent ever sees, because the harness hardcodes it. So the headline sits
+**marginally below ε**, not above it.
+
+**The more useful number is the std: 0.000639 for 012 against 0.000154 for the
+baseline — 4x noisier.** Sampled softmax over sampled negatives adds two
+stochastic layers the pointwise baseline does not have. This is a property of
+the *method*, not of the run.
+
+That settles iterations 8-12. Their spread was 0.0003 against a per-seed noise
+of 0.0006, so **those five experiments were measuring nothing but seed noise** —
+not "probably noise", measurably so. The ladder 0.603910 → 0.603999 is an
+artefact of one random draw.
+
+Which reframes the grinding: it was never mainly a prompt problem. **The agent
+chased 0.0003 differences because the harness reported them as differences.**
+Telling it not to grind treats the symptom; the cause is that a single-seed
+score cannot resolve what it was being asked to compare.
+
+**Open decision — should the harness average over seeds?**
+
+| | cost | effect |
+| --- | --- | --- |
+| leave it | — | matches the organisers' design; agent keeps chasing noise |
+| 3 seeds per experiment | 40 s → 2 min; 80 experiments ≈ 2.7 h | every verdict real; fixes grinding at the root, and makes `converged()` honest |
+| single seed, verify the winner | ~2 min once | what was done here; the agent's *path* stays noise-driven |
+
+Not a bug fix, a design choice. Single-seed development *is* the organisers'
+intent: they set ε ≈ 2.5σ specifically so a single-seed gain of ε is unlikely to
+be noise. But that calibration assumed the baseline's σ of 0.0008; our best
+solution's is 0.0006 on its own and the *difference* of two noisy runs is
+noisier still, so ε is doing less work here than intended.
+
+---
+
 ## Convergence — the rule that decides when a run is over
 
 ε = 0.002, N = 3, both organiser-fixed (Starter Kit README and §2.3 of the
@@ -451,10 +500,10 @@ authoritative. Mitigation is mechanical: the agent's write access is
 
 Ordered by what blocks the record run.
 
-1. **Confirm the best solution on 2-3 seeds.** +0.0025 against σ=0.0008 clears
-   2σ by a hair, on one seed. Everything downstream assumes this is real, and
-   iterations 8-12 are now five consecutive softmax-weight tweaks spanning
-   0.0003 — which is what a seed sweep exists to tell apart from progress.
+1. **Decide the seeds question** (see the seed-noise section). Done: the seed
+   sweep confirms the gain is real at +0.0019 but that iterations 8-12 resolved
+   nothing. Outstanding: whether the harness should average over 3 seeds for the
+   record run. This is the one decision that changes what the ladder *means*.
 2. **Fix the `load()` contract confusion.** Iteration 13 crashed assuming
    `load()` returns DataFrames with `.columns`; it returns split tuples. The
    agent recovered correctly, but every new direction that needs raw columns
