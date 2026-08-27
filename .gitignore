@@ -5,8 +5,14 @@ rec_datasets/*
 # Agent run outputs. logs/iterations/*.json is a REQUIRED DELIVERABLE
 # (run-log requirements: hypothesis, diff, metrics, error/recovery), so it is
 # tracked. ~1-3KB per iteration.
+#
+# logs/events.jsonl is tracked for the same reason: it is the chronological
+# run log, and the only place a failure *between* experiments (an API 500, a
+# retry, a crash) is recorded. Robustness is scored on how failures were
+# handled, so this file is the evidence. One line per event, a few KB per run.
 logs/*
 !logs/iterations/
+!logs/events.jsonl
 logs/iterations/*
 !logs/iterations/*.json
 checkpoints/

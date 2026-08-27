@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 from datetime import datetime
 
 if sys.platform == 'win32':
@@ -34,6 +35,7 @@ else:
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_DIR = os.path.join(ROOT, 'logs', 'iterations')
 LEDGER = os.path.join(ROOT, 'LEDGER.md')
+EVENTS = os.path.join(ROOT, 'logs', 'events.jsonl')
 
 # Official baseline, reproduced on this machine (see CLAUDE.md).
 BASELINE_VALID = 0.6015
@@ -51,6 +53,83 @@ records in `logs/iterations/NNN.json`; the code for each is `solutions/NNN_*.py`
 | # | parent | hypothesis | valid | delta | verdict | by |
 |---|---|---|---|---|---|---|
 """
+
+
+def log_event(kind, detail, **extra):
+    """Append one line to the chronological run log.
+
+    The experiment records answer "what was tried and what did it score". They
+    cannot answer "did anything go wrong, and did the run carry on" - a failure
+    that happens between experiments (a 500 from the API, a retry, a corrupt
+    record) touches no experiment and so appears nowhere. Robustness is scored
+    on exactly that: "how it handles one - recovering, retrying, or routing
+    around a failed step", and section 2.4 requires each iteration to record
+    "any error / recovery events". Printing them loses them when the terminal
+    closes.
+
+    Append-only JSONL, one event per line, so a crash mid-write costs at most
+    the last line and never corrupts what came before.
+    """
+    rec = {'ts': stamp(), 'kind': kind, 'detail': str(detail)[:1000]}
+    rec.update(extra)
+    os.makedirs(os.path.dirname(EVENTS), exist_ok=True)
+    try:
+        with open(EVENTS, 'a', encoding='utf-8') as fh:
+            _lock(fh)
+            try:
+                fh.write(json.dumps(rec) + '\n')
+            finally:
+                _unlock(fh)
+    except OSError:
+        pass                 # logging must never be the thing that kills a run
+    return rec
+
+
+def events(kinds=None, since_iteration=None):
+    """Read back the run log, optionally filtered. Used for the writeup."""
+    if not os.path.isfile(EVENTS):
+        return []
+    out = []
+    with open(EVENTS, encoding='utf-8') as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue     # a torn final line from a hard kill; skip it
+            if kinds and rec.get('kind') not in kinds:
+                continue
+            if (since_iteration is not None
+                    and (rec.get('iteration') or 0) < since_iteration):
+                continue
+            out.append(rec)
+    return out
+
+
+def _write_json_atomic(path, obj):
+    """Write via a temp file in the same directory, then rename.
+
+    os.replace is atomic on both POSIX and Windows, so a reader either sees the
+    old complete file or the new complete one. Writing in place means a crash
+    partway through leaves truncated JSON, which _load_all() then skips - the
+    experiment disappears from the ledger without anything saying so.
+    """
+    directory = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(dir=directory, suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+            json.dump(obj, fh, indent=2)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def next_iteration():
@@ -128,6 +207,9 @@ def find_twin(predictions_hash, metrics, exclude_iteration=None):
     return None, None
 
 
+_reported_corrupt: set[str] = set()
+
+
 def _load_all():
     if not os.path.isdir(LOG_DIR):
         return []
@@ -138,8 +220,15 @@ def _load_all():
         try:
             with open(os.path.join(LOG_DIR, name)) as fh:
                 out.append(json.load(fh))
-        except (ValueError, OSError):
-            continue
+        except (ValueError, OSError) as exc:
+            # Skipping keeps the run alive, but skipping *silently* means an
+            # experiment vanishes and nothing ever says so. Report each bad
+            # file once - _load_all is called several times per iteration.
+            if name not in _reported_corrupt:
+                _reported_corrupt.add(name)
+                log_event('corrupt_record',
+                          '%s: %s: %s' % (name, type(exc).__name__, exc),
+                          file=name)
     return out
 
 
@@ -195,8 +284,7 @@ def write(record):
                       verdict(record.get('valid_primary'), record.get('status')))
     os.makedirs(LOG_DIR, exist_ok=True)
     path = os.path.join(LOG_DIR, '%04d.json' % record['iteration'])
-    with open(path, 'w') as fh:
-        json.dump(record, fh, indent=2)
+    _write_json_atomic(path, record)
 
     h = record.get('source_hash')
     if h:
@@ -242,8 +330,7 @@ def annotate(iteration, **fields):
     except (ValueError, OSError):
         return None
     rec.update(fields)
-    with open(path, 'w') as fh:
-        json.dump(rec, fh, indent=2)
+    _write_json_atomic(path, rec)
     h = rec.get('source_hash')
     if h:
         _hash_index[h] = rec

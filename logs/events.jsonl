@@ -1,0 +1,2 @@
+{"ts": "2026-08-27T15:48:03+08:00", "kind": "run_start", "detail": "agent loop started", "model": "gpt-5.5", "max_iter": 1, "max_experiments": 13, "max_cost_usd": 1.0, "supervised": false, "ledger_rows_at_start": 11}
+{"ts": "2026-08-27T15:49:04+08:00", "kind": "run_end", "detail": "max_iter reached", "tokens_in": 18613, "tokens_out": 2667, "tokens_cached": 10496, "cost_usd": 0.1258, "api_calls": 3, "experiments": 12, "best_valid_primary": 0.603999}

@@ -62,13 +62,19 @@ within-user ranking.
 - log_random_4_22_to_5_08_pure.csv must NOT be trained on.
 
 ## Workflow
+Every iteration's message ALREADY CONTAINS the full ledger and the full source
+of the current best solution. Do not call read_ledger or read_solution to fetch
+them again - each call is a wasted round trip that resends the whole
+conversation. Use those tools only for something not in front of you: an older
+solution you want to compare against, or the full JSON record of a past run.
+
 Each iteration:
-1. Call read_ledger to see what has been tried.
-2. Call read_solution to read the best or parent solution.
-3. Decide what to try. Explain your hypothesis in 1-2 sentences.
-4. Call write_solution with the complete new solution file.
-5. Call run_experiment to score it.
-6. Interpret the result. Plan the next iteration.
+1. Read the ledger and best solution already in this message.
+2. Decide what to try. Explain your hypothesis in 1-2 sentences.
+3. Call write_solution with the complete new solution file.
+4. Call run_experiment to score it.
+5. Interpret the result in 2-3 sentences. Stop; the next iteration starts with
+   a fresh, up-to-date message.
 
 ## web_search
 - The 7 directions above are your default. Search ONLY when going beyond them.
@@ -107,7 +113,11 @@ the metric ranks within a user, so cross-user pairs teach nothing about it.
 - Write the COMPLETE solution file every time — it must run standalone.
 - Whole file for a new idea. Targeted edit (copy parent, change one thing) \
 for a bugfix or parameter tweak.
-- Prefer many small experiments over one big change. Iterations are cheap.
+- Prefer many small experiments over one big change. Compute is cheap (~40s a
+  run), but tokens are not: every extra tool round resends the whole
+  conversation. Run ONE experiment per turn, then stop and let the next
+  iteration begin with a clean, current message.
+- Keep prose short. Hypotheses are one or two sentences, not paragraphs.
 """
 
 
@@ -115,14 +125,63 @@ def system_prompt() -> str:
     return SYSTEM_PROMPT
 
 
-def build_user_message() -> str:
-    parts = []
+def _ledger_table() -> str:
+    """Every experiment, with the metrics split out.
 
-    if os.path.exists(ledger.LEDGER):
-        with open(ledger.LEDGER) as f:
-            parts.append('## Current ledger\n\n' + f.read())
-    else:
-        parts.append('## Current ledger\n\nNo experiments yet.')
+    Not a paste of LEDGER.md: that renders one merged `primary` column, and
+    GAUC and nDCG@5 move in opposite directions often enough that the split is
+    the useful signal. The best result so far came from noticing exactly that
+    ("BPR gains GAUC but loses nDCG@5, add a pointwise auxiliary"), which the
+    merged number cannot show. Built from the JSON records, so it also carries
+    the failure reason for runs that did not score.
+    """
+    recs = ledger._load_all()
+    if not recs:
+        return '## Experiments so far\n\nNone yet.'
+
+    def fmt(v):
+        return ('%.6f' % v) if isinstance(v, (int, float)) else '--'
+
+    lines = [
+        '## Experiments so far',
+        '',
+        'GAUC and nDCG@5 are shown separately on purpose - they often move in',
+        'opposite directions, and primary is just their mean.',
+        '',
+        '| # | parent | GAUC | nDCG@5 | primary | delta | verdict | hypothesis |',
+        '|---|---|---|---|---|---|---|---|',
+    ]
+    notes = []
+    for r in recs:
+        p = r.get('valid_primary')
+        lines.append('| %d | %s | %s | %s | %s | %s | %s | %s |' % (
+            r.get('iteration', 0),
+            r.get('parent') or '-',
+            fmt(r.get('GAUC')),
+            fmt(r.get('nDCG@5')),
+            fmt(p),
+            ('%+.4f' % (p - ledger.BASELINE_VALID)) if p is not None else '--',
+            r.get('verdict', '?'),
+            (r.get('hypothesis') or '').replace('|', '/')[:100],
+        ))
+        if r.get('status') != 'ok' and r.get('error'):
+            note = '- **%d (%s):** %s' % (r.get('iteration', 0),
+                                          r.get('status'), r['error'][:400])
+            # For a crash, `error` is only 'exited 1' - the traceback the agent
+            # needs to fix its own bug is in stderr_tail. Last few lines only:
+            # that is where the exception type and message are.
+            tail = r.get('stderr_tail')
+            if tail:
+                tail = '\n'.join(tail.strip().splitlines()[-6:])
+                note += '\n  ```\n  %s\n  ```' % tail.replace('\n', '\n  ')
+            notes.append(note)
+    if notes:
+        lines += ['', 'Runs that did not score:'] + notes
+    return '\n'.join(lines)
+
+
+def build_user_message() -> str:
+    parts = [_ledger_table()]
 
     best_rec = ledger.best()
     if best_rec:

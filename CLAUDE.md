@@ -148,6 +148,24 @@ Recall@50, and a 50/50-by-time split. All wrong, and the old `RESULTS.md` has
 been removed. The agent's own `LEDGER.md` and `logs/iterations/` are the results
 record from iteration 1 onward.
 
+## The three run records — do not confuse them
+
+| | |
+| --- | --- |
+| `LEDGER.md` | one line per experiment, human-readable. **Only the merged `primary`.** |
+| `logs/iterations/NNNN.json` | the full record: GAUC and nDCG@5 *separately*, error, `stderr_tail`, tokens, `recovery_events` |
+| `logs/events.jsonl` | chronological run log: retries, crashes, convergence, run start/end |
+
+`LEDGER.md` is a rendering, not the source. Anything reasoning about *how* a
+result moved needs the JSON — GAUC and nDCG@5 routinely move in opposite
+directions, and the mean hides it. The agent's own best result came from
+noticing exactly that.
+
+`logs/events.jsonl` is the only place a failure *between* experiments is
+recorded, which is what Robustness (inside Technical Execution, 35%) is scored
+on. Both log paths are tracked in git deliberately — they are the deliverable,
+not a byproduct.
+
 ## Repo gotchas
 
 - Never commit `rec_datasets/` (620MB) or `techjaminfo*.docx` (pre-release
