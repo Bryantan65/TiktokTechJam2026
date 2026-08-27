@@ -174,6 +174,56 @@ def write(record):
     return path
 
 
+def annotate(iteration, **fields):
+    """Add fields to an already-written record.
+
+    The harness writes the experiment record, but token usage is only known to
+    the agent loop, which learns it after the run returns. This lets the loop
+    fold that in rather than leaving cost in stdout, where it is lost when the
+    terminal closes. Total token spend is a required submission deliverable.
+    """
+    path = os.path.join(LOG_DIR, '%04d.json' % iteration)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path) as fh:
+            rec = json.load(fh)
+    except (ValueError, OSError):
+        return None
+    rec.update(fields)
+    with open(path, 'w') as fh:
+        json.dump(rec, fh, indent=2)
+    h = rec.get('source_hash')
+    if h:
+        _hash_index[h] = rec
+    return rec
+
+
+def totals():
+    """Cumulative resource usage across every logged iteration, for the
+    Feasibility deliverable (total tokens, total compute seconds)."""
+    out = {'tokens_in': 0, 'tokens_out': 0, 'cost_usd': 0.0,
+           'compute_seconds': 0.0, 'iterations': 0}
+    if not os.path.isdir(LOG_DIR):
+        return out
+    for name in sorted(os.listdir(LOG_DIR)):
+        if not name.endswith('.json'):
+            continue
+        try:
+            with open(os.path.join(LOG_DIR, name)) as fh:
+                rec = json.load(fh)
+        except (ValueError, OSError):
+            continue
+        out['iterations'] += 1
+        out['tokens_in'] += rec.get('tokens_in') or 0
+        out['tokens_out'] += rec.get('tokens_out') or 0
+        out['cost_usd'] += rec.get('cost_usd') or 0.0
+        out['compute_seconds'] += rec.get('seconds') or 0.0
+    out['cost_usd'] = round(out['cost_usd'], 4)
+    out['compute_seconds'] = round(out['compute_seconds'], 1)
+    return out
+
+
 def recent(n=3):
     """Full records for the last n experiments. Older ones are represented by
     their ledger line only, which keeps context constant-size."""

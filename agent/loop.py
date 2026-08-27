@@ -15,12 +15,38 @@ import ledger  # noqa: E402
 from agent.tools import TOOL_SCHEMAS, TOOL_DISPATCH, do_web_search  # noqa: E402
 from agent.prompt import system_prompt, build_user_message  # noqa: E402
 
-MODEL = 'gpt-4o'
 MAX_TOOL_ROUNDS = 20
 
-# GPT-4o pricing (per 1M tokens, as of 2025)
-INPUT_COST_PER_M = 2.50
-OUTPUT_COST_PER_M = 10.00
+# Model and pricing are configurable because model IDs and prices change often
+# and a stale hardcoded value is worse than none: token spend is a reported
+# deliverable (15% of the grade), so a wrong price silently misreports it.
+# Discover valid ids with:  client.models.list()
+# Set in .env:  AGENT_MODEL, AGENT_INPUT_COST_PER_M, AGENT_OUTPUT_COST_PER_M
+MODEL = os.environ.get('AGENT_MODEL', 'gpt-4o')
+INPUT_COST_PER_M = float(os.environ.get('AGENT_INPUT_COST_PER_M', 2.50))
+OUTPUT_COST_PER_M = float(os.environ.get('AGENT_OUTPUT_COST_PER_M', 10.00))
+
+
+def _role(m):
+    """Messages are a mix of plain dicts and SDK objects."""
+    return m.get('role') if isinstance(m, dict) else getattr(m, 'role', None)
+
+
+def _truncate(messages, keep_last=20):
+    """Trim history without splitting a tool-call sequence.
+
+    The API requires every 'tool' message to be preceded by the assistant
+    message that requested it. Slicing blindly (messages[-20:]) can orphan one,
+    and the request is then rejected outright - at a random iteration, probably
+    unattended. Cutting only at a 'user' message is safe: that is the start of
+    an iteration, so no tool sequence spans the boundary.
+    """
+    if len(messages) <= keep_last + 1:
+        return messages
+    for i in range(len(messages) - keep_last, len(messages)):
+        if _role(messages[i]) == 'user':
+            return messages[:1] + messages[i:]
+    return messages          # no safe cut point; keep everything this round
 
 
 class _Spinner:
@@ -160,6 +186,7 @@ def run_loop(supervised: bool = False, max_iter: int = 100) -> None:
 
         iteration += 1
         search_count = 0
+        ran_iterations = []
         tokens.reset_iteration()
         t0 = time.time()
         print(f'\n--- Iteration {iteration} ---')
@@ -203,6 +230,11 @@ def run_loop(supervised: bool = False, max_iter: int = 100) -> None:
                         args = {}
                     result, search_count = _execute_tool(
                         client, tc.function.name, args, search_count)
+                    if tc.function.name == 'run_experiment':
+                        try:
+                            ran_iterations.append(json.loads(result)['iteration'])
+                        except (ValueError, KeyError, TypeError):
+                            pass
                     messages.append({
                         'role': 'tool',
                         'tool_call_id': tc.id,
@@ -213,6 +245,23 @@ def run_loop(supervised: bool = False, max_iter: int = 100) -> None:
                 break
 
         elapsed = time.time() - t0
+
+        # Fold this iteration's LLM cost into the experiment record(s) it
+        # produced. Printing alone would lose it when the terminal closes, and
+        # total token spend is a required submission deliverable.
+        if ran_iterations:
+            share_in = tokens.iter_input // len(ran_iterations)
+            share_out = tokens.iter_output // len(ran_iterations)
+            share_cost = tokens.iter_cost() / len(ran_iterations)
+            for it in ran_iterations:
+                ledger.annotate(it,
+                                tokens_in=share_in,
+                                tokens_out=share_out,
+                                cost_usd=round(share_cost, 6),
+                                model=MODEL,
+                                agent_iteration=iteration,
+                                wall_seconds=round(elapsed, 1))
+
         print(f'  [{elapsed:.0f}s elapsed] {tokens.iter_summary()}')
         print(f'  {tokens.total_summary()}')
 
@@ -234,10 +283,14 @@ def run_loop(supervised: bool = False, max_iter: int = 100) -> None:
                 return
 
         if len(messages) > 40:
-            messages = messages[:1] + messages[-20:]
+            messages = _truncate(messages, keep_last=20)
 
     print('\n=== Agent loop finished ===')
     print(f'  {tokens.total_summary()}')
+    t = ledger.totals()
+    print(f'  logged totals: {t["tokens_in"]:,}in/{t["tokens_out"]:,}out '
+          f'(${t["cost_usd"]:.3f}) over {t["iterations"]} experiments, '
+          f'{t["compute_seconds"]:.0f}s compute')
     best_rec = ledger.best()
     if best_rec:
         print(f'  Best result: valid primary {best_rec["valid_primary"]} '

@@ -75,6 +75,23 @@ Each iteration:
 - Maximum 1 search per iteration.
 - When you use a search result, include the citation URL in your hypothesis.
 
+## Interpreting a bad result — read this before concluding anything
+A poor score is more often YOUR BUG than a fact about the method. Treat these
+as bugs until proven otherwise:
+- **Below 0.4834** (random) — your model is not learning at all. Something is
+  structurally wrong. Never record this as evidence about a technique.
+- **A big drop on one of the 7 directions** — those are the organisers'
+  ranked list; a large negative is far more likely a mistake in your
+  implementation than a refutation of the idea.
+
+When that happens, your NEXT action is to re-read your own solution and check
+the implementation, not to abandon the direction. Say so in the hypothesis.
+
+Common self-check: are you actually using the label? A ranking loss that never
+reads `y` is comparing arbitrary rows, not positives against negatives. For
+pairwise losses the pairs must be (positive, negative) **from the same user** —
+the metric ranks within a user, so cross-user pairs teach nothing about it.
+
 ## Rules
 - NEVER request --split test. You develop on valid only.
 - NEVER compute your own metrics. The harness scores.

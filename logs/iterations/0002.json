@@ -18,5 +18,7 @@
   "rows": 124909,
   "seconds": 100.1,
   "verdict": "worse",
-  "delta": -0.104464
+  "delta": -0.104464,
+  "invalid": true,
+  "invalid_reason": "implementation bug, not a finding: the label (yb) is never used, so the BPR pairs are arbitrary rows rather than (positive, negative) from the same user. Scored 0.4970, below random (0.4834). Says nothing about pairwise ranking."
 }
