@@ -12,15 +12,16 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Must run before any import that reads os.environ at module level
+# (ledger.py reads HARNESS_MIN_SCORED, loop.py reads AGENT_*).
+load_dotenv(os.path.join(ROOT, '.env'))
+
 sys.path.insert(0, os.path.join(ROOT, 'harness'))
 import ledger  # noqa: E402
 
 from agent.tools import TOOL_SCHEMAS, TOOL_DISPATCH, do_web_search  # noqa: E402
 from agent.prompt import system_prompt, build_user_message  # noqa: E402
-
-# Must run before the constants below, which read the environment at import
-# time. load_dotenv() inside run_loop() would be too late for them.
-load_dotenv(os.path.join(ROOT, '.env'))
 
 MAX_TOOL_ROUNDS = 20
 
@@ -335,7 +336,22 @@ def _summarize_args(name: str, args: dict) -> str:
     return ''
 
 
-def run_loop(supervised: bool = False, max_iter: int = 100) -> None:
+def _setup_run_dir(run_name: str) -> str:
+    """Create a new per-run folder and redirect all output paths to it."""
+    from agent.tools import init_solutions_dir
+    run_dir = ledger.next_run_dir(run_name)
+    ledger.init_run_dir(run_dir)
+    ledger.setup_control_row(run_dir)
+    sol_dir = os.path.join(run_dir, 'solutions')
+    init_solutions_dir(sol_dir)
+    return run_dir
+
+
+def run_loop(supervised: bool = False, max_iter: int = 100,
+             run_name: str = 'run') -> None:
+    run_dir = _setup_run_dir(run_name)
+    print(f'=== Run folder: {os.path.relpath(run_dir, ROOT)}/ ===')
+
     client = OpenAI()          # .env is loaded at import, above
     tokens = TokenTracker()
 

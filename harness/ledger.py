@@ -37,6 +37,77 @@ LOG_DIR = os.path.join(ROOT, 'logs', 'iterations')
 LEDGER = os.path.join(ROOT, 'LEDGER.md')
 EVENTS = os.path.join(ROOT, 'logs', 'events.jsonl')
 
+
+def init_run_dir(run_dir: str):
+    """Redirect all output paths to a per-run folder.
+
+    Called once at agent startup. After this, iteration JSONs, LEDGER.md,
+    and events.jsonl all land inside run_dir (e.g. logs/run-1/).
+    """
+    global LOG_DIR, LEDGER, EVENTS, _hash_index_loaded
+    LOG_DIR = run_dir
+    LEDGER = os.path.join(run_dir, 'LEDGER.md')
+    EVENTS = os.path.join(run_dir, 'events.jsonl')
+    _hash_index_loaded = False
+    _hash_index.clear()
+    os.makedirs(run_dir, exist_ok=True)
+
+
+def next_run_dir(prefix: str = 'run') -> str:
+    """Find the next available logs/<prefix>-N/ folder.
+
+    Scans existing folders matching the prefix to find the highest number,
+    then returns the path for N+1. Handles both zero-padded (shakedown-01)
+    and non-padded (record-run-1) numbering from Bryan's naming style.
+    """
+    import re as _re
+    logs_dir = os.path.join(ROOT, 'logs')
+    os.makedirs(logs_dir, exist_ok=True)
+    pattern = _re.compile(r'^' + _re.escape(prefix) + r'-0*(\d+)$')
+    highest = 0
+    for name in os.listdir(logs_dir):
+        if os.path.isdir(os.path.join(logs_dir, name)):
+            m = pattern.match(name)
+            if m:
+                highest = max(highest, int(m.group(1)))
+    return os.path.join(logs_dir, '%s-%d' % (prefix, highest + 1))
+
+
+def setup_control_row(run_dir: str):
+    """Write the control row (iteration 1) into a fresh run folder.
+
+    Copies 0001.json from the canonical logs/iterations/ source and writes
+    the LEDGER.md header + control line. Idempotent: skips if 0001.json
+    already exists in run_dir.
+    """
+    dest_json = os.path.join(run_dir, '0001.json')
+    if os.path.exists(dest_json):
+        return
+    src_json = os.path.join(ROOT, 'logs', 'iterations', '0001.json')
+    if not os.path.isfile(src_json):
+        return
+    os.makedirs(run_dir, exist_ok=True)
+    import shutil
+    shutil.copy2(src_json, dest_json)
+    with open(src_json) as fh:
+        rec = json.load(fh)
+    ledger_path = os.path.join(run_dir, 'LEDGER.md')
+    with open(ledger_path, 'w', encoding='utf-8') as fh:
+        fh.write(HEADER)
+        p = rec.get('valid_primary')
+        sd = rec.get('primary_std')
+        line = '| %d | %s | %s | %s | %s | %s | %s | %s |\n' % (
+            rec['iteration'],
+            rec.get('parent') or '-',
+            (rec.get('hypothesis') or '').replace('|', '/')[:90],
+            ('%.4f' % p) if p is not None else '--',
+            ('%.4f' % sd) if sd is not None else '--',
+            ('%+.4f' % (p - BASELINE_VALID)) if p is not None else '--',
+            rec.get('verdict', '?'),
+            rec.get('by', 'human'),
+        )
+        fh.write(line)
+
 # Official baseline, reproduced on this machine (see CLAUDE.md).
 BASELINE_VALID = 0.6015
 EPSILON = 0.002          # official convergence threshold; also the accept gate

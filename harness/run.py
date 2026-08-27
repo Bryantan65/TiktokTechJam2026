@@ -155,9 +155,12 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
         ledger.write(rec)
         return rec
 
-    solutions_dir = os.path.join(ROOT, 'solutions')
     real_solution = os.path.realpath(solution)
-    if not real_solution.startswith(os.path.realpath(solutions_dir) + os.sep):
+    allowed_dirs = [os.path.realpath(os.path.join(ROOT, 'solutions'))]
+    if os.path.realpath(ledger.LOG_DIR) != allowed_dirs[0]:
+        allowed_dirs.append(
+            os.path.realpath(os.path.join(ledger.LOG_DIR, 'solutions')))
+    if not any(real_solution.startswith(d + os.sep) for d in allowed_dirs):
         rec['error'] = ("refusing to run %r; solutions must live inside "
                         "solutions/" % solution)
         ledger.write(rec)

@@ -11,10 +11,22 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOLUTIONS_DIR = os.path.join(ROOT, 'solutions')
+BASE_SOLUTIONS_DIR = os.path.join(ROOT, 'solutions')
+SOLUTIONS_DIR = BASE_SOLUTIONS_DIR
 
 sys.path.insert(0, os.path.join(ROOT, 'harness'))
 import ledger  # noqa: E402
+
+
+def init_solutions_dir(run_solutions_dir: str):
+    """Redirect solution writes to a per-run folder.
+
+    Reads still check both the run's solutions/ and root solutions/
+    (for base solutions like 000_baseline.py, 001_torch_fm.py).
+    """
+    global SOLUTIONS_DIR
+    SOLUTIONS_DIR = run_solutions_dir
+    os.makedirs(SOLUTIONS_DIR, exist_ok=True)
 
 
 def read_ledger() -> str:
@@ -29,12 +41,19 @@ def read_ledger() -> str:
     }, indent=2)
 
 
+def _resolve_solution_read(path: str):
+    """Find a solution file, checking run solutions/ then root solutions/."""
+    for d in (SOLUTIONS_DIR, BASE_SOLUTIONS_DIR):
+        full = os.path.join(d, path)
+        real = os.path.realpath(full)
+        if real.startswith(os.path.realpath(d) + os.sep) and os.path.isfile(real):
+            return real
+    return None
+
+
 def read_solution(path: str) -> str:
-    full = os.path.join(SOLUTIONS_DIR, path)
-    real = os.path.realpath(full)
-    if not real.startswith(os.path.realpath(SOLUTIONS_DIR) + os.sep):
-        return json.dumps({'error': f'path must be inside solutions/: {path}'})
-    if not os.path.isfile(real):
+    real = _resolve_solution_read(path)
+    if real is None:
         return json.dumps({'error': f'file not found: {path}'})
     with open(real) as f:
         return f.read()

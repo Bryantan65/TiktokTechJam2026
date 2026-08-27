@@ -11,8 +11,12 @@ def main():
                     help='Pause after each iteration for human approval')
     ap.add_argument('--max-iter', type=int, default=100,
                     help='Maximum iterations before stopping (default: 100)')
+    ap.add_argument('--run-name', default='run',
+                    help='Run folder prefix (default: "run"). '
+                         'Auto-numbers: --run-name record-run -> record-run-3')
     args = ap.parse_args()
-    run_loop(supervised=args.supervised, max_iter=args.max_iter)
+    run_loop(supervised=args.supervised, max_iter=args.max_iter,
+             run_name=args.run_name)
 
 
 if __name__ == '__main__':
