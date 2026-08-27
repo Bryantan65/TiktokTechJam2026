@@ -20,3 +20,4 @@ records in `logs/iterations/NNN.json`; the code for each is `solutions/NNN_*.py`
 | 10 | 008 | Sample distinct negatives inside the 2-negative same-user softmax set whenever possible, a | 0.6037 | +0.0022 | KEPT | agent |
 | 11 | 008 | Reduce the BCE auxiliary in the current best sampled-softmax FM from 0.10 to 0.05; lighter | 0.6039 | +0.0024 | KEPT | agent |
 | 12 | 011 | Reducing BCE auxiliary from 0.10 to 0.05 slightly improved the sampled-softmax FM, suggest | 0.6040 | +0.0025 | KEPT | agent |
+| 13 | 012 | The loss direction has saturated, so switch to time drift features: add coarse hour/date b | -- | -- | failed | agent |

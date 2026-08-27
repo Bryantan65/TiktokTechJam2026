@@ -53,11 +53,14 @@ CACHED_COST_PER_M = float(os.environ.get('AGENT_CACHED_COST_PER_M',
 # accept tools natively (gpt-5.5 and earlier), which keeps reasoning on.
 REASONING_EFFORT = os.environ.get('AGENT_REASONING_EFFORT') or None
 
-# Hard stops. Without these nothing bounds an unattended run: --max-iter counts
-# agent loop passes, but one pass can call run_experiment up to MAX_TOOL_ROUNDS
-# times. The first real run did 9 experiments and $3.34 inside a single
-# "iteration".
-MAX_EXPERIMENTS = int(os.environ.get('AGENT_MAX_EXPERIMENTS', 40))
+# Backstops, not the intended terminating condition - a run should end on
+# converged(), which is the rule the task specification names. What these
+# actually guard against is a crash loop: converged() counts only experiments
+# that SCORED, so an agent whose solutions all fail never converges and would
+# otherwise run forever. MAX_EXPERIMENTS counts every ledger row, errors
+# included, so it bounds that case. Set high enough that triggering it means
+# something is genuinely wrong (80 experiments is ~$11 and ~2.3 hours).
+MAX_EXPERIMENTS = int(os.environ.get('AGENT_MAX_EXPERIMENTS', 80))
 MAX_COST_USD = float(os.environ.get('AGENT_MAX_COST_USD', 15.0))
 
 
@@ -348,16 +351,21 @@ def run_loop(supervised: bool = False, max_iter: int = 100) -> None:
                 ledger.log_event('budget_stop', stop, iteration=iteration)
                 break
             if ledger.converged():
-                print('\nConverged: 3 consecutive ok experiments without '
-                      'improvement > 0.002.')
+                st = ledger.convergence_status()
+                print('\nConverged: best improved by only %+.6f across the '
+                      'last %d scored experiments (need %.3f).'
+                      % (st['window_improvement'] or 0.0, st['n'],
+                         st['epsilon']))
                 stop_reason = 'converged'
                 # The terminating condition the task specification asks for, so it
                 # belongs in the run log rather than only on the terminal.
                 ledger.log_event('converged',
-                                 '%d consecutive scored experiments without an '
-                                 'improvement > %s'
-                                 % (ledger.N_CONVERGE, ledger.EPSILON),
-                                 iteration=iteration)
+                                 'best improved by %+.6f across the last %d '
+                                 'scored experiments; epsilon is %s'
+                                 % (st['window_improvement'] or 0.0, st['n'],
+                                    st['epsilon']),
+                                 iteration=iteration,
+                                 window_improvement=st['window_improvement'])
                 break
 
             iteration += 1

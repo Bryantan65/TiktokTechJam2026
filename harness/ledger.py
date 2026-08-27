@@ -247,34 +247,64 @@ def verdict(primary, status):
     return 'noise'
 
 
-def converged(n=N_CONVERGE):
-    """True when the last n successful experiments all failed to clear epsilon.
+def _scored():
+    """Experiments that actually ran and produced a number, oldest first.
 
-    Uses the official rule: n consecutive iterations without an improvement
-    greater than epsilon. Only counts experiments that actually ran and scored
-    (status == 'ok'); errors and crashes are skipped — three crashes in a row
-    should not end the search.
+    Errors and crashes are skipped - three crashes in a row should not end the
+    search. 'no-op' records tested nothing (the change was discarded before it
+    reached the model), so they are not evidence that the search has run out of
+    ideas either.
     """
-    if not os.path.isdir(LOG_DIR):
-        return False
-    names = sorted(f for f in os.listdir(LOG_DIR) if f.endswith('.json'))
-    ok_recs = []
-    for name in reversed(names):
-        if len(ok_recs) >= n:
-            break
-        try:
-            with open(os.path.join(LOG_DIR, name)) as fh:
-                rec = json.load(fh)
-        except (ValueError, OSError):
-            continue
-        # 'no-op' records tested nothing - the change was discarded before it
-        # reached the model - so they are not evidence that the search has run
-        # out of ideas. Counting them ends a run that has barely started.
-        if rec.get('status') == 'ok' and rec.get('verdict') != 'no-op':
-            ok_recs.append(rec)
-    if len(ok_recs) < n:
-        return False
-    return all(r.get('verdict') not in ('KEPT',) for r in ok_recs)
+    return [r for r in _load_all()
+            if r.get('status') == 'ok'
+            and r.get('verdict') != 'no-op'
+            and r.get('valid_primary') is not None]
+
+
+def converged(n=N_CONVERGE):
+    """True when the score has not improved by more than epsilon in n tries.
+
+    The official rule: "converged when validation score has not improved by
+    more than a small threshold epsilon over the last N consecutive
+    iterations". *Improved* means against the best so far - so this compares
+    the best of the last n experiments with the best of everything before them.
+
+    It deliberately does NOT reuse verdict(). verdict() answers a different
+    question - "is this good enough to count as beating the baseline?" - and
+    measures against the fixed 0.6015. The two agree only while the agent is
+    below target. Once it clears 0.6035 every result is 'KEPT' forever, even
+    one that repeats its parent exactly, and convergence could never fire.
+    Observed: iterations 10-12 improved by 0.0003 in total, a seventh of
+    epsilon, and all three were labelled KEPT.
+    """
+    recs = _scored()
+    if len(recs) <= n:
+        return False                 # need a prior best to improve *on*
+    window, before = recs[-n:], recs[:-n]
+    best_before = max(r['valid_primary'] for r in before)
+    best_window = max(r['valid_primary'] for r in window)
+    return (best_window - best_before) < EPSILON
+
+
+def convergence_status(n=N_CONVERGE):
+    """How close the run is to being stopped, in the rule's own terms.
+
+    Shown to the agent every iteration. Without it the agent cannot know it is
+    on a clock: observed behaviour is five consecutive micro-tweaks of one idea
+    spanning 0.0003, which is exactly the pattern this rule exists to end. An
+    agent told "you have one try left before the run ends" can change direction
+    instead; an agent told nothing keeps adjusting a constant.
+    """
+    recs = _scored()
+    out = {'n': n, 'epsilon': EPSILON, 'scored': len(recs),
+           'window_improvement': None, 'converged': False}
+    if len(recs) <= n:
+        return out
+    best_before = max(r['valid_primary'] for r in recs[:-n])
+    best_window = max(r['valid_primary'] for r in recs[-n:])
+    out['window_improvement'] = round(best_window - best_before, 6)
+    out['converged'] = out['window_improvement'] < EPSILON
+    return out
 
 
 def write(record):

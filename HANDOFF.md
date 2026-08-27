@@ -313,6 +313,73 @@ it is the evidence, not a byproduct.
 
 ---
 
+## Convergence — the rule that decides when a run is over
+
+ε = 0.002, N = 3, both organiser-fixed (Starter Kit README and §2.3 of the
+problem statement). Not ours to tune.
+
+**`converged()` could not fire, and this was only found by asking when a run
+stops.** It borrowed `verdict()`, which answers a different question:
+
+| | compares against | used for |
+| --- | --- | --- |
+| `verdict()` | fixed 0.6015 | the ledger's `KEPT` accept gate |
+| `converged()` | **running best** | has the search stopped progressing |
+
+The two agree only while the agent is below target. Once past 0.6035 every
+result is `KEPT` forever — including one that repeats its parent exactly — so
+convergence could never trigger. Iterations 10-12 improved the best by
+**0.000089**, a twentieth of ε, and all three were labelled `KEPT`.
+
+`converged()` now compares the best of the last N scored experiments against the
+best of everything before them. `verdict()` is unchanged; the `KEPT` label was
+never wrong, it was just answering a different question.
+
+**What does not count toward convergence:** anything that failed to score.
+Errors, crashes, timeouts and no-ops are skipped, so an agent debugging a new
+direction is not penalised for it — verified in practice at iteration 13, which
+crashed and cost nothing. This is the answer to "but some ideas need 5-10
+iterations": the debugging ones are free; only *working but unimproving*
+experiments burn the window.
+
+**The strategic consequence, which is the part worth internalising.** Grinding
+costs twice: it burns the three-iteration window *and* raises the bar any new
+direction must then clear. Iterations 2-8 each improved, so the window kept
+resetting and there was unlimited room. Iterations 9-12 gained 0.0003 in total
+and left the agent needing +0.002 over 0.6040 within three tries. **Expensive
+directions must be tried while still climbing, not after the cheap ones are
+exhausted.**
+
+Which is why the prompt now states the rule, plus the line that matters — *a
+flat result is a signal to change direction, not to change a constant* — and
+every iteration carries a live status line:
+
+```
+**Convergence watch.** Best improvement across the last 3 experiments:
+**+0.000089**, against the 0.002 needed to keep the run alive (BELOW
+THRESHOLD - one more experiment without a real gain ends the run, so try
+a different direction).
+```
+
+**Verified, 2026-08-27.** One iteration against the converged ledger, with only
+the loop's stop check bypassed. The agent pivoted from direction 1 to direction
+6 unprompted — *"The loss direction has saturated, so switch to time drift
+features"* — its solution crashed, and it diagnosed itself correctly:
+*"`load()` returns split tuples/lists, not raw DataFrames ... This is an
+implementation failure, not evidence against time features."* $0.19.
+
+That is three behaviours confirmed at once: it pivots when told it is stuck, a
+crash costs it nothing, and it does not record its own bug as evidence about a
+technique.
+
+**Backstops raised to 80 experiments / $15.** Neither should ever fire. What
+they actually guard is a crash loop: `converged()` counts only *scored*
+experiments, so an agent whose solutions all fail never converges.
+`MAX_EXPERIMENTS` counts every ledger row, errors included, and is the only
+thing bounding that case.
+
+---
+
 ## The autonomy run
 
 The current ledger is **not** a demonstration of autonomy, and the records say
@@ -388,14 +455,19 @@ Ordered by what blocks the record run.
    2σ by a hair, on one seed. Everything downstream assumes this is real, and
    iterations 8-12 are now five consecutive softmax-weight tweaks spanning
    0.0003 — which is what a seed sweep exists to tell apart from progress.
-2. **Decide whether search should ever fire.** `web_search` has never been
+2. **Fix the `load()` contract confusion.** Iteration 13 crashed assuming
+   `load()` returns DataFrames with `.columns`; it returns split tuples. The
+   agent recovered correctly, but every new direction that needs raw columns
+   will hit the same wall. Either document the row shape in the system prompt
+   or expose the fields the agent keeps reaching for.
+3. **Decide whether search should ever fire.** `web_search` has never been
    called — not once in 12 experiments. Nothing triggers it: the prompt says
    *"search ONLY when going beyond"* the 7 directions, and the agent was handed
    those 7 ranked with #1 flagged as most likely. It has no reason to look.
    Either make it fire (e.g. "before starting a new direction, search for how it
    is usually implemented") or drop the tool. A dormant tool that appears in the
    schema every call is paying rent for nothing.
-3. **Record run** — the protocol above. Budget two or three attempts; the first
+4. **Record run** — the protocol above. Budget two or three attempts; the first
    clean run usually fails on something never seen in development. Do not
    schedule it for the last night.
 

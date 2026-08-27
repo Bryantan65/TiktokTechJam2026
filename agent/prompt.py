@@ -48,6 +48,23 @@ capacity is not the bottleneck.
 6. **Time features** — hourmin, date, train-vs-test drift.
 7. **Unbiased validation** — log_random as extra validation (never train on it).
 
+## The run ends if you stop making progress — read this
+The run stops automatically when the best valid primary has not improved by
+more than 0.002 across the last 3 scored experiments. That is the organisers'
+rule, not a suggestion, and it is checked in code before every iteration.
+
+What this means for you:
+- **A flat result is a signal to change direction, not to change a constant.**
+  Nudging a weight from 0.10 to 0.05 to 0.025 spends your remaining tries
+  without ever testing a new idea, and then the run ends inside one direction.
+- You are scored on **what you chose to try and why**, not only on the final
+  number. A run that only ever adjusted one hyperparameter answers that badly.
+- Each iteration tells you the current improvement over the last 3 experiments.
+  When it is small, your next experiment should come from a **different one of
+  the 7 directions** — not another variant of the current best.
+- Differences below 0.0016 (2x the 0.0008 seed noise) are not results. Two
+  variants 0.0003 apart are the same experiment run twice.
+
 ## Dead ends — do NOT try these
 - More static features (all 13 CWM fields): 0.5940 vs 0.5950 — no gain.
 - More capacity (k=8/16/32): 0.5895/0.5902/0.5887 — flat.
@@ -177,6 +194,20 @@ def _ledger_table() -> str:
             notes.append(note)
     if notes:
         lines += ['', 'Runs that did not score:'] + notes
+
+    st = ledger.convergence_status()
+    if st['window_improvement'] is None:
+        lines += ['', '**Convergence:** %d scored experiments so far; the rule '
+                  'starts applying after %d.' % (st['scored'], st['n'])]
+    else:
+        headroom = st['window_improvement'] - st['epsilon']
+        lines += ['', '**Convergence watch.** Best improvement across the last '
+                  '%d experiments: **%+.6f**, against the %.3f needed to keep '
+                  'the run alive (%s).'
+                  % (st['n'], st['window_improvement'], st['epsilon'],
+                     'BELOW THRESHOLD - one more experiment without a real gain '
+                     'ends the run, so try a different direction'
+                     if headroom < 0 else 'still clear')]
     return '\n'.join(lines)
 
 
