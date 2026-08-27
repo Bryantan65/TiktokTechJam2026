@@ -2,6 +2,7 @@
 import json
 import os
 import random
+import shutil
 import sys
 import threading
 import time
@@ -170,11 +171,35 @@ class _Spinner:
         self._thread.join()
         elapsed = time.time() - self._t0
         try:
-            sys.stdout.write(f'\r    {self._label} done ({elapsed:.0f}s)'
-                             '                    \n')
+            done = self._fit(f'    {self._label} done ({elapsed:.0f}s)')
+            sys.stdout.write('\r' + done.ljust(self._width()) + '\n')
             sys.stdout.flush()
         except Exception:          # noqa: BLE001  cosmetic only
             pass
+
+    @staticmethod
+    def _width():
+        try:
+            return max(20, shutil.get_terminal_size().columns - 1)
+        except Exception:          # noqa: BLE001  not a tty, or no size
+            return 79
+
+    @classmethod
+    def _fit(cls, line):
+        """Clamp to the terminal width, leaving one column spare.
+
+        A spinner redraws with '\\r', which returns to the start of the current
+        VISUAL line. Once a write exceeds the terminal width the terminal wraps,
+        '\\r' lands on the wrapped remainder, and every frame leaves the first
+        half behind - the animation becomes a wall of near-identical lines. Seen
+        with run_experiment, whose label carries 80 characters of hypothesis and
+        reached 138 columns.
+
+        Truncating from the left of the label would hide the filename, which is
+        the part worth reading, so the tail is what goes.
+        """
+        limit = cls._width()
+        return line if len(line) <= limit else line[:limit - 1] + '>'
 
     def _spin(self):
         i = 0
@@ -182,9 +207,10 @@ class _Spinner:
             try:
                 elapsed = time.time() - self._t0
                 frame = self.FRAMES[i % len(self.FRAMES)]
-                sys.stdout.write(
-                    f'\r    {frame} {self._label} [{elapsed:.0f}s]'
-                    '          ')
+                line = f'    {frame} {self._label} [{elapsed:.0f}s]'
+                # Pad to the full width so a shorter frame cannot leave
+                # characters from a longer previous one on screen.
+                sys.stdout.write('\r' + self._fit(line).ljust(self._width()))
                 sys.stdout.flush()
             except Exception:      # noqa: BLE001  cosmetic only - never kill a run
                 return
@@ -301,7 +327,11 @@ def _summarize_args(name: str, args: dict) -> str:
         return args.get('filename', '')
     if name == 'run_experiment':
         h = args.get('hypothesis', '')
-        return f"{args.get('solution', '')} — {h[:80]}"
+        # ASCII separator: the label is written from the spinner thread,
+        # and an em-dash raises UnicodeEncodeError on a cp1252 console,
+        # which the thread's except clause swallows - killing the spinner
+        # silently for the rest of the run.
+        return f"{args.get('solution', '')} - {h[:80]}"
     return ''
 
 

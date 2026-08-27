@@ -10,9 +10,14 @@ rec_datasets/*
 # run log, and the only place a failure *between* experiments (an API 500, a
 # retry, a crash) is recorded. Robustness is scored on how failures were
 # handled, so this file is the evidence. One line per event, a few KB per run.
+# Archived runs (shakedown-NN/, void-run-N/) are tracked too - they are the
+# evidence behind the fixes they produced, and the before-picture for the
+# measurement change. Add new ones with `git add -f logs/<dir>/`.
 logs/*
 !logs/iterations/
 !logs/events.jsonl
+!logs/shakedown-*/
+!logs/void-run-*/
 logs/iterations/*
 !logs/iterations/*.json
 checkpoints/

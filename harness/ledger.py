@@ -42,6 +42,20 @@ BASELINE_VALID = 0.6015
 EPSILON = 0.002          # official convergence threshold; also the accept gate
 N_CONVERGE = 3           # official: 3 consecutive iterations below epsilon
 
+# Convergence cannot fire before this many scored experiments exist.
+#
+# Not in the specification, and not a loosening of it. The rule detects a
+# PLATEAU, and four experiments is not a plateau - it is a start. Caught live
+# on 2026-08-27: after #1 0.601413, #2 0.602909, #3 0.596445, the run was one
+# experiment away from stopping, because the best had improved by +0.0015
+# (under epsilon) across the only three experiments that existed. It would have
+# ended having tried two ideas, which is the opposite of what the rule is for.
+#
+# 8 leaves five experiments to establish a best before any three can be judged
+# against it - roughly two directions' worth at ~2 min each.
+MIN_SCORED_BEFORE_CONVERGENCE = int(
+    os.environ.get('HARNESS_MIN_SCORED', 8))
+
 HEADER = """# Experiment ledger
 
 One line per experiment, read in full by the agent every iteration. Full
@@ -280,6 +294,8 @@ def converged(n=N_CONVERGE):
     epsilon, and all three were labelled KEPT.
     """
     recs = _scored()
+    if len(recs) < MIN_SCORED_BEFORE_CONVERGENCE:
+        return False                 # too early to call it a plateau
     if len(recs) <= n:
         return False                 # need a prior best to improve *on*
     window, before = recs[-n:], recs[:-n]
@@ -299,13 +315,15 @@ def convergence_status(n=N_CONVERGE):
     """
     recs = _scored()
     out = {'n': n, 'epsilon': EPSILON, 'scored': len(recs),
+           'min_scored': MIN_SCORED_BEFORE_CONVERGENCE,
            'window_improvement': None, 'converged': False}
     if len(recs) <= n:
         return out
     best_before = max(r['valid_primary'] for r in recs[:-n])
     best_window = max(r['valid_primary'] for r in recs[-n:])
     out['window_improvement'] = round(best_window - best_before, 6)
-    out['converged'] = out['window_improvement'] < EPSILON
+    out['converged'] = (out['window_improvement'] < EPSILON
+                        and len(recs) >= MIN_SCORED_BEFORE_CONVERGENCE)
     return out
 
 
