@@ -565,11 +565,11 @@ evidence if something was actually watching.
 
 ## The autonomy run
 
-**Steps 1-3 are done.** The ledger holds only the control; the code is frozen at
-tag `autonomy-run-1`. Step 4 is the outstanding work.
+**The protocol, run three times now.** The ledger holds only the control between
+runs; each frozen state has its own tag.
 
 ```
-1. commit and tag              DONE - tag autonomy-run-1
+1. commit and tag              DONE - one tag per run, see below
 2. archive the ledger          DONE - shakedown-02, void-run-1
 3. run the baseline by hand    DONE - iteration 1, by=human, 0.601413 +/- 0.000154
 4. launch once                 python -m agent          <- no flags
@@ -590,6 +590,25 @@ Step 3 stays human-run: a baseline the agent reproduced itself is a weaker
 control than one verified against the organisers' published number. Its
 `+/- 0.000154` is also the reference point for reading every later row — that is
 what a *stable* model looks like here.
+
+**One tag per run, never reused.** Each frozen state gets its own immutable tag
+named for the run it produced, pairing with the archive directory:
+
+```
+void-run-1-code    531789f   ->  logs/void-run-1/
+record-run-1-code  5d9eb77   ->  logs/record-run-1/
+record-run-2-code  d0fdb97   ->  logs/record-run-2/
+```
+
+There was previously a single `autonomy-run-1` that got deleted and re-cut at a
+new commit before each attempt. That breaks the moment anyone else has fetched
+it — their tag disagrees with the remote and git refuses to pick a winner, so
+`git pull` fails with a tag conflict. It also made the tag useless as a record,
+since "the frozen code" meant three different commits depending on when you
+looked. If you hit that error on an old clone:
+`git fetch --tags --prune --prune-tags`.
+
+Treat a tag as immutable. Name the next one after the run it will produce.
 
 **Voids the run:** editing agent/harness/prompt code mid-run, killing and
 restarting, hand-editing the ledger. **Does not:** an API outage or machine
