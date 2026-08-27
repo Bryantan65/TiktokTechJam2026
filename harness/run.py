@@ -89,6 +89,14 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
         ledger.write(rec)
         return rec
 
+    solutions_dir = os.path.join(ROOT, 'solutions')
+    real_solution = os.path.realpath(solution)
+    if not real_solution.startswith(os.path.realpath(solutions_dir) + os.sep):
+        rec['error'] = ("refusing to run %r; solutions must live inside "
+                        "solutions/" % solution)
+        ledger.write(rec)
+        return rec
+
     if not os.path.isfile(solution):
         rec['error'] = 'no such solution: %s' % solution
         ledger.write(rec)

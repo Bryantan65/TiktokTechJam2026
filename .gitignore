@@ -20,6 +20,9 @@ __pycache__/
 venv/
 .ipynb_checkpoints/
 
+# Secrets
+.env
+
 # Local
 firebase-debug.log
 
@@ -34,3 +37,6 @@ techjaminfo*.docx
 # The small score files (models/*.json, models/*_result.csv) ARE tracked on
 # purpose — they are the evidence behind every number in RESULTS.md.
 models/*.pt
+
+
+bash.exe.stackdump

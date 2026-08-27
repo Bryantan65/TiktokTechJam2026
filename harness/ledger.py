@@ -11,7 +11,25 @@ conclusion twice. For an experiment log, completeness beats relevance.
 import hashlib
 import json
 import os
+import sys
 from datetime import datetime
+
+if sys.platform == 'win32':
+    import msvcrt
+
+    def _lock(fh):
+        msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+
+    def _unlock(fh):
+        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+else:
+    import fcntl
+
+    def _lock(fh):
+        fcntl.flock(fh, fcntl.LOCK_EX)
+
+    def _unlock(fh):
+        fcntl.flock(fh, fcntl.LOCK_UN)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_DIR = os.path.join(ROOT, 'logs', 'iterations')
@@ -37,8 +55,11 @@ records in `logs/iterations/NNN.json`; the code for each is `solutions/NNN_*.py`
 
 def next_iteration():
     os.makedirs(LOG_DIR, exist_ok=True)
-    used = [int(f[:4]) for f in os.listdir(LOG_DIR)
-            if f.endswith('.json') and f[:4].isdigit()]
+    used = []
+    for f in os.listdir(LOG_DIR):
+        stem, ext = os.path.splitext(f)
+        if ext == '.json' and stem.isdigit():
+            used.append(int(stem))
     return max(used) + 1 if used else 1
 
 
@@ -48,10 +69,17 @@ def source_hash(path):
         return hashlib.sha256(fh.read()).hexdigest()[:12]
 
 
-def find_by_hash(h):
-    """A previous record with this exact source, or None."""
+_hash_index: dict[str, dict] = {}
+_hash_index_loaded = False
+
+
+def _load_hash_index():
+    global _hash_index_loaded
+    if _hash_index_loaded:
+        return
+    _hash_index_loaded = True
     if not os.path.isdir(LOG_DIR):
-        return None
+        return
     for name in sorted(os.listdir(LOG_DIR)):
         if not name.endswith('.json'):
             continue
@@ -60,9 +88,15 @@ def find_by_hash(h):
                 rec = json.load(fh)
         except (ValueError, OSError):
             continue
-        if rec.get('source_hash') == h:
-            return rec
-    return None
+        h = rec.get('source_hash')
+        if h:
+            _hash_index[h] = rec
+
+
+def find_by_hash(h):
+    """A previous record with this exact source, or None."""
+    _load_hash_index()
+    return _hash_index.get(h)
 
 
 def verdict(primary, status):
@@ -77,15 +111,30 @@ def verdict(primary, status):
 
 
 def converged(n=N_CONVERGE):
-    """True when the last n verdicts all failed to clear epsilon.
+    """True when the last n successful experiments all failed to clear epsilon.
 
     Uses the official rule: n consecutive iterations without an improvement
-    greater than epsilon.
+    greater than epsilon. Only counts experiments that actually ran and scored
+    (status == 'ok'); errors and crashes are skipped — three crashes in a row
+    should not end the search.
     """
-    recs = recent(n)
-    if len(recs) < n:
+    if not os.path.isdir(LOG_DIR):
         return False
-    return all(r.get('verdict') not in ('KEPT',) for r in recs)
+    names = sorted(f for f in os.listdir(LOG_DIR) if f.endswith('.json'))
+    ok_recs = []
+    for name in reversed(names):
+        if len(ok_recs) >= n:
+            break
+        try:
+            with open(os.path.join(LOG_DIR, name)) as fh:
+                rec = json.load(fh)
+        except (ValueError, OSError):
+            continue
+        if rec.get('status') == 'ok':
+            ok_recs.append(rec)
+    if len(ok_recs) < n:
+        return False
+    return all(r.get('verdict') not in ('KEPT',) for r in ok_recs)
 
 
 def write(record):
@@ -97,6 +146,10 @@ def write(record):
     path = os.path.join(LOG_DIR, '%04d.json' % record['iteration'])
     with open(path, 'w') as fh:
         json.dump(record, fh, indent=2)
+
+    h = record.get('source_hash')
+    if h:
+        _hash_index[h] = record
 
     if not os.path.exists(LEDGER):
         with open(LEDGER, 'w') as fh:
@@ -113,7 +166,11 @@ def write(record):
         record.get('by', 'agent'),
     )
     with open(LEDGER, 'a') as fh:
-        fh.write(line)
+        _lock(fh)
+        try:
+            fh.write(line)
+        finally:
+            _unlock(fh)
     return path
 
 
