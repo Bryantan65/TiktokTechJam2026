@@ -19,5 +19,11 @@
   "rows": 124909,
   "seconds": 29.9,
   "verdict": "noise",
-  "delta": 0.001772
+  "delta": 0.001772,
+  "tokens_in": 59188,
+  "tokens_out": 3759,
+  "cost_usd": 0.408734,
+  "model": "gpt-5.5",
+  "agent_iteration": 1,
+  "wall_seconds": 312.5
 }
