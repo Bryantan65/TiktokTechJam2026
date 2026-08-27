@@ -22,7 +22,8 @@ Last updated: 2026-08-27, after record run 2.
 ✅ convergence: fires correctly, floored at 8 experiments
 ✅ search policy: draft / improve / debug, refine before pivot
 ✅ **record run 2 — converged past target, +0.0031**
-⬜ score on test, once
+✅ submission path built and validated against the official checker
+⬜ **score on test — once. Never done. See Next.**
 ⬜ write the submission
 ```
 
@@ -56,6 +57,7 @@ Spend across every run to date: ~810k in / 66k out, ~$4.5.
 | `agent/prompt.py` | system prompt + the per-iteration message, rebuilt from the ledger |
 | `harness/seedsweep.py` | measure one solution across seeds; writes nothing to the ledger |
 | `harness/watch.py` | follow a long unattended run; one line per experiment and event |
+| `harness/make_submission.py` | solution -> validated submission CSV. **The only tool allowed to touch test.** |
 | `logs/shakedown-01/`, `-02/`, `void-run-1/` | archived runs; see each README |
 | `src/` | CWM paper code, ported and working. **Reference only** — see below. |
 
@@ -630,6 +632,78 @@ running".
 
 ---
 
+## Making a submission
+
+`kuairand-starter-kit/submit.py` ships with the kit and had never been run until
+after record-run-2. Solutions emit `.npy` arrays; a submission is a
+`row_id,user_id,video_id,score` CSV, and the official `--check` rejects a wrong
+header, a wrong row count, gaps in `row_id`, misaligned `(user_id, video_id)`
+pairs, and non-finite scores. Nothing bridged the two, which is the classic way
+to lose on the last night.
+
+```
+python harness/make_submission.py 008_time_features_two_bpr_bce.py \
+    --split valid --out submission_valid.csv          # sanity, scores locally
+python harness/make_submission.py 008_time_features_two_bpr_bce.py \
+    --split test  --out submission.csv --seeds 1      # the real thing
+```
+
+It writes through the official `write_submission` and validates through the
+official `read_submission`, so the file is checked by the organisers' code
+rather than ours. It resolves a solution by name in `solutions/` or in any
+`logs/*/solutions/`, so an archived candidate works without being copied back.
+
+**It is the one thing in the repo that may touch `test`**, which is why it lives
+outside `solutions/`, is absent from `TOOL_DISPATCH`, and leaves `run.py` still
+refusing any split but valid. Scoring on test stays a decision a person makes,
+at most two or three times for the whole competition.
+
+### Archived solutions were unrunnable, and now are not
+
+Solutions locate the starter kit relative to their own file
+(`../kuairand-starter-kit`). That stops resolving the moment a run is archived
+to `logs/<run>/solutions/`, so **every archived solution was silently
+unrunnable**, including the submission candidate — the archives were not
+reproducible, which is most of the point of keeping them. Both
+`make_submission.py` and `run.py` now put the kit on `PYTHONPATH`, which grants
+a solution no access it did not already have. Worth remembering if solutions are
+ever moved again.
+
+### The decision waiting for whoever submits: seed 0, or an average?
+
+Measured on valid, using record-run-2's best solution:
+
+```
+seed 0 alone              0.604761
+3 seeds, rank-averaged    0.605133   (+0.0004)
+```
+
+`--seeds N` rank-averages predictions across N seeds. Ranks rather than raw
+scores, because different seeds put their logits on different scales and one
+wide-ranged run would otherwise dominate the mean; only relative order is
+scored, so ranks lose nothing.
+
+**This is a decision about what the submission claims, not a formality.** The
+agent's solution is itself a 3-component ensemble (two BPR + one BCE).
+Rank-averaging three seeds of it submits a nine-component ensemble that *a human
+constructed*, not one the agent ever proposed or validated.
+
+- **Submit seed 0** — the artifact is entirely the agent's work. This is the
+  recommendation. The +0.0004 is about 1σ of a single seed, and Autonomy is
+  scored under Impact & Relevance (20%); trading "this is entirely the agent's"
+  for a gain that small is a poor deal.
+- **Submit the average** — defensible, and worth roughly 12% more delta
+  (+0.0031 → +0.0035 against the Primary metric under Technical Execution, 35%).
+  But only if it is **disclosed in the writeup** as a human-added seed ensemble.
+  Presenting it as the agent's output would be false.
+
+Note the two numbers are not directly comparable as measurements: 0.604761 is a
+single draw with a std of ~0.0005, while the rank-average has essentially no
+variance. The fair comparison is against the agent's 3-seed *mean of metrics*,
+0.604598, which makes the ensemble's edge about +0.0005.
+
+---
+
 ## The CWM code in `src/`
 
 Demoted. The organisers explicitly say it is *"not recommended as a starting
@@ -651,20 +725,73 @@ authoritative. Mitigation is mechanical: the agent's write access is
 
 ## Next
 
-1. **Score `008_time_features_two_bpr_bce.py` on test. Once.** It is the
-   validation-best checkpoint at convergence, which is what the rules say is
-   scored. Not #9 — richer time buckets came in 0.0003 lower, inside the spread.
-2. **Send `docs/email-convergence-question.md`.** The answer to question 2
-   affects any further run, and could require removing our 8-experiment floor.
-3. **Write the submission.** The deliverables the logs already support:
-   total tokens and compute (`ledger.totals()`), error and recovery events
-   (`logs/record-run-2/events.jsonl`), per-iteration hypothesis and metrics
-   (`logs/record-run-2/`), and the search tree via the `parent` chain.
+### 1. Score on test — ONCE. Not yet done.
 
-Optional, if there is time: another record run. The search policy has only been
-exercised once, and record-run-2 stopped while still improving — a second run
-with the same code might go further, or might confirm the plateau. Either is
-worth knowing, and it costs ~$1.60.
+**This is the outstanding task, and it is one-shot by discipline.**
+
+```
+python harness/make_submission.py 008_time_features_two_bpr_bce.py \
+    --split test --out submission.csv --seeds 1
+```
+
+`008_time_features_two_bpr_bce.py` is the validation-best checkpoint at
+convergence, which is what the rules say is scored. **Not #9** — richer time
+buckets scored 0.0003 lower, inside the spread.
+
+Before running it, read *"The decision waiting for whoever submits"* above and
+choose `--seeds 1` or `--seeds 3`. The command differs by one flag; the claim
+the submission makes differs a lot.
+
+What to expect, and what would be alarming:
+
+```
+valid          0.604598 +/- 0.000497   (+0.0031 over baseline)
+test baseline  0.5946                   official FM
+```
+
+Valid has run ~0.007 above test throughout, because test sits 10 days further
+from the training window. **So ~0.598 on test is the expected transfer, not a
+regression.** Compare the *delta* against the official FM's test 0.5946, never
+the raw valid number — mixing the two is the mistake `CLAUDE.md` warns about,
+and it makes +0.0018 look like +0.009.
+
+What would be a genuine problem: a delta far below +0.0031, which would mean
+the gains were valid-specific. MLE-bench lists validation overfitting as a known
+way these runs fail, and our best solution was selected across nine experiments
+on valid alone.
+
+Budget: test may be checked **two or three times for the whole competition**.
+One of those is this. Do not spend another on a variant unless something is
+actually wrong.
+
+### 2. Answer from the organisers
+
+`docs/email-convergence-question.md` is sent. Question 2 — whether refinement
+iterations count toward N — determines whether any further run should refine at
+all. Question 3's answer could require removing our 8-experiment floor, which
+would make runs end earlier than record-run-2 did.
+
+### 3. Write the submission
+
+Everything the deliverables need is already in the logs:
+
+| deliverable | where |
+| --- | --- |
+| total tokens and compute | `ledger.totals()` over `logs/record-run-2/` |
+| error and recovery events | `logs/record-run-2/events.jsonl` |
+| per-iteration hypothesis, metrics | `logs/record-run-2/*.json` |
+| the search tree | the `parent` chain, drawn in `record-run-2/README.md` |
+| code diff per iteration | `logs/record-run-2/solutions/` |
+
+### Optional, in rough order of value
+
+- **A second record run** (~$1.60, ~30 min). The search policy has been
+  exercised exactly once. record-run-2's tree is the shape we wanted, but one
+  run is one sample of the agent's behaviour, not evidence it reliably produces
+  that. A second run also stopped-while-improving, so it may simply go further.
+- **The bonus benchmarks.** KuaiRand-1k (11.7M rows) and 27k (322M) earn extra
+  points on top of the Pure score and cost nothing if skipped. Untouched. 1k is
+  the plausible one; 27k is almost certainly out of scope.
 
 ---
 
@@ -695,6 +822,10 @@ worth knowing, and it costs ~$1.60.
 - **`_budget_check()` counts every ledger row, not this session's.** Fine for a
   fresh-ledger record run; misleading if you ever want "20 more experiments" on
   top of an existing ledger.
+- **Test has never been scored.** Everything claimed here is validation-only.
+  Until that one run happens, transfer is an assumption.
+- **The submission artifact does not exist yet.** The tooling is built and
+  validated on valid; nobody has produced `submission.csv`.
 - **Spinner rendering is only fixed for width.** If the terminal is *resized*
   mid-run the padding is recomputed each frame, so it self-corrects, but a
   narrower window mid-write can still leave one stale row.
