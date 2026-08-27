@@ -1,7 +1,10 @@
-# Track 2: Autonomous Machine Learning Research Agent for Recommender Systems as of 27/08/2026
+# Track 2: Autonomous Machine Learning Research Agent for Recommender Systems as of 28/08/2026
 
-**Problem Statement last updated:** 26 August 2026, 6:33PM
+**Problem Statement last updated:** 27 August 2026, 5:55PM
 - Added downloadable kuairand-starter-kit.zip under 'Starter Kit'
+- Compute budget specified: 50 iterations hard cap, 6h wall-clock ceiling
+- Feasibility scoring changed from GPU-hours to agent wall-clock
+- Metrics/label clarifications aligned with Starter Kit
 
 **Technical Workshop Webinar with Q&A** will be held on 28 Aug, 2:00 to 2:45pm.
 
@@ -59,7 +62,7 @@ Design and implement an Autonomous ML Research Agent. For each benchmark, the ag
 | --- | --- |
 | **In scope** | Any open-source library or framework (PyTorch, RecBole, TorchRec, LightGBM, …); Any papers, public solutions, or pretrained weights; Changes to any pipeline stage — not just the model |
 | **Out of scope** | No external training data or pretrained weights trained on these benchmarks' test labels; No hidden-test access during development (train + validation only) |
-| **Limits** | KuaiRand-Pure: NDCG@10 / Recall@50, click = positive (fixed) (Required); KuaiRand-1k & KuaiRand-27k: same task and metrics (Bonus); Hidden test scored once, on the final submission; Compute budget: TBD |
+| **Limits** | KuaiRand-Pure: GAUC / nDCG@5, long_view = positive (fixed) (Required); KuaiRand-1k & KuaiRand-27k: same task and metrics (Bonus); Hidden test scored once, on the final submission; Compute budget: 50 iterations per benchmark run (hard cap; the convergence rule ε = 0.002 / N = 3 normally triggers first), plus a 6 h wall-clock ceiling per run as a backstop. Compute is deliberately not the binding constraint on this benchmark — 100 iterations of the official baseline take about 28 min on a single CPU core with no GPU. GPU-hours and LLM tokens are reported for Feasibility scoring, not capped. |
 | **Allowed assumptions** | Fixed train / validation / hidden-test split per dataset; Official baseline, scores & evaluation script (incl. convergence rule); Example submission + output schema |
 
 ## 2.4 Available Resources & Data
@@ -90,7 +93,7 @@ There is one hard rule: **no external training data.** Training must rely only o
 
 | Dataset | Domain & Description | Metrics | Scale |
 | --- | --- | --- | --- |
-| **KuaiRand** (Kuaishou) — Three released variants: KuaiRand-Pure is required, while KuaiRand-1k and KuaiRand-27k are bonus. | Short-video feed. 12 feedback signals (click / like / follow / comment / forward / long_view / play_time …) plus a randomized-exposure intervention that supports counterfactual evaluation. Relevance label and K are fixed by the organizers (see Starter Kit / TBD): the default task treats click as the positive relevance label and reports NDCG@10 / Recall@50. The exact label definition and K values are pinned in the Starter Kit so every team solves the same task. | NDCG@10 / Recall@50 | Pure: 1.4M interactions (27K users × 7.6K items). 1k: 11.7M. 27k: 322M. |
+| **KuaiRand** (Kuaishou) — Three released variants: KuaiRand-Pure is required, while KuaiRand-1k and KuaiRand-27k are bonus. | Short-video feed. 12 feedback signals (click / like / follow / comment / forward / long_view / play_time …) plus a randomized-exposure intervention that supports counterfactual evaluation. Relevance label, task form and metrics are fixed by the organizers (pinned in the Starter Kit): the task treats `long_view` (native column) as the positive relevance label, ranks within each user's logged impressions (not full-catalog retrieval), and reports GAUC / nDCG@5. Primary score = mean(GAUC, nDCG@5). | GAUC / nDCG@5 | Pure: 1.4M interactions (27K users × 7.6K items). 1k: 11.7M. 27k: 322M. |
 
 **Links:** KuaiRand — https://kuairand.com
 
@@ -120,14 +123,14 @@ KuaiRand's randomized-exposure data also enables off-policy / counterfactual eva
 - Submit the per-iteration log required in the Starter Kit (Run-log requirements), covering:
   - Hypothesis for that iteration — what the agent intended to try and why
   - The code diff applied
-  - The resulting metrics (NDCG@10 / Recall@50 for the KuaiRand benchmarks)
+  - The resulting metrics (GAUC / nDCG@5 for the KuaiRand benchmarks)
   - Any error or recovery events encountered, and how the agent handled them
 - A short summary reporting the number of manual interventions during the run (used to assess autonomy per Task Requirement 2)
 
 ### 4. Final Submission & Results Summary
 - Submit your final model output/checkpoint for the required benchmark (KuaiRand-Pure), in the schema defined by the Starter Kit. If you also attempt the bonus benchmarks (KuaiRand-1k & KuaiRand-27k), submit their outputs as well for bonus scoring.
-- A results table reporting your validation-best score for the required benchmark's metrics (KuaiRand-Pure NDCG@10 / Recall@50), and its absolute delta over the official baseline (per the Evaluation section scoring formula); if you attempted the bonus benchmarks (KuaiRand-1k & KuaiRand-27k), include their NDCG@10 / Recall@50 results as well
-- Reported resource usage required to reach the converged result: total token consumption (input + output) from the agent's LLM calls, and total GPU time (GPU-hours) consumed during training and evaluation (used to score Feasibility & Practicality)
+- A results table reporting your validation-best score for the required benchmark's metrics (KuaiRand-Pure GAUC / nDCG@5), and its absolute delta over the official baseline (per the Evaluation section scoring formula); if you attempted the bonus benchmarks (KuaiRand-1k & KuaiRand-27k), include their GAUC / nDCG@5 results as well
+- Reported resource usage required to reach the converged result: total token consumption (input + output) from the agent's LLM calls, the total agent wall-clock of the run, and the number of iterations used (out of the 50-iteration cap). Report GPU-hours as well if any GPU was used. These feed Feasibility & Practicality scoring.
 
 ## 2.6 Judging Criteria
 
@@ -141,15 +144,17 @@ KuaiRand's randomized-exposure data also enables off-policy / counterfactual eva
 
 ### Technical Execution — Primary Metric & Robustness
 
-**Primary metric.** We score the converged result, not the peak and not the intermediate trajectory. A run is considered converged when validation score has not improved by more than a small threshold ε over the last N consecutive iterations (default: ε and N fixed by the organizers and published in the Starter Kit), or when the run hits the fixed compute/wall-clock budget — whichever comes first. The submission scored for ranking is the validation-best checkpoint at that point, evaluated once on the hidden test set. The agent develops only on train + validation; it never sees the hidden test set.
+**Primary metric.** We score the converged result, not the peak and not the intermediate trajectory. A run is considered converged when validation score has not improved by more than ε = 0.002 over the last N = 3 consecutive iterations, or when the run hits the 50-iteration cap or the 6 h wall-clock ceiling — whichever comes first. The submission scored for ranking is the validation-best checkpoint at that point, evaluated once on the hidden test set. The agent develops only on train + validation; it never sees the hidden test set.
 
 - **KuaiRand-Pure** is the required benchmark and determines 100% of the Primary metric score. KuaiRand-1k and KuaiRand-27k are bonus benchmarks: a strong result on either earns additional bonus points on top of the Primary metric score, but skipping them does not reduce the KuaiRand-Pure score.
-- Per-dataset metrics: KuaiRand-Pure / KuaiRand-1k / KuaiRand-27k → NDCG@10 / Recall@50. Within each dataset, the score is the equal-weighted average of each metric's absolute improvement over the official baseline on the hidden test set. For every metric m:
+- Per-dataset metrics: KuaiRand-Pure / KuaiRand-1k / KuaiRand-27k → GAUC / nDCG@5. Within each dataset, the score is the equal-weighted average of each metric's absolute improvement over the official baseline on the hidden test set. For every metric m:
 
 ```
 delta(m) = score_agent(m) − score_baseline(m)
 score_dataset = mean over m of delta(m)
 ```
+
+- **Reading the numbers.** The metrics do not span [0, 1]. On the hidden test set, 27.1% of users have no positive label (their nDCG is 0 for any model) and 9.2% are all-positive, so a perfect ranking — using the true labels as the score — reaches only GAUC 1.0000 / nDCG@5 0.7289 / primary 0.8645. Random scoring sits at primary 0.4753. The official baseline's 0.5946 therefore already captures about 31% of the attainable range; judge progress against the 0.8645 ceiling, not against 1.0.
 
 **Robustness.** Not judged by whether the agent ever hits a failure, but by how it handles one — recovering, retrying, or routing around a failed step (a code error, a timeout, an unexpected input) so that long iterative runs neither crash, stall, nor diverge before hitting the compute/wall-clock budget.
 
@@ -166,16 +171,17 @@ Judged on what the agent identified as worth trying and why — not on implement
 
 ### Feasibility & Practicality — Resource Consumption
 
-How much it costs — in both LLM usage and GPU compute time — to reach the converged result.
+How much it costs — in LLM usage and agent wall-clock — to reach the converged result. Two rules make this comparable: it is scored only among submissions whose hidden-test primary score exceeds the official baseline, and it is graded in three coarse tiers (low / medium / high consumption) rather than a continuous ranking. Without the quality gate the criterion would fight the Primary metric — an agent that stopped after three iterations would look cheapest and score worst.
 
 - **Token consumption.** Total input + output tokens used by the agent's LLM calls across the run.
-- **GPU time.** Total GPU-hours consumed during training and evaluation to reach the converged result — captures the actual compute resources used in a way that wall-clock time alone cannot (e.g. running on more GPUs in parallel looks fast on the clock but is not necessarily cheaper).
+- **Agent wall-clock.** Total elapsed time of the agent run to reach the converged result. This replaces GPU-hours as the scored compute measure: on this benchmark the reference pipeline needs no GPU at all (about 28 min of single-core CPU for 100 iterations), so GPU-hours would be ~0 for most teams and would only penalise whoever happened to use a GPU. Report GPU-hours if any were used, but wall-clock is what is scored.
 
 ## 2.7 References
 
 - [1] J. S. Chan, N. Chowdhury, O. Jaffe, J. Aung, D. Sherburn, E. Mays, G. Starace, K. Liu, L. Maksin, T. Patwardhan, L. Weng, and A. Mądry, "MLE-bench: Evaluating Machine Learning Agents on Machine Learning Engineering," OpenAI, 2024. arXiv:2410.07095.
 - [2] Z. Jiang, D. Schmidt, D. Srikanth, D. Xu, I. Kaplan, D. Jacenko, and Y. Wu, "AIDE: AI-Driven Exploration in the Space of Code," 2025. arXiv:2502.13138.
 - [3] Y. Yamada, R. T. Lange, C. Lu, S. Hu, C. Lu, J. Foerster, J. Clune, and D. Ha, "The AI Scientist-v2: Workshop-Level Automated Scientific Discovery via Agentic Tree Search," 2025. arXiv:2504.08066.
+- [4] H. Zhao, G. Cai, J. Zhu, Z. Dong, J. Xu, and J.-R. Wen, "Counteracting Duration Bias in Video Recommendation via Counterfactual Watch Time," KDD 2024. Code: https://github.com/hyz20/CWM — optional advanced reference, not the official baseline. Its contribution is a censored-regression loss on watch time (a completed play means the true watch time was truncated by video length, so a one-sided loss is used instead of squared error). Note it ships no Recall implementation, reports nDCG@1/3/5 on a rebuilt long_view2 label, and requires torch==1.6.0.
 
 ## 2.8 Appendix A. A Primer on Recommender Systems
 
@@ -207,22 +213,22 @@ Most industrial ranking is framed as predicting the probability of user feedback
   - **Sample selection bias:** the post-click signal is only observed on clicked items, yet must be predicted for all impressions.
   - **Data sparsity:** post-click signals such as long_view or like are far rarer than clicks.
 
-KuaiRand has no purchase label, so CVR itself is never scored here. But the same two problems reappear on its post-click signals (long_view, like, follow …), and ESMM-style multi-task modelling — see A.3 — is a legitimate approach to them.
+KuaiRand has no purchase label, so CVR itself is never scored here. The funnel framing above is general background — note that in KuaiRand the scored label `long_view` is logged on every impression, not only on clicked ones, so classic sample selection bias does not apply directly to this challenge's task. Data sparsity still does, and the multi-feedback structure (click, like, follow, play_time …) makes ESMM-style multi-task modelling — see A.3 — a legitimate way to exploit the other signals as auxiliary tasks.
 
 ### A.3 Multi-Task & Multi-Feedback Learning
 
 Real users produce many signals (click, like, follow, comment, watch-time, and so on). Predicting them jointly — rather than training a separate model per signal — shares representations and tends to improve every task.
 
-- **Why it matters here:** KuaiRand provides 12 feedback signals, so a multi-task model can learn from several of them jointly even though only click is scored.
+- **Why it matters here:** KuaiRand provides 12 feedback signals, so a multi-task model can learn from several of them jointly even though only `long_view` is scored.
 - The key idea is to balance shared parameters (which transfer useful knowledge across tasks) against task-specific parameters (which prevent conflicting tasks from hurting one another — the "seesaw" problem).
 
 ### A.4 Evaluation Metrics
 
 | Metric | Intuition | Used for |
 | --- | --- | --- |
-| **AUC** | Probability that a random positive is ranked above a random negative. Threshold-free and robust to class imbalance. | CTR / CVR prediction in general (not scored in this challenge) |
-| **NDCG** | Quality of a ranked list, rewarding relevant items near the top (with a position discount). | Ranking quality (KuaiRand) |
-| **Recall** | Fraction of all relevant items that appear in the returned list. | Coverage (KuaiRand) |
+| **AUC** | Probability that a random positive is ranked above a random negative. Threshold-free and robust to class imbalance. | Scored in this challenge as GAUC — per-user AUC averaged with each user's positive count as the weight; users whose impressions are all-positive or all-negative are excluded. |
+| **NDCG** | Quality of a ranked list, rewarding relevant items near the top (with a position discount). | Scored in this challenge as nDCG@5. Users with no positive label score 0 and are included in the average. |
+| **Recall** | Fraction of all relevant items that appear in the returned list. | Retrieval / coverage tasks — not scored here. Each user has only ~5 logged impressions in the evaluation split, so Recall@50 is 0.999+ for every model, including random scoring. |
 
 **Offline vs. online:** a higher offline metric does not always mean better real-world performance (because of distribution shift and feedback loops). This competition is evaluated offline, but it is worth knowing the gap exists.
 
