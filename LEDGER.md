@@ -9,3 +9,4 @@ records in `logs/iterations/NNN.json`; the code for each is `solutions/NNN_*.py`
 | # | parent | hypothesis | valid | delta | verdict | by |
 |---|---|---|---|---|---|---|
 | 1 | - | baseline: FM with pointwise logloss, autograd port | 0.6014 | -0.0001 | noise | human |
+| 2 | 1 | Implement BPR loss for pairwise ranking to improve GAUC and nDCG@5. | 0.4970 | -0.1045 | worse | agent |
