@@ -82,9 +82,15 @@ def _run_one(solution, split, data_dir, seed, timeout, n_rows):
     try:
         cmd = [sys.executable, solution, '--data_dir', data_dir,
                '--split', split, '--out', out_path, '--seed', str(seed)]
+        # Solutions find the starter kit relative to their own file, which stops
+        # resolving once a run is archived into logs/<run>/solutions/. Putting
+        # the kit on PYTHONPATH keeps an archived solution runnable wherever it
+        # lives. It grants no access the solution did not already have.
+        env = dict(os.environ)
+        env['PYTHONPATH'] = KIT + os.pathsep + env.get('PYTHONPATH', '')
         try:
             proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
-                                  timeout=timeout)
+                                  timeout=timeout, env=env)
         except subprocess.TimeoutExpired:
             return None, 'timeout after %ds (seed %d)' % (timeout, seed), '', ''
 
