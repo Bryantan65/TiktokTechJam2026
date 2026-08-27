@@ -178,7 +178,10 @@ def converged(n=N_CONVERGE):
                 rec = json.load(fh)
         except (ValueError, OSError):
             continue
-        if rec.get('status') == 'ok':
+        # 'no-op' records tested nothing - the change was discarded before it
+        # reached the model - so they are not evidence that the search has run
+        # out of ideas. Counting them ends a run that has barely started.
+        if rec.get('status') == 'ok' and rec.get('verdict') != 'no-op':
             ok_recs.append(rec)
     if len(ok_recs) < n:
         return False
