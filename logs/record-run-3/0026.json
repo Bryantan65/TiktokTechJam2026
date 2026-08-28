@@ -1,0 +1,57 @@
+{
+  "iteration": 26,
+  "solution": "logs/record-run-3/solutions/026_history_prior_blend.py",
+  "hypothesis": "improve 24: node 12's history draft was not refined, and the FM can only store repeat user-video/user-author preferences through a low-rank interaction; add a very weak train-only smoothed history prior blended by within-user rank with the best node-24 ensemble.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T01:28:49+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605367,
+  "GAUC": 0.672484,
+  "nDCG@5": 0.538251,
+  "source_hash": "90ec3a50c720",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time; ensemble=7label+0.75watchconf+0.75userbal+0.35history\nraw alignment: exact=1436609 missing=0 raw=1436609 +play_ratio headers=['user_id', 'video_id', 'date', 'hourmin', 'time_ms', 'is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_hate', 'long_view', 'play_time_ms', 'duration_ms', 'profile_stay_time', 'comment_stay_time', 'is_profile_enter', 'is_rand', 'tab']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "1cd2fecd516e",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 7.4e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672359,
+      "nDCG@5": 0.53849,
+      "primary": 0.605425
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67255,
+      "nDCG@5": 0.538236,
+      "primary": 0.605393
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672542,
+      "nDCG@5": 0.538026,
+      "primary": 0.605284
+    }
+  ],
+  "seconds": 765.4,
+  "verdict": "KEPT",
+  "delta": 0.003867,
+  "tokens_in": 133476,
+  "tokens_out": 8453,
+  "tokens_cached": 109952,
+  "cost_usd": 0.170828,
+  "model": "gpt-5.5",
+  "agent_iteration": 25,
+  "wall_seconds": 869.3,
+  "recovery_events": []
+}

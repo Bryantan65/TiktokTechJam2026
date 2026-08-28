@@ -1,0 +1,57 @@
+{
+  "iteration": 13,
+  "solution": "logs/record-run-3/solutions/013_bpr_11_rank_ensemble.py",
+  "hypothesis": "improve 10: convergence is at risk, so make the highest-probability move: extend the only clearly working mechanism from seven to eleven independent same-user BPR rankers with the same Borda combiner. This tests whether ensemble variance reduction still has any headroom beyond node 10.",
+  "parent": "10",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T21:29:57+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.6045,
+  "GAUC": 0.671333,
+  "nDCG@5": 0.537668,
+  "source_hash": "4f94aa29821f",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "07fa4df5e4be",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000224,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671144,
+      "nDCG@5": 0.537461,
+      "primary": 0.604302
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671341,
+      "nDCG@5": 0.537569,
+      "primary": 0.604455
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671513,
+      "nDCG@5": 0.537974,
+      "primary": 0.604743
+    }
+  ],
+  "seconds": 1139.4,
+  "verdict": "KEPT",
+  "delta": 0.003,
+  "tokens_in": 86425,
+  "tokens_out": 5140,
+  "tokens_cached": 68352,
+  "cost_usd": 0.11367,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 1210.2,
+  "recovery_events": []
+}

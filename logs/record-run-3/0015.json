@@ -1,0 +1,57 @@
+{
+  "iteration": 15,
+  "solution": "logs/record-run-3/solutions/015_bpr7_time_context_fixalign.py",
+  "hypothesis": "debug 14: the first time-context draft warned that almost every row missed raw alignment, likely because duration column names/semantics differ; match FIFO raw rows by (date,user,video,author,tab) instead so real hourmin reaches the model.",
+  "parent": "14",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T22:11:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604932,
+  "GAUC": 0.671821,
+  "nDCG@5": 0.538043,
+  "source_hash": "5de77a6792c5",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['hour','hblock','weekday','tab_hour','tab_weekday']\nwarning: 1434391 rows could not be aligned to raw hourmin; used hour=0 fallback\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "5ab138fdc065",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 9.4e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671968,
+      "nDCG@5": 0.538043,
+      "primary": 0.605006
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671854,
+      "nDCG@5": 0.5378,
+      "primary": 0.604827
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671642,
+      "nDCG@5": 0.538286,
+      "primary": 0.604964
+    }
+  ],
+  "seconds": 1211.3,
+  "verdict": "KEPT",
+  "delta": 0.003432,
+  "tokens_in": 50589,
+  "tokens_out": 4523,
+  "tokens_cached": 33664,
+  "cost_usd": 0.095959,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 1253.9,
+  "recovery_events": []
+}

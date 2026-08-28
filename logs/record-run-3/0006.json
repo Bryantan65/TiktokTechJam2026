@@ -1,0 +1,57 @@
+{
+  "iteration": 6,
+  "solution": "logs/record-run-3/solutions/006_bce_warm_bpr_fm.py",
+  "hypothesis": "improve 2: BPR is the only node with signal; initialize it from a 7-epoch BCE FM warmup, then reset checkpoint selection so the saved model must come from BPR fine-tuning rather than the warmup. This tests whether BPR needs pointwise structure first instead of relearning it from scratch.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T20:29:39+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.600189,
+  "GAUC": 0.665784,
+  "nDCG@5": 0.534593,
+  "source_hash": "60b8b86535bd",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "b0e4396a156a",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000682,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.666074,
+      "nDCG@5": 0.535053,
+      "primary": 0.600564
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.666187,
+      "nDCG@5": 0.535015,
+      "primary": 0.600601
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.66509,
+      "nDCG@5": 0.533711,
+      "primary": 0.599401
+    }
+  ],
+  "seconds": 163.0,
+  "verdict": "noise",
+  "delta": -0.001311,
+  "tokens_in": 80259,
+  "tokens_out": 3389,
+  "tokens_cached": 62208,
+  "cost_usd": 0.09457,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 202.2,
+  "recovery_events": []
+}

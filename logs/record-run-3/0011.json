@@ -1,0 +1,57 @@
+{
+  "iteration": 11,
+  "solution": "logs/record-run-3/solutions/011_bpr7_prior_blend.py",
+  "hypothesis": "improve 10: the identical-member ensemble is flattening, so add diversity by blending its within-user ranks with a smoothed video/author/tab/duration prior ranker trained only on train labels. This is a lightweight context-aware prior idea; background search URL: https://dl.acm.org/doi/10.1145/1864708.1864727.",
+  "parent": "10",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T21:03:28+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604203,
+  "GAUC": 0.671033,
+  "nDCG@5": 0.537372,
+  "source_hash": "255af7dfbdb9",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "9030f0d35ea6",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00027,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671373,
+      "nDCG@5": 0.537323,
+      "primary": 0.604348
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670564,
+      "nDCG@5": 0.537217,
+      "primary": 0.603891
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671162,
+      "nDCG@5": 0.537577,
+      "primary": 0.60437
+    }
+  ],
+  "seconds": 624.2,
+  "verdict": "KEPT",
+  "delta": 0.002703,
+  "tokens_in": 60989,
+  "tokens_out": 8556,
+  "tokens_cached": 46208,
+  "cost_usd": 0.134065,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 751.5,
+  "recovery_events": []
+}

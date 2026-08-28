@@ -1,0 +1,57 @@
+{
+  "iteration": 14,
+  "solution": "logs/record-run-3/solutions/014_bpr7_time_context.py",
+  "hypothesis": "draft direction 6: add explicit temporal context to the best BPR ensemble by reading raw hourmin and appending hour/block/weekday interaction fields, following time-aware recommendation work such as https://dl.acm.org/doi/10.1145/1721654.1721677. This is the highest-upside unexplored direction now that ensemble size and lightweight history blends have flattened.",
+  "parent": "10",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T21:51:06+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604933,
+  "GAUC": 0.671822,
+  "nDCG@5": 0.538043,
+  "source_hash": "843f46a82a50",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['hour','hblock','weekday','tab_hour','tab_weekday']\nwarning: 1434391 rows could not be aligned to raw hourmin; used hour=0 fallback\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "f39a4b98d6a1",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 9.4e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671971,
+      "nDCG@5": 0.538043,
+      "primary": 0.605007
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671853,
+      "nDCG@5": 0.5378,
+      "primary": 0.604827
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671642,
+      "nDCG@5": 0.538286,
+      "primary": 0.604964
+    }
+  ],
+  "seconds": 1172.8,
+  "verdict": "KEPT",
+  "delta": 0.003433,
+  "tokens_in": 112909,
+  "tokens_out": 9353,
+  "tokens_cached": 87168,
+  "cost_usd": 0.179674,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 1305.3,
+  "recovery_events": []
+}

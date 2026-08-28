@@ -1,0 +1,57 @@
+{
+  "iteration": 5,
+  "solution": "logs/record-run-3/solutions/005_listwise_fm.py",
+  "hypothesis": "improve 2: BPR has saturated but loss direction is not exhausted; try a true within-user ListNet-style softmax objective, loss_u=logsumexp(scores_u)-mean(score_pos), optimizing all impressions for a user jointly rather than sampled pairs.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T20:25:34+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.599465,
+  "GAUC": 0.664096,
+  "nDCG@5": 0.534835,
+  "source_hash": "0560b7e3cb63",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "dec12c12aa17",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000597,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.664884,
+      "nDCG@5": 0.535385,
+      "primary": 0.600134
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.663567,
+      "nDCG@5": 0.534406,
+      "primary": 0.598986
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.663837,
+      "nDCG@5": 0.534715,
+      "primary": 0.599276
+    }
+  ],
+  "seconds": 204.9,
+  "verdict": "worse",
+  "delta": -0.002035,
+  "tokens_in": 47187,
+  "tokens_out": 5096,
+  "tokens_cached": 29184,
+  "cost_usd": 0.103263,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 252.7,
+  "recovery_events": []
+}

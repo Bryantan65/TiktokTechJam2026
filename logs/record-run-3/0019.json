@@ -1,0 +1,57 @@
+{
+  "iteration": 19,
+  "solution": "logs/record-run-3/solutions/019_time_quarter_context.py",
+  "hypothesis": "improve 17: time features are the only new signal that clearly moved the best node, so add finer quarter-hour and tab\u00d7quarter-hour buckets while keeping the same BPR7 ensemble. This tests whether nDCG gains from hour context were limited by overly coarse temporal buckets.",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T23:28:23+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604437,
+  "GAUC": 0.671063,
+  "nDCG@5": 0.537812,
+  "source_hash": "92bd333ee4e2",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['hour','hblock','qhour','weekday','tab_hour','tab_qhour','tab_weekday']\nraw hourmin alignment: exact=1436609 missing=0 raw=1436609 headers=['user_id', 'video_id', 'date', 'hourmin', 'time_ms', 'is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_hate', 'long_view', 'play_time_ms', 'duration_ms', 'profile_stay_time', 'comment_stay_time', 'is_profile_enter', 'is_rand', 'tab']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "ea2c61fc1228",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000202,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670823,
+      "nDCG@5": 0.537829,
+      "primary": 0.604326
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670931,
+      "nDCG@5": 0.5377,
+      "primary": 0.604315
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671435,
+      "nDCG@5": 0.537907,
+      "primary": 0.604671
+    }
+  ],
+  "seconds": 758.6,
+  "verdict": "KEPT",
+  "delta": 0.002937,
+  "tokens_in": 105988,
+  "tokens_out": 5451,
+  "tokens_cached": 81664,
+  "cost_usd": 0.135736,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 822.2,
+  "recovery_events": []
+}

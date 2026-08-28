@@ -1,0 +1,57 @@
+{
+  "iteration": 9,
+  "solution": "logs/record-run-3/solutions/009_bpr_5_rank_ensemble.py",
+  "hypothesis": "improve 8: the 3-member BPR ensemble crossed target, so push the same mechanism by using five members and averaging within-user rank/Borda scores instead of raw normalized margins. Since both metrics depend only on within-user order, rank averaging should preserve each member's signal while reducing scale noise.",
+  "parent": "8",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T20:41:59+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604294,
+  "GAUC": 0.671073,
+  "nDCG@5": 0.537515,
+  "source_hash": "f420bec0d624",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "edead1596ea1",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00017,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670792,
+      "nDCG@5": 0.537552,
+      "primary": 0.604172
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671128,
+      "nDCG@5": 0.537317,
+      "primary": 0.604222
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.6713,
+      "nDCG@5": 0.537677,
+      "primary": 0.604488
+    }
+  ],
+  "seconds": 468.0,
+  "verdict": "KEPT",
+  "delta": 0.002794,
+  "tokens_in": 64116,
+  "tokens_out": 4136,
+  "tokens_cached": 47616,
+  "cost_usd": 0.094514,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 515.3,
+  "recovery_events": []
+}

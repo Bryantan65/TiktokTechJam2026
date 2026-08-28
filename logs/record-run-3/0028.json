@@ -1,0 +1,57 @@
+{
+  "iteration": 28,
+  "solution": "logs/record-run-3/solutions/028_residual_deepfm.py",
+  "hypothesis": "improve 27: node 27's DeepFM member only shifted the GAUC/nDCG tradeoff, so make the deep path a small residual around FM (smaller MLP, near-zero last layer, 0.25 scale) to preserve GAUC while keeping higher-order top-list signal.",
+  "parent": "27",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T01:58:03+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605408,
+  "GAUC": 0.67246,
+  "nDCG@5": 0.538356,
+  "source_hash": "256fdec1568f",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time; ensemble=7label+0.75watchconf+0.75userbal+0.50resdeepfm\nraw alignment: exact=1436609 missing=0 raw=1436609 +play_ratio headers=['user_id', 'video_id', 'date', 'hourmin', 'time_ms', 'is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_hate', 'long_view', 'play_time_ms', 'duration_ms', 'profile_stay_time', 'comment_stay_time', 'is_profile_enter', 'is_rand', 'tab']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "9338b7ca7ab8",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000147,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672169,
+      "nDCG@5": 0.538312,
+      "primary": 0.605241
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672542,
+      "nDCG@5": 0.538386,
+      "primary": 0.605464
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672668,
+      "nDCG@5": 0.538369,
+      "primary": 0.605519
+    }
+  ],
+  "seconds": 885.2,
+  "verdict": "KEPT",
+  "delta": 0.003908,
+  "tokens_in": 51518,
+  "tokens_out": 6473,
+  "tokens_cached": 35712,
+  "cost_usd": 0.113173,
+  "model": "gpt-5.5",
+  "agent_iteration": 27,
+  "wall_seconds": 951.0,
+  "recovery_events": []
+}
