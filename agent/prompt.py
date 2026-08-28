@@ -157,15 +157,13 @@ So:
   predictions can extract value that equal-weight misses.
 
 ## Search strategy — spend your budget wisely
-- Try your most ambitious direction EARLY, while convergence headroom is large.
-  A +0.001 refinement step never clears the 0.002 convergence threshold, so
-  refinement must happen while the run is still climbing from bigger moves.
-- The metric is nDCG@5 + GAUC. If a method directly optimises one of these
-  (e.g. LambdaRank optimises nDCG), it has a structural advantage over methods
-  that optimise a proxy like logloss or BPR.
+- Try your most ambitious direction EARLY, while convergence headroom is large,
+  not after the cheap gains are exhausted.
+- The metric is nDCG@5 + GAUC. A method that directly optimises a ranking metric
+  has a structural advantage over one that optimises a proxy like logloss or BPR.
 - Post-hoc calibration is cheap. If your model's predictions have different
-  scales across user groups (e.g. tabs with very different positive rates),
-  rescaling per group before ranking costs one experiment and may help.
+  scales across user groups, rescaling per group before ranking costs one
+  experiment and may help.
 - Equal-weight ensembles plateau quickly. If you have multiple strong models,
   learned weights (e.g. stacking on held-out predictions) can extract value
   that equal-weight averaging cannot.

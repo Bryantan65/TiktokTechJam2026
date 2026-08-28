@@ -1103,6 +1103,36 @@ Two changes to `agent/prompt.py`, both expanding general capability:
    post-hoc calibration is cheap; learned ensemble weights beat equal-weight.
    All general knowledge, no specific solutions named.
 
+   **Revised the same day, after review.** The first draft of these bullets did
+   name specifics, and the "no specific solutions named" claim above was not true
+   of it. Three corrections:
+
+   - *"e.g. LambdaRank optimises nDCG"* — removed. The principle (direct metric
+     optimisation beats a proxy loss) is general; the named method is a hint, and
+     it pointed straight at the library added in change 2 below. Naming both is
+     effectively telling the agent what to try.
+   - *"e.g. tabs with very different positive rates"* — removed. That is
+     `CLAUDE.md`'s 44-point tab spread, which **we** measured and which no run has
+     found independently in four attempts. Handing it over converts our analysis
+     into the agent's. The general form — rescale per group if scales differ —
+     stays, because that is textbook.
+   - The convergence arithmetic was **wrong**. The bullet claimed a +0.001
+     refinement step can never clear the 0.002 threshold. `converged()` compares
+     `max(last 3)` against `max(everything before)`, so three consecutive +0.001
+     steps clear it by +0.003; only an *isolated* small gain converges. And with
+     `MIN_SCORED_BEFORE_CONVERGENCE = 30` nothing converges before experiment 30
+     regardless. Worse, it pulled against the draft/improve/debug policy sitting
+     directly above it in the same prompt — the policy written specifically to
+     stop record-run-1's `2,2,2,2,2,2` breadth-only search. The ordering advice
+     (ambitious first) is kept; the arithmetic is gone.
+
+   Worth recording that the per-group rescaling bullet is **not** inert on this
+   data, which is why the general form was kept rather than dropped: 39.8% of
+   valid users span more than one tab, those users hold 57.3% of valid rows, and
+   their dominant tab carries a median 66.7% of their impressions. For the other
+   60.2% of users a per-tab rescale is a monotone transform inside a single group
+   and cannot change their ranking at all.
+
 2. **Library list expanded** — added `xgboost 3.x` and `lightgbm 4.x` to the
    "What is installed" section. Both added to `requirements.txt`. This unlocks
    LambdaRank/LambdaMART (direct nDCG optimisation) without telling the agent
@@ -1135,11 +1165,28 @@ rather than a BPR ensemble) landed at +0.0031, below run 3's +0.0040. Two
 searches converging near the same place from different directions is what a
 ceiling looks like.
 
-**Run 5 widens the ceiling slightly** by giving the agent access to gradient-
-boosted ranking models (xgboost, lightgbm) and general search-strategy guidance.
-LambdaRank directly optimises nDCG — every prior run optimised a proxy loss
-(BPR, BCE) and hoped the ranking metric would follow. Whether that is enough to
-break through 0.606 is the question run 5 answers.
+**Run 5 tests the ceiling rather than widening it.** Giving the agent
+gradient-boosted ranking models (xgboost, lightgbm) opens a structurally
+different family: every prior run optimised a proxy loss (BPR, BCE, sampled
+softmax) and hoped the ranking metric would follow, and none had access to a
+library-backed ranker that optimises nDCG directly.
+
+Do not assume that raises the score. The measured ceiling analysis says
+otherwise — we are already at 0.6055 against a half-fitted non-personalised
+ceiling of 0.6048, with 1.62% pair coverage and a median user carrying 31 rows
+across 29 videos. A gradient-boosted ranker sees exactly the same features and
+the same coverage; it cannot manufacture signal that is not in the data.
+
+**Which is why a null result is the valuable outcome, not the disappointing
+one.** Right now the saturation argument rests on runs 3 and 4 converging to
++0.0040 and +0.0031 down two different mechanism families. If run 5 is handed
+gradient boosting *and* direct nDCG optimisation and still lands near 0.605,
+that is a third structurally independent search arriving at the same place, and
+the ceiling claim stops being an inference and becomes a demonstration. That is
+worth more to the writeup than +0.0005 on the primary metric would be.
+
+Either way run 5 answers something. Frame it that way before launching, so a
+flat result is read as evidence rather than as failure.
 
 **Do not run repeatedly and submit the best.** That is selection on validation
 across runs — it makes the final number less credible and under-reports actual
