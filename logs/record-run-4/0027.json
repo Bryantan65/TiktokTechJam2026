@@ -1,0 +1,57 @@
+{
+  "iteration": 27,
+  "solution": "logs/record-run-4/solutions/027_author_tab_history.py",
+  "hypothesis": "improve 25: neg32 saturated the loss, so spend the final high-risk pass on the strongest residual path: add a small user-author-tab history term, since tab strongly changes positive rate and author recurrence was the useful history signal.",
+  "parent": "25",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:53:12+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604531,
+  "GAUC": 0.671489,
+  "nDCG@5": 0.537573,
+  "source_hash": "b21b25bc9fc8",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') author_tab_history neg16\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "622324653c31",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 6.3e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671344,
+      "nDCG@5": 0.537575,
+      "primary": 0.604459
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671505,
+      "nDCG@5": 0.537645,
+      "primary": 0.604575
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671617,
+      "nDCG@5": 0.537499,
+      "primary": 0.604558
+    }
+  ],
+  "seconds": 284.7,
+  "verdict": "KEPT",
+  "delta": 0.003031,
+  "tokens_in": 59888,
+  "tokens_out": 5983,
+  "tokens_cached": 41856,
+  "cost_usd": 0.125838,
+  "model": "gpt-5.5",
+  "agent_iteration": 26,
+  "wall_seconds": 344.3,
+  "recovery_events": []
+}

@@ -1,0 +1,57 @@
+{
+  "iteration": 7,
+  "solution": "logs/record-run-4/solutions/007_time_features_softmax8.py",
+  "hypothesis": "draft time features: add hour-of-day/day-of-week/hour\u00d7tab categorical context from raw log CSVs to the current best sampled-softmax FM; temporal context is a standard recommender feature for user behavior variation (https://dl.acm.org/doi/10.1145/3397271.3401100).",
+  "parent": "5",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:20:56+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604314,
+  "GAUC": 0.671081,
+  "nDCG@5": 0.537548,
+  "source_hash": "21856e4e9711",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e7c7fdc3fa09",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 9.5e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671136,
+      "nDCG@5": 0.537292,
+      "primary": 0.604214
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671173,
+      "nDCG@5": 0.537477,
+      "primary": 0.604325
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670933,
+      "nDCG@5": 0.537874,
+      "primary": 0.604403
+    }
+  ],
+  "seconds": 140.4,
+  "verdict": "KEPT",
+  "delta": 0.002814,
+  "tokens_in": 38908,
+  "tokens_out": 6243,
+  "tokens_cached": 28160,
+  "cost_usd": 0.10338,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 215.8,
+  "recovery_events": []
+}

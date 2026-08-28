@@ -1,0 +1,57 @@
+{
+  "iteration": 11,
+  "solution": "logs/record-run-4/solutions/011_din_seq_attention.py",
+  "hypothesis": "draft user behaviour sequences: following DIN target-attention over user history (https://arxiv.org/abs/1706.06978), add recent positive train-history video/author attention as a dominant standalone score on top of the time-aware sampled-softmax FM, not a tiny ensemble member.",
+  "parent": "9",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:36:12+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60413,
+  "GAUC": 0.67093,
+  "nDCG@5": 0.537331,
+  "source_hash": "d0537e8c35e2",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab+DIN_hist aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate')\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "11bd69dede8b",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000187,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670915,
+      "nDCG@5": 0.537067,
+      "primary": 0.603991
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671138,
+      "nDCG@5": 0.537546,
+      "primary": 0.604342
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670736,
+      "nDCG@5": 0.537379,
+      "primary": 0.604057
+    }
+  ],
+  "seconds": 299.4,
+  "verdict": "KEPT",
+  "delta": 0.00263,
+  "tokens_in": 99579,
+  "tokens_out": 7799,
+  "tokens_cached": 75520,
+  "cost_usd": 0.175898,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 392.3,
+  "recovery_events": []
+}

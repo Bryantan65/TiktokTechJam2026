@@ -4,7 +4,8 @@ State, decisions, and what's next. **`CLAUDE.md` holds the task facts** — labe
 metrics, splits, baselines, dead ends. This file holds the *decisions* and the
 reasoning behind them, which is the part that's expensive to reconstruct.
 
-Last updated: 2026-08-28, code frozen at tag `record-run-4-code`, run 4 not yet launched.
+Last updated: 2026-08-28, after record run 4 converged. Code frozen at tag
+`record-run-4-code`. **Run 3 remains the submission candidate.**
 
 ---
 
@@ -24,12 +25,16 @@ Last updated: 2026-08-28, code frozen at tag `record-run-4-code`, run 4 not yet 
 ✅ submission path built and validated against the official checker
 ✅ **record run 3 (Zheng) — converged at +0.0040**
 ✅ compute caps aligned to the organisers' 50-iteration / 6 h rules
+✅ **record run 4 — converged at +0.0031, did not displace run 3**
+✅ README rewritten from the upstream CWM readme to the project's own
 ⬜ **score on test — once. Never done. See Next.**
 ⬜ write the submission
 ```
 
 **Record run 3 is the result.** One uninterrupted process, no human
-intervention, terminated on the organisers' convergence rule.
+intervention, terminated on the organisers' convergence rule. Run 4 was launched
+to test whether the revised search policy would beat it; it did not, and the
+pre-committed rule below settles that it does not replace it.
 
 ```
 submission candidate   logs/record-run-3/solutions/027_deepfm_member.py
@@ -43,7 +48,8 @@ Node 24 (`024_time_watch_userbalanced.py`) ties it at 0.605492 — the two are
 indistinguishable. Either is defensible as the submission; #27 is the recorded
 best by six decimal places.
 
-Spend across every run to date: ~3.1M in / 235k out, ~$8.2.
+Spend across every run to date: ~5.5M in / 420k out, ~$12.5 (run 4 added
+$4.24 across 128 API calls, 74% of its input tokens served from cache).
 
 ### What's built
 
@@ -80,7 +86,7 @@ which is stronger evidence than the final number alone. Runtime: 50 s numpy,
 
 **Target: valid 0.6035** (baseline 0.6015 + the official ε of 0.002).
 
-### The five runs
+### The six runs
 
 Each archive is kept because it is the evidence behind a fix, and deleting them
 would leave the fixes looking like guesses.
@@ -93,6 +99,7 @@ would leave the fixes looking like guesses.
 | `logs/record-run-1/` | 8 experiments, converged | the search policy (depth-2 star) |
 | `logs/record-run-2/` | 9 experiments, converged at +0.0031 | the search policy working |
 | **`logs/record-run-3/`** | **30 experiments, converged at +0.0040** | **the result** |
+| `logs/record-run-4/` | 32 experiments, converged at +0.0031 | the search policy under test; run 3 held |
 
 **shakedown-02** is the one worth reading. Twelve experiments, all inside
 direction 1, ending in five consecutive tweaks of one loss weight across a
@@ -138,6 +145,63 @@ One thing to tidy before submission: the raw-CSV join key includes the label
 which duplicate impression a row is, using a property of a row you already hold —
 but the feature-construction path touches `y`, which reads badly under scrutiny.
 Joining on file order instead would remove the question.
+
+**record-run-4** (2026-08-28, 5600X) is the first run under the revised search
+policy — standalone-before-blending, plus the environment disclosure. It is the
+cleanest search of the six and it scored **lower** than run 3. Both facts matter.
+
+```
+best      #31  031_user_trend_position.py   0.604615 +/- 0.000141   +0.0031
+          GAUC 0.6715   nDCG@5 0.5377
+records   32 (30 scored, 2 no-op)   of the 50-iteration cap
+wall      12:10:54 -> 14:30:07 = 2 h 19 m   of the 6 h ceiling
+compute   110 min solution time - 128 API calls - 7 web searches - $4.24
+stopped   converged, +0.000084 across the last 3
+```
+
+**It did not displace run 3.** The pre-committed rule required exceeding
+0.605493 by >= 0.0005, i.e. 0.605993. It reached 0.604615 — short by 0.0014, and
+below run 3 outright. Run 3 stands, and this is recorded because the rule was
+written down before the run started precisely so it could not be renegotiated
+afterwards.
+
+**The tree is the deepest we have produced.** Twelve levels along its spine, with
+breadth at the nodes that earned it:
+
+```
+1 -> 2 -> 3 -> 5 -> 7 -> 9 -> 11 -> 16 -> 19 -> 25 -> 31 -> 32
+                    |            |     |
+                    +- 5 kids    +- 4  +- 4
+```
+
+Compare record-run-1's `2,2,2,2,2,2` — six first drafts and nothing refined. The
+policy change did what it was written to do.
+
+**It found a different mechanism family and arrived at a lower ceiling.** Run 3's
+spine was a ten-member ensemble; run 4 stayed close to single models and built on
+**sampled softmax with 8-16 negatives drawn from the same user**, then layered
+history statistics and a row-order user-trend term. Two independent searches,
+different families, +0.0040 and +0.0031 — and the ~0.0009 between them is roughly
+what run 3's ensembling was worth.
+
+That is the uncomfortable reading of the policy change: it made the search
+legible and made the score worse. Both runs are honest samples, but standalone-
+first discourages exactly the multi-model averaging that produced run 3's best,
+and the rule as written is too strict — see the wording fix under *Next*.
+
+**Listwise softmax failed for the fifth time.** `#4`, a full softmax over each
+user's impressions, scored 0.59659 — **-0.0049**. That is now five independent
+implementations across four runs that could not see each other's ledgers:
+-0.0026, -0.0051, -0.0056, -0.0020, -0.0049. The mechanism is understood (33%
+positive rate means a user's positives compete against each other) and the
+replication is about as clean as this setup can produce.
+
+**Two no-ops caught and recovered from.** `#18` and `#21` produced identical
+GAUC and nDCG@5 to an earlier node despite different code — the source-hash and
+identical-metrics guards flagged both, the agent read the flag and moved on, and
+`#22` scored 0.604073 immediately after `#21` failed. One `solution_recovered`
+event in `logs/record-run-4/events.jsonl`. **Zero crashes, zero API failures,
+zero human interventions.**
 
 ### What is actually demonstrated
 
@@ -867,6 +931,11 @@ single draw with a std of ~0.0005, while the rank-average has essentially no
 variance. The fair comparison is against the agent's 3-seed *mean of metrics*,
 0.604598, which makes the ensemble's edge about +0.0005.
 
+**Resolved 2026-08-28: `--seeds 1`.** The organisers' Q&A (below) asked entrants
+not to lean on human intervention because "the goal is to evaluate the autonomous
+agent's capabilities". A human-built seed ensemble worth half a sigma is exactly
+the trade that guidance argues against. Submit seed 0.
+
 ---
 
 ## The CWM code in `src/`
@@ -888,84 +957,74 @@ authoritative. Mitigation is mechanical: the agent's write access is
 
 ---
 
+## Organiser Q&A, 2026-08-28 — what it settles
+
+A live Q&A session with the organisers. Four points bear on decisions we had
+open; the rest was background on the recommendation funnel, which only confirms
+what `CLAUDE.md` already says — our task is the **ranking** stage, not retrieval.
+
+**A crashed run may be restarted, and that is not human intervention.** Their
+wording: restarting a process that died on a network or other error is fine,
+including from a separate session. A restart counts as intervention *only if you
+change the agent's behaviour or parameters while doing it*.
+
+This is more permissive than the rule we had been holding ourselves to, which
+treated "killing and restarting" as voiding the run. Our design already meets
+the condition and does so structurally rather than by discipline: the agent has
+no memory between iterations — **the ledger is the memory** — so a restart
+re-reads `logs/<run>/*.json` and resumes knowing everything. There is no
+parameter to accidentally change because nothing is carried in process state.
+
+It changes what we claim, slightly. Not *we never had to restart*, but *restarts
+were permitted and we never needed one*: runs 3 and 4 both report zero crashes
+and zero API failures.
+
+**Do not lean on human intervention.** Asked whether an autonomous agent with
+mediocre scores beats an accurate one needing human help, they said performance
+gained by intervention tends not to survive the move to test, and that entrants
+should focus on train/valid and on the agent's own capability. This is the same
+line we drew ourselves — capability disclosure yes, knowledge injection no — and
+it is what settles `--seeds 1` above.
+
+**There is no validation leaderboard.** Entrants calibrate against their own
+metrics and the published baseline, nothing else. So the ~0.007 valid-to-test gap
+stays an estimate until the single local test check, which makes that check the
+only ground truth we will have before submitting.
+
+**The video is optional for Track 2** — recommended at ~3 minutes, but the other
+four tracks require it and this one does not. If we skip it the written report
+carries everything, which raises the bar on the README.
+
+Also confirmed: free API keys from other providers are allowed if tokens run out.
+Not currently a constraint at ~$8 total.
+
+---
+
 ## Next
 
-Ordered. Item 1 blocks the run; items 3-5 happen while it runs.
+Items 1-3 are done. What remains is the submission itself.
 
-### 1. Benchmark the second machine before choosing where to run
+### Done
 
-Two candidates, and the paper specs do not settle it:
+**1. Benchmarked both machines.** `python harness/seedsweep.py 001_torch_fm.py`,
+three sequential seeds: **5600X 84.8 s, Core Ultra 5 125H 280 s** — 3.3x slower,
+with no throttling between back-to-back runs, so it is raw throughput and not
+heat. The 125H's fourteen "cores" are 4 P + 8 E + 2 LP-E, and torch schedules
+onto the slow ones. Run 4 went to the desktop, and any future run should too.
 
-```
-AMD Ryzen 5 5600X          6 cores / 12 threads, desktop, 3.7 GHz sustained
-Intel Core Ultra 5 125H   14 cores / 18 threads, laptop, hybrid P + E cores
-```
+**2. Ran record run 4.** 2 h 19 m, 32 experiments, converged at +0.0031. It did
+not displace run 3 under the pre-committed >= 0.0005 rule. Full write-up above.
 
-The 125H's fourteen "cores" are not fourteen of the same thing — 4 P-cores,
-8 E-cores, 2 low-power E-cores — and torch will schedule onto the slow ones.
-More importantly this is a **multi-hour all-core load**, and a laptop throttles
-where a desktop holds its clocks. A short benchmark will not show that.
+**3. Rewrote the README.** Overview, guardrails table, setup, reproduction steps,
+findings, limitations with the ceiling analysis, and per-member contributions.
+The upstream CWM paper abstract is gone.
 
-**Run this on the Intel machine, twice, back to back:**
+Also checked and closed: **`starterkitv2/` is byte-identical to
+`kuairand-starter-kit/`** across all seven files — hash-compared, the only
+difference is our own `README.en.md` translation living in the original folder.
+Nothing to re-score, nothing to re-run. Delete the duplicate.
 
-```
-python harness/seedsweep.py 001_torch_fm.py
-```
-
-**Reference, measured on the 5600X: 84.8 s.** Note `seedsweep.py` runs its three
-seeds *sequentially*, unlike the harness — that is deliberate here, because a
-sequential benchmark compares single-core-ish throughput rather than how well
-each machine schedules three concurrent processes. Do not compare it to the
-harness's ~50 s parallel figure; compare Intel-sequential against
-5600X-sequential, i.e. against 84.8 s.
-
-- **Slower than ~85 s** ⇒ the desktop is faster per unit work; prefer it.
-- **Faster than ~85 s** ⇒ the Intel machine wins on raw speed, and its 14 cores
-  should also parallelise the three seeds at least as well.
-- **Second run meaningfully slower than the first** ⇒ thermal throttling. That
-  is the decisive signal: it compounds over a 3 h load, and a laptop that starts
-  fast can finish slower than the desktop. Prefer the desktop in that case even
-  if the first run looked good.
-
-`seedsweep.py` writes nothing to the ledger, so this is safe to run at any time,
-including while something else is going on.
-
-### 2. Launch record run 4
-
-```
-python -m agent --run-name record-run
-```
-
-No other flags. Auto-creates `logs/record-run-4/` and copies the control row in.
-
-**Estimate on the 5600X: 2-4 hours.** record-run-3 was 356 min of compute plus
-33 min of LLM; parallel seeds halve the compute, and the new standalone-before-
-blending policy should make individual experiments much cheaper (1 model x 3
-seeds instead of 10 x 3). It may also run more of them — cheaper experiments
-delay convergence. The 6 h guard stops it either way.
-
-**Pre-committed, before the run starts so it cannot become a rationalisation:**
-run 4 replaces `record-run-3/solutions/027_deepfm_member.py` as the submission
-candidate **only if it exceeds 0.605493 by at least 0.0005**. That solution's
-seed spread is 0.0002, so the SE of a 3-seed mean is ~0.0001 and of the
-difference ~0.00016 — the threshold is about three standard errors. Below it,
-027 stands and we say so.
-
-### 3. Rewrite the README — the biggest visible gap
-
-It is still the **upstream CWM paper's readme**. A judge opening the repo sees
-"Counterfactual Watch Model" and a paper abstract. The deliverables require:
-
-```
-project overview          setup and installation
-steps to reproduce        limitations and what you would improve
-team member contributions
-```
-
-The material exists — this file for the reasoning, `logs/record-run-*/` for the
-evidence, and the ceiling analysis for a genuinely good limitations section.
-
-### 4. Compile the resource-usage report
+### 4. Compile the resource-usage report — open
 
 Deliverable 4 asks for total tokens (in + out), total agent wall-clock, and
 iterations used out of 50. `ledger.totals()` has the first; `run_start` and
@@ -976,7 +1035,7 @@ run has **zero within-run interventions** — that is the number the autonomy
 criterion asks for. Prompt and harness revisions between runs are development,
 listed separately and honestly.
 
-### 5. Generate and validate the submission, then score test ONCE
+### 5. Generate and validate the submission, then score test ONCE — open
 
 Note the wording. `make_submission.py` **generates and validates** a submission;
 it does not score test, by choice. The test labels *are* in the downloaded file —
@@ -991,8 +1050,8 @@ is fixed, so it cannot influence selection.
 python harness/make_submission.py <best>.py --split test --out submission.csv --seeds 1
 ```
 
-Read *"The decision waiting for whoever submits"* above and choose `--seeds 1`
-or `--seeds 3` first.
+**`--seeds 1` is settled** — see the resolution under *"The decision waiting for
+whoever submits"*, and the organiser Q&A that decided it.
 
 Expect **~0.598 on test**: valid has run ~0.007 above test throughout. Compare
 the *delta* against the official FM's test **0.5946**, never the raw valid
@@ -1000,10 +1059,33 @@ number. A delta far below +0.0040 would mean the gains were valid-specific,
 which is worth knowing — the candidate was selected across 30 experiments on
 valid alone.
 
-### 6. Answer from the organisers
+### 6. Answer from the organisers — partially in
 
-`docs/email-convergence-question.md` is sent. Question 2 — whether refinement
-iterations count toward N — decides whether any further run should refine.
+`docs/email-convergence-question.md` is sent and unanswered. The 2026-08-28 Q&A
+session answered other things (see that section) but not this. Question 2 —
+whether refinement iterations count toward N — decides whether any further run
+should refine.
+
+### 7. Loosen the ensembling rule before any run 5
+
+The current prompt says a mechanism must show "an independent gain" before it is
+blended. That is too strict, and run 4 is the evidence: its `#15` user-balanced
+softmax scored **-0.0011 standalone** and was dropped, while run 3's `#24` — the
+same mechanism, blended — was **+0.0003** and ended up in the winning solution.
+A mechanism can be worthless alone and useful in a mixture.
+
+Change the wording to *"until it has been measured on its own terms"*: measure it
+standalone so the number means something, then let the agent decide whether to
+blend it anyway. That keeps the diagnostic value of the standalone measurement
+without turning it into a veto.
+
+### 8. Tidy run 3's raw-CSV join before submitting
+
+`023`/`024` key the raw-log lookup on `(date, user, video, tab, dur, y)` — the
+label is in the join key. It is defensible (it disambiguates which duplicate
+impression a row is, from a property of a row you already hold) and it is not
+leakage, but a feature path that touches `y` reads badly under scrutiny. Joining
+on file order removes the question entirely.
 
 ---
 
@@ -1020,7 +1102,11 @@ own web searches in record-run-3, and it found CWM with no access to `src/`,
 which contains a working implementation.
 
 Realistic reach is **0.607-0.608**; **0.610 needs a genuinely new source of
-signal** and is unlikely given the deceleration above.
+signal** and is unlikely given the deceleration above. Run 4 supports this: a
+fully independent search down a different mechanism family (sampled softmax
+rather than a BPR ensemble) landed at +0.0031, below run 3's +0.0040. Two
+searches converging near the same place from different directions is what a
+ceiling looks like.
 
 **Do not run repeatedly and submit the best.** That is selection on validation
 across runs — it makes the final number less credible and under-reports actual
@@ -1045,9 +1131,11 @@ run 4 is; re-running the same agent to fish for a good draw is not.
   record-run-1 found time features gave nothing on plain BPR. If a further run
   reproduces it on top of an ensemble, that is an interaction worth stating; one
   observation is not.
-- **The search policy has been exercised exactly once.** record-run-2's tree is
-  the shape we wanted, but a single run is a single sample of the agent's
-  behaviour, not evidence that the policy reliably produces it.
+- ~~The search policy has been exercised exactly once.~~ **Three times now** —
+  runs 2, 3 and 4 all produced real trees, run 4 the deepest (12 levels). The
+  draft/improve/debug policy reproduces. The *standalone-before-blending* addition
+  has been exercised once, in run 4, and appears to have cost score; see item 7
+  under Next.
 - **A solution already in the ledger cannot be re-measured in place.** The
   source-hash guard returns `duplicate`. Fine for a fresh ledger; use
   `harness/seedsweep.py` (which writes nothing) to re-measure anything old.
@@ -1057,7 +1145,9 @@ run 4 is; re-running the same agent to fish for a good draw is not.
   fresh-ledger record run; misleading if you ever want "20 more experiments" on
   top of an existing ledger.
 - **Test has never been scored.** Everything claimed here is validation-only.
-  Until that one run happens, transfer is an assumption.
+  Until that one run happens, transfer is an assumption. With no validation
+  leaderboard (organiser Q&A), this single check is the only ground truth
+  available before submission.
 - **The submission artifact does not exist yet.** The tooling is built and
   validated on valid; nobody has produced `submission.csv`.
 - **Spinner rendering is only fixed for width.** If the terminal is *resized*

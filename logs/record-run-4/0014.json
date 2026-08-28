@@ -1,0 +1,57 @@
+{
+  "iteration": 14,
+  "solution": "logs/record-run-4/solutions/014_node9_seed_ensemble.py",
+  "hypothesis": "improve 9: with convergence at risk, average two independently trained copies of the current best node 9 model at full strength to reduce seed/checkpoint variance rather than adding a weak new mechanism.",
+  "parent": "9",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:50:26+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604255,
+  "GAUC": 0.671206,
+  "nDCG@5": 0.537303,
+  "source_hash": "94437581ae8e",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') two_seed_ensemble\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "7cd918f0cee3",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000373,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671581,
+      "nDCG@5": 0.53743,
+      "primary": 0.604506
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670599,
+      "nDCG@5": 0.537054,
+      "primary": 0.603826
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671439,
+      "nDCG@5": 0.537426,
+      "primary": 0.604433
+    }
+  ],
+  "seconds": 298.3,
+  "verdict": "KEPT",
+  "delta": 0.002755,
+  "tokens_in": 87443,
+  "tokens_out": 6524,
+  "tokens_cached": 64000,
+  "cost_usd": 0.155847,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 368.5,
+  "recovery_events": []
+}

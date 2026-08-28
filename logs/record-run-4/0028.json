@@ -1,0 +1,57 @@
+{
+  "iteration": 28,
+  "solution": "logs/record-run-4/solutions/028_global_pop_residual.py",
+  "hypothesis": "improve 27: author-tab was flat, but it suggested residual scores can trade GAUC/nDCG; add tiny train-only global video/author popularity empirical-Bayes residuals as a last chance to help within-user ranking without changing the saturated FM loss.",
+  "parent": "27",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:58:57+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604245,
+  "GAUC": 0.671052,
+  "nDCG@5": 0.537437,
+  "source_hash": "0fba95f792d0",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') global_pop_residual\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "09178cf5fcce",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000297,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671153,
+      "nDCG@5": 0.537514,
+      "primary": 0.604333
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670557,
+      "nDCG@5": 0.53727,
+      "primary": 0.603914
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671447,
+      "nDCG@5": 0.537528,
+      "primary": 0.604487
+    }
+  ],
+  "seconds": 291.0,
+  "verdict": "KEPT",
+  "delta": 0.002745,
+  "tokens_in": 51000,
+  "tokens_out": 6498,
+  "tokens_cached": 35712,
+  "cost_usd": 0.121056,
+  "model": "gpt-5.5",
+  "agent_iteration": 27,
+  "wall_seconds": 350.8,
+  "recovery_events": []
+}

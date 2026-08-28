@@ -1,0 +1,57 @@
+{
+  "iteration": 19,
+  "solution": "logs/record-run-4/solutions/019_recent_history.py",
+  "hypothesis": "improve 16: node 17 showed stronger all-history weights hurt, so keep node 16's robust blend and add only small exponentially decayed recent author/video/tab residuals. If user behaviour is time-local, this should improve top-5 ranking without overwhelming the base FM.",
+  "parent": "16",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:12:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60448,
+  "GAUC": 0.671323,
+  "nDCG@5": 0.537636,
+  "source_hash": "f1a89da01a19",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') recent_history\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "7723713574ba",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 4.5e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671453,
+      "nDCG@5": 0.537609,
+      "primary": 0.604531
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671343,
+      "nDCG@5": 0.537582,
+      "primary": 0.604462
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671174,
+      "nDCG@5": 0.537718,
+      "primary": 0.604446
+    }
+  ],
+  "seconds": 188.5,
+  "verdict": "KEPT",
+  "delta": 0.00298,
+  "tokens_in": 71185,
+  "tokens_out": 7216,
+  "tokens_cached": 46976,
+  "cost_usd": 0.15617,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 252.4,
+  "recovery_events": []
+}

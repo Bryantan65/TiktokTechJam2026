@@ -1,0 +1,57 @@
+{
+  "iteration": 31,
+  "solution": "logs/record-run-4/solutions/031_user_trend_position.py",
+  "hypothesis": "improve 25: exploit row order as a time proxy by adding a tiny train-learned user trend times within-target-split position residual; users whose recent train rate rose should get later impressions slightly boosted, and falling users slightly demoted.",
+  "parent": "25",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T14:18:50+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604615,
+  "GAUC": 0.671519,
+  "nDCG@5": 0.537711,
+  "source_hash": "384b83fbf02a",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') recent_history neg16 user_trend_position\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8fcb3477325f",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000141,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671327,
+      "nDCG@5": 0.537584,
+      "primary": 0.604456
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67151,
+      "nDCG@5": 0.537814,
+      "primary": 0.604662
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671719,
+      "nDCG@5": 0.537734,
+      "primary": 0.604726
+    }
+  ],
+  "seconds": 346.0,
+  "verdict": "KEPT",
+  "delta": 0.003115,
+  "tokens_in": 149419,
+  "tokens_out": 9506,
+  "tokens_cached": 120576,
+  "cost_usd": 0.227456,
+  "model": "gpt-5.5",
+  "agent_iteration": 30,
+  "wall_seconds": 454.7,
+  "recovery_events": []
+}

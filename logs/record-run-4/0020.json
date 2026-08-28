@@ -1,0 +1,57 @@
+{
+  "iteration": 20,
+  "solution": "logs/record-run-4/solutions/020_global_quality_history.py",
+  "hypothesis": "improve 19: the recent-history residual moved both metrics up but is nearly saturated; add a very small empirical-Bayes global author/video quality residual from train only to help rank items for users without repeated entities. This is a targeted last pass on the history-statistics mechanism, not another ensemble member.",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:17:03+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604062,
+  "GAUC": 0.670889,
+  "nDCG@5": 0.537234,
+  "source_hash": "cc76443e4715",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time aux+recent_history+global_quality\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "44a7833178b5",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 8.7e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670778,
+      "nDCG@5": 0.537201,
+      "primary": 0.60399
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671115,
+      "nDCG@5": 0.537201,
+      "primary": 0.604158
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670774,
+      "nDCG@5": 0.537301,
+      "primary": 0.604038
+    }
+  ],
+  "seconds": 191.1,
+  "verdict": "KEPT",
+  "delta": 0.002562,
+  "tokens_in": 77885,
+  "tokens_out": 11645,
+  "tokens_cached": 55808,
+  "cost_usd": 0.199546,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 281.9,
+  "recovery_events": []
+}

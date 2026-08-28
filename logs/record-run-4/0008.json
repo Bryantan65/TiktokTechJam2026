@@ -1,0 +1,57 @@
+{
+  "iteration": 8,
+  "solution": "logs/record-run-4/solutions/008_time_crosses_softmax8.py",
+  "hypothesis": "improve 7: time context gave a clear stable gain; add finer 10-minute bucket plus hour\u00d7dow and tab\u00d7dow categorical crosses so FM interactions can model periodic context beyond raw hour.",
+  "parent": "7",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:23:56+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604314,
+  "GAUC": 0.671083,
+  "nDCG@5": 0.537544,
+  "source_hash": "2eaa3c2b901b",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab,time10,hour_dow,tab_dow\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "4f834ad8b24d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 9.8e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671246,
+      "nDCG@5": 0.537573,
+      "primary": 0.60441
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671176,
+      "nDCG@5": 0.537253,
+      "primary": 0.604214
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670827,
+      "nDCG@5": 0.537807,
+      "primary": 0.604317
+    }
+  ],
+  "seconds": 136.8,
+  "verdict": "KEPT",
+  "delta": 0.002814,
+  "tokens_in": 34466,
+  "tokens_out": 4198,
+  "tokens_cached": 23424,
+  "cost_usd": 0.081297,
+  "model": "gpt-5.5",
+  "agent_iteration": 7,
+  "wall_seconds": 177.3,
+  "recovery_events": []
+}

@@ -1,0 +1,57 @@
+{
+  "iteration": 24,
+  "solution": "logs/record-run-4/solutions/024_deepfm_stable.py",
+  "hypothesis": "improve 23: DeepFM had one strong seed but high variance, so stabilize it with a zero-start smaller residual, no dropout, and checkpoint on the deployed FM+history score rather than the raw neural score.",
+  "parent": "23",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:35:50+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603816,
+  "GAUC": 0.670477,
+  "nDCG@5": 0.537155,
+  "source_hash": "1931352c0ed6",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time aux stable DeepFM residual\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "d46ef47255e4",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000587,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67144,
+      "nDCG@5": 0.537546,
+      "primary": 0.604493
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669873,
+      "nDCG@5": 0.537141,
+      "primary": 0.603507
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670118,
+      "nDCG@5": 0.536778,
+      "primary": 0.603448
+    }
+  ],
+  "seconds": 204.9,
+  "verdict": "KEPT",
+  "delta": 0.002316,
+  "tokens_in": 63650,
+  "tokens_out": 5799,
+  "tokens_cached": 43904,
+  "cost_usd": 0.129307,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 255.7,
+  "recovery_events": []
+}

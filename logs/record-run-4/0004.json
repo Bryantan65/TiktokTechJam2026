@@ -1,0 +1,57 @@
+{
+  "iteration": 4,
+  "solution": "logs/record-run-4/solutions/004_full_user_softmax_fm.py",
+  "hypothesis": "improve 3: sampled softmax hit the target mean but had high seed variance; remove negative-sampling noise by optimizing full within-user softmax mass on positives for each eligible user. This keeps the listwise loss direction while making gradients deterministic per epoch apart from user order.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:14:50+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.59659,
+  "GAUC": 0.660428,
+  "nDCG@5": 0.532754,
+  "source_hash": "94622c502445",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "c3b62208d032",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000946,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.660143,
+      "nDCG@5": 0.532784,
+      "primary": 0.596463
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.661868,
+      "nDCG@5": 0.53332,
+      "primary": 0.597594
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.659272,
+      "nDCG@5": 0.532157,
+      "primary": 0.595714
+    }
+  ],
+  "seconds": 77.8,
+  "verdict": "worse",
+  "delta": -0.00491,
+  "tokens_in": 45643,
+  "tokens_out": 3008,
+  "tokens_cached": 33280,
+  "cost_usd": 0.077628,
+  "model": "gpt-5.5",
+  "agent_iteration": 3,
+  "wall_seconds": 110.5,
+  "recovery_events": []
+}
