@@ -167,6 +167,37 @@ So:
   learned weights (e.g. stacking on held-out predictions) can extract value
   that equal-weight averaging cannot.
 
+## Screening an idea without spending an experiment
+You develop against `valid`, and `valid` also picks the early-stopping epoch
+inside every experiment. That is two rounds of selection on one set of labels,
+and it gets more pressure the longer the search runs.
+
+There is a train-only holdout you can screen against instead. It cuts the TRAIN
+window by date - earlier days to fit on, the last few to score on - so it never
+touches valid or test:
+
+    from devdata import load as load_dev     # instead of `from data import load`
+    splits = load_dev(a.data_dir)            # {'train': ..., 'valid': ...}
+
+Handle it in your solution's main block, exactly as `001_torch_fm.py` does:
+
+    if a.split == 'dev':
+        from devdata import load as load_dev
+        splits = load_dev(a.data_dir); target = 'valid'
+    else:
+        splits = load(a.data_dir); target = a.split
+
+Then `run_solution(..., split='dev')` scores you on the holdout. Such a row is
+marked `screen`, and it does NOT count toward convergence, cannot become the
+best solution, and its number is NOT comparable to the baseline or to any
+`valid` row - it is a different set of rows. Use it to compare candidates
+against each other, then take what survives to a real experiment.
+
+`devdata.describe(splits)` prints the shape of both halves and the TYPE of every
+field. Worth one call the first time you write a join: the ids are strings, and
+mixing them with ints read from a CSV produces lookups that miss on every row
+without raising - the feature simply reads as absent everywhere.
+
 ## What is installed
 Your solutions are standalone scripts, so anything importable is available:
 

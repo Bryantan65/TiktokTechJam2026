@@ -29,6 +29,9 @@ Last updated: 2026-08-28, after record run 6 converged. Code frozen at tag
 ✅ **record run 6 — converged at +0.0035, did not displace run 3**
 ✅ GBDT capability disclosed; agent found LambdaRank unprompted and it lost
 ✅ README rewritten from the upstream CWM readme to the project's own
+✅ the agent can see what an experiment costs (`secs`)
+✅ an unmeasured seed spread is no longer reported as a stable one
+✅ **train-only holdout: the agent can screen an idea without spending valid**
 ✅ **test scored once — +0.0039. The gain transferred.**
 ✅ submission generated from the locked candidate and validated
 ```
@@ -1098,6 +1101,64 @@ compare deltas, never raw primaries across splits.**
 A second file, `submission.csv`, generated earlier the same day, rescored to
 0.598411 (+0.0038). The 0.0001 gap is process-level float nondeterminism, and
 confirms both files came from the same candidate.
+
+---
+
+## The train-only holdout — screening without spending valid
+
+`harness/devdata.py`. Cuts the TRAIN window by date: earlier days to fit on, the
+last 5 to score on. Never touches valid, and has no `test` key at all, so a
+solution cannot reach for test data even by accident.
+
+It is a faithful proxy, which was not obvious in advance:
+
+```
+                 rows      positive rate   (user, video) pair coverage
+official valid   124909    33.2%           1.62%
+dev holdout      129898    33.5%           1.71%
+```
+
+Pair coverage is the number that defines this task — it is why personalisation
+is unlearnable here — and the holdout reproduces it to within 0.1 points.
+
+**Why it exists.** The agent develops against valid, and valid also picks the
+early-stopping epoch inside every experiment. That is two rounds of selection on
+one set of labels, and the pressure grows with the length of the search. It has
+held so far (+0.0040 valid → +0.0039 test) but every hunch currently costs a
+real experiment. MLE-bench requires exactly this of every agent it evaluates:
+*"each agent must rely solely on a self-constructed runtime test set, a held-out
+split from the original training data."*
+
+**How it is wired.** `run_experiment(..., split='dev')`. Such a row is logged
+and visible, but:
+
+- `verdict` is `screen`, not a delta — its number is on a different scale
+  (the control scores 0.6081 on dev against 0.6014 on valid) and comparing it
+  to the 0.6015 baseline would be meaningless
+- excluded from `_scored()`, so it cannot end a run by convergence
+- excluded from `best()`, so it cannot become the incumbent
+- it still costs wall clock, which is the honest price of a screen
+
+`solutions/001_torch_fm.py` handles `--split dev`, so everything the agent
+branches from inherits the pattern. `run.py` puts `harness/` on the subprocess
+PYTHONPATH and pins `HARNESS_DEV_HOLDOUT_DAYS`, so the harness and the solution
+cannot derive different cuts and misalign their rows.
+
+**What it deliberately does not do.** `describe()` reports row counts, date
+ranges, positive rates, per-field types and generic user/video/pair coverage.
+It reports nothing about any particular feature — no per-field lift, no ranking
+of what looks promising. That would be a person's research findings smuggled
+into a tool. The agent's own candidate code decides what gets tested.
+
+The field-type report earns its place: the official loader returns ids as
+**strings**, and mixing them with ints read from a CSV via pandas produces
+lookups that miss on every row *without raising*. The feature reads as absent
+everywhere and the experiment looks like a clean negative result. That cost
+three wasted attempts during the feature audit on 2026-08-28.
+
+**Guards, regression-tested:** `--split test`, `--split train` and any unknown
+split are refused by the harness; the agent's tool schema offers only
+`valid | dev` and its handler refuses anything else independently.
 
 ---
 
