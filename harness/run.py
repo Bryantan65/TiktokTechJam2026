@@ -53,17 +53,28 @@ _SPLIT_CACHE = {}
 # single-seed scoring (faster, and what the organisers' epsilon assumes).
 N_SEEDS = int(os.environ.get('HARNESS_SEEDS', 3))
 
-# Adaptive seeding: score seed 0 first, and only spend the remaining seeds if
-# the result could plausibly become the new best. Two thirds of experiments
-# never improve on the incumbent, and measuring a dud to three-seed precision
-# buys nothing - record-run-6 spent 121 of its 180 compute minutes on
-# experiments that did not move the best. A screened row is still logged, still
-# scored, and still visible to the agent; it is just measured once.
+# Adaptive seeding: score seed 0 first, and spend the remaining seeds only if
+# the result could plausibly become the new best. The idea was that two thirds
+# of experiments never improve on the incumbent, so measuring a dud to
+# three-seed precision is waste - record-run-6 spent 121 of its 180 compute
+# minutes on experiments that did not move the best.
+#
+# DEFAULT OFF, because it was measured and it is SLOWER. A/B on the control
+# solution: 49.1s with all three seeds concurrent, 69.6s phased. Phasing
+# serialises what was already parallel, and this workload is memory-bandwidth
+# bound so the freed cores buy nothing back - one seed on six threads takes
+# about as long as three seeds on two threads each. The saving on a dud is
+# 34s against 33s, i.e. none, while the cost on a contender is ~40%.
+#
+# Kept behind a flag rather than deleted: it becomes correct the moment seeds
+# stop being run concurrently, or if experiment-level concurrency is ever
+# raised so that freed cores go to another experiment instead of idling.
+# HARNESS_ADAPTIVE_SEEDS=1 enables it.
 #
 # The margin is the official epsilon. A solution landing more than epsilon
 # below the incumbent cannot become best on a re-measurement: seed spread on
 # this data is ~0.0008, so 0.002 is about 2.5 sigma.
-ADAPTIVE_SEEDS = os.environ.get('HARNESS_ADAPTIVE_SEEDS', '1') != '0'
+ADAPTIVE_SEEDS = os.environ.get('HARNESS_ADAPTIVE_SEEDS', '0') != '0'
 SCREEN_MARGIN = float(os.environ.get('HARNESS_SCREEN_MARGIN', 0.002))
 
 
