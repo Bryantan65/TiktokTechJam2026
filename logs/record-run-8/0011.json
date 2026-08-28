@@ -1,0 +1,64 @@
+{
+  "iteration": 11,
+  "solution": "logs/record-run-8/solutions/011_userbalanced_bpr_bce_fm.py",
+  "hypothesis": "improve 3: change the BPR+BCE sampler from positive-count-weighted to partially user-balanced by capping positive anchors per user, aiming to lift per-user nDCG@5 while preserving the successful within-user pairwise objective.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:25:22+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601105,
+  "GAUC": 0.666407,
+  "nDCG@5": 0.535803,
+  "source_hash": "8146c6fae057",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "70103866432c",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000179,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.66619,
+      "nDCG@5": 0.535765,
+      "primary": 0.600977
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.666628,
+      "nDCG@5": 0.535991,
+      "primary": 0.601309
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.666402,
+      "nDCG@5": 0.535653,
+      "primary": 0.601028
+    }
+  ],
+  "seconds": 41.8,
+  "verdict": "noise",
+  "delta": -0.000395,
+  "tokens_in": 91972,
+  "tokens_out": 4101,
+  "tokens_cached": 74496,
+  "cost_usd": 0.121948,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 98.1,
+  "recovery_events": []
+}

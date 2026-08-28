@@ -1,0 +1,64 @@
+{
+  "iteration": 29,
+  "solution": "logs/record-run-8/solutions/029_lgb_aux_history.py",
+  "hypothesis": "improve 24: multi-task heads were weak, but raw auxiliary feedback may help as smoothed user/item history features; add click/like/follow/comment/forward/play-time aggregate rates to the personalized LambdaRank residual while preserving leave-one-out on train rows.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:29:27+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604632,
+  "GAUC": 0.671372,
+  "nDCG@5": 0.537893,
+  "source_hash": "78df00ddb378",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], lgb_aux_history fm_weight=0.5\nraw rows=1,436,609; date_col=date; hour_col=hourmin; aux_cols=['is_click', 'is_comment', 'is_follow', 'is_forward', 'is_like', 'play_time_ms']\nraw alignment train: 1,141,112/1,141,112\nraw alignment valid: 124,909/124,909\nraw alignment test: 170,588/170,588\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e319366ed831",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000327,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671942,
+      "nDCG@5": 0.537971,
+      "primary": 0.604956
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671373,
+      "nDCG@5": 0.537904,
+      "primary": 0.604639
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.6708,
+      "nDCG@5": 0.537804,
+      "primary": 0.604302
+    }
+  ],
+  "seconds": 259.2,
+  "verdict": "KEPT",
+  "delta": 0.003132,
+  "tokens_in": 79041,
+  "tokens_out": 7336,
+  "tokens_cached": 54144,
+  "cost_usd": 0.162674,
+  "model": "gpt-5.5",
+  "agent_iteration": 28,
+  "wall_seconds": 329.1,
+  "recovery_events": []
+}

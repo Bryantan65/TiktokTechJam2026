@@ -1,0 +1,64 @@
+{
+  "iteration": 23,
+  "solution": "logs/record-run-8/solutions/023_lgb_time_ensemble.py",
+  "hypothesis": "improve 20: the FM ensemble is stable, but the single residual LambdaRank tree is stochastic and may underfit a tiny top-k correction; average three same-feature LGB residual rankers at full residual weight before the 50/50 FM blend to reduce tree variance.",
+  "parent": "20",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:04:34+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604698,
+  "GAUC": 0.671393,
+  "nDCG@5": 0.538003,
+  "source_hash": "d059696488f4",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], lgb_time_ensemble n_lgb=3, fm_weight=0.5\nraw time rows=1,436,609; date_col=date; hour_col=hourmin\ntime alignment train: 1,141,112/1,141,112\ntime alignment valid: 124,909/124,909\ntime alignment test: 170,588/170,588\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "ff383242d3f2",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000158,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671716,
+      "nDCG@5": 0.537948,
+      "primary": 0.604832
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671473,
+      "nDCG@5": 0.538004,
+      "primary": 0.604738
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670989,
+      "nDCG@5": 0.538057,
+      "primary": 0.604523
+    }
+  ],
+  "seconds": 160.8,
+  "verdict": "KEPT",
+  "delta": 0.003198,
+  "tokens_in": 84158,
+  "tokens_out": 6020,
+  "tokens_cached": 62976,
+  "cost_usd": 0.144643,
+  "model": "gpt-5.5",
+  "agent_iteration": 22,
+  "wall_seconds": 225.9,
+  "recovery_events": []
+}

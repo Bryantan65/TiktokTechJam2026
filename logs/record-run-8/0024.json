@@ -1,0 +1,64 @@
+{
+  "iteration": 24,
+  "solution": "logs/record-run-8/solutions/024_lgb_user_pref_residual.py",
+  "hypothesis": "improve 20: add leave-one-out personalized history rates (user-video/author/tab/duration/author-tab) to the successful time residual ranker, giving the tree sequence-like user preference signals without sparse FM cross embeddings.",
+  "parent": "20",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:08:16+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604793,
+  "GAUC": 0.671496,
+  "nDCG@5": 0.53809,
+  "source_hash": "528ca035e683",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], lgb_user_pref_residual fm_weight=0.5\nraw time rows=1,436,609; date_col=date; hour_col=hourmin\ntime alignment train: 1,141,112/1,141,112\ntime alignment valid: 124,909/124,909\ntime alignment test: 170,588/170,588\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8d1fa40fdeeb",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000176,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671742,
+      "nDCG@5": 0.538169,
+      "primary": 0.604955
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671533,
+      "nDCG@5": 0.538102,
+      "primary": 0.604817
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671214,
+      "nDCG@5": 0.537998,
+      "primary": 0.604606
+    }
+  ],
+  "seconds": 173.1,
+  "verdict": "KEPT",
+  "delta": 0.003293,
+  "tokens_in": 83715,
+  "tokens_out": 5870,
+  "tokens_cached": 62976,
+  "cost_usd": 0.142036,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 233.7,
+  "recovery_events": []
+}

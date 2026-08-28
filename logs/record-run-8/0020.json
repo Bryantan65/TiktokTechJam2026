@@ -1,0 +1,64 @@
+{
+  "iteration": 20,
+  "solution": "logs/record-run-8/solutions/020_lgb_time_residual.py",
+  "hypothesis": "improve 17: the time-feature FM draft was weak, but hour/date drift may be useful as a tree residual correction; add raw hour/date/tab-hour features only to the LightGBM LambdaRank residual stage.",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:53:03+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604746,
+  "GAUC": 0.671439,
+  "nDCG@5": 0.538051,
+  "source_hash": "7036ec463fa2",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], residual_lgb_time, fm_models=5, fm_weight=0.5\nraw time rows=1,436,609; date_col=date; hour_col=hourmin\ntime alignment train: 1,141,112/1,141,112\ntime alignment valid: 124,909/124,909\ntime alignment test: 170,588/170,588\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "eb57ae772e35",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000218,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671727,
+      "nDCG@5": 0.537948,
+      "primary": 0.604838
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671616,
+      "nDCG@5": 0.538187,
+      "primary": 0.604902
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670975,
+      "nDCG@5": 0.538019,
+      "primary": 0.604497
+    }
+  ],
+  "seconds": 153.1,
+  "verdict": "KEPT",
+  "delta": 0.003246,
+  "tokens_in": 111793,
+  "tokens_out": 7788,
+  "tokens_cached": 86144,
+  "cost_usd": 0.185075,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 227.4,
+  "recovery_events": []
+}

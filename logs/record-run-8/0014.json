@@ -1,0 +1,33 @@
+{
+  "iteration": 14,
+  "solution": "logs/record-run-8/solutions/014_lgb_lambdarank_blend.py",
+  "hypothesis": "draft different models: add a standalone LightGBM LambdaRank/NDCG@5 ranker as a 30% within-user rank blend with node 13, so the tree model's signal is readable while testing direct listwise optimization. Citation: https://lightgbm.readthedocs.io/en/latest/Parameters.html#objective",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:32:23+08:00",
+  "status": "error",
+  "error": "exited 1 (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "5f124b4ec2b5",
+  "stderr_tail": "Traceback (most recent call last):\n  File \"D:\\github\\TiktokTechJam2026\\logs\\record-run-8\\solutions\\014_lgb_lambdarank_blend.py\", line 17, in <module>\n    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__), '..'), 'kuairand-starter-kit'))\n                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nTypeError: dirname() takes 1 positional argument but 2 were given",
+  "seeds_completed": 0,
+  "seconds": 3.5,
+  "verdict": "failed",
+  "tokens_in": 53569,
+  "tokens_out": 7141,
+  "tokens_cached": 40448,
+  "cost_usd": 0.124437,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 94.4,
+  "recovery_events": []
+}

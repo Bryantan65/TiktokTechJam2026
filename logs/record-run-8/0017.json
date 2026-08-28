@@ -1,0 +1,64 @@
+{
+  "iteration": 17,
+  "solution": "logs/record-run-8/solutions/017_lgb_residual_lambdarank_blend.py",
+  "hypothesis": "improve 15: the independent LambdaRank ranker degraded the strong FM ensemble; use the FM rank ensemble as LightGBM init_score and feature so LambdaRank learns residual top-k corrections rather than replacing the incumbent ranking. Citation: https://lightgbm.readthedocs.io/en/latest/Advanced-Topics.html#continued-training-with-input-score",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:40:53+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604669,
+  "GAUC": 0.671405,
+  "nDCG@5": 0.537934,
+  "source_hash": "086bba062914",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], residual_lgb, fm_models=5, fm_weight=0.5\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "cb45133ba953",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000171,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671735,
+      "nDCG@5": 0.537917,
+      "primary": 0.604826
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671513,
+      "nDCG@5": 0.537877,
+      "primary": 0.604695
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670966,
+      "nDCG@5": 0.538007,
+      "primary": 0.604487
+    }
+  ],
+  "seconds": 141.3,
+  "verdict": "KEPT",
+  "delta": 0.003169,
+  "tokens_in": 132858,
+  "tokens_out": 8628,
+  "tokens_cached": 97024,
+  "cost_usd": 0.224377,
+  "model": "gpt-5.5",
+  "agent_iteration": 16,
+  "wall_seconds": 246.6,
+  "recovery_events": []
+}

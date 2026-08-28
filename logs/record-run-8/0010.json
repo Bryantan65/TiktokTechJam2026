@@ -1,0 +1,64 @@
+{
+  "iteration": 10,
+  "solution": "logs/record-run-8/solutions/010_history_features_bpr_bce_fm.py",
+  "hypothesis": "draft user behaviour sequences: following DIN's attention-over-history idea (Deep Interest Network, arXiv:1706.06978), add causal candidate-specific user history bins for same author/video/tab/duration to the best BPR+BCE FM as a cheap readable sequence signal.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:23:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602296,
+  "GAUC": 0.668498,
+  "nDCG@5": 0.536094,
+  "source_hash": "c41a7ba938f0",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'] + causal history bins\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "95dee58415e3",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000223,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668179,
+      "nDCG@5": 0.535977,
+      "primary": 0.602078
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669089,
+      "nDCG@5": 0.535958,
+      "primary": 0.602524
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668226,
+      "nDCG@5": 0.536348,
+      "primary": 0.602287
+    }
+  ],
+  "seconds": 59.9,
+  "verdict": "noise",
+  "delta": 0.000796,
+  "tokens_in": 55550,
+  "tokens_out": 5556,
+  "tokens_cached": 37760,
+  "cost_usd": 0.118915,
+  "model": "gpt-5.5",
+  "agent_iteration": 9,
+  "wall_seconds": 135.3,
+  "recovery_events": []
+}

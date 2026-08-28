@@ -407,6 +407,72 @@ def _ledger_table() -> str:
                 'Your next action should be an **improve** or a **debug** of a '
                 'node that showed something.' % (len(widest[1]), widest[0])]
 
+    # Is the current branch measured out? The agent can see every +/- in the
+    # table, and the table already warns that two results closer than their
+    # spread have not been told apart - but it has to infer a plateau by
+    # eyeballing a dozen rows, and across two runs it did not.
+    #
+    # record-run-8 spent its last 12 experiments, 55% of its compute, on
+    # variants whose ENTIRE range was 0.79x one error bar. record-run-6 did the
+    # same with 9 ensemble re-weightings for +0.00003. Different mechanism,
+    # identical pathology: lock onto the best node, emit variations, measure
+    # nothing. Fixing one shape of it (the ensemble batching note above) just
+    # moved the behaviour somewhere else, so this counts the plateau itself
+    # rather than any particular cause of it.
+    #
+    # Purely a statement about the agent's own numbers. It says the branch is
+    # unmeasurable, not that it is wrong, and does not say what to try instead.
+    scored = [r for r in recs
+              if r.get('status') == 'ok'
+              and r.get('split', 'valid') == 'valid'
+              and r.get('valid_primary') is not None]
+    if len(scored) >= 6:
+        # A row whose spread is unknown - a screened single seed, or a solution
+        # that ignored --seed - has an unknown spread, NOT a zero one. Treating
+        # it as zero makes it impossible to call indistinguishable, which is
+        # how record-run-6's nine re-weightings escaped detection entirely.
+        # Substitute the typical measured spread instead.
+        known = sorted(r['primary_std'] for r in scored
+                       if r.get('primary_std'))
+        typical = known[len(known) // 2] if known else 0.0
+
+        def spread(r):
+            # None (screened, or deterministic under the current harness) and
+            # exactly 0.0 (older records, written before deterministic runs
+            # were detected) both mean the same thing: no measurement. A truly
+            # zero spread is not a thing a stochastic model has.
+            return r.get('primary_std') or typical
+
+        top = max(scored, key=lambda r: r['valid_primary'])
+        tsd = spread(top)
+        run = 0
+        for r in reversed(scored):
+            # Indistinguishable from the incumbent: the gap is inside the two
+            # spreads added together.
+            if abs(r['valid_primary'] - top['valid_primary']) <= (spread(r) + tsd):
+                run += 1
+            else:
+                break
+        # Threshold tuned against all five archived runs. At 4 or 5 it fires on
+        # record-run-3 at iteration 12-13, which still had +0.00097 to give -
+        # a false alarm on the best run we have. At 6 it catches record-run-8
+        # at iteration 25 with six experiments still to spend, and on every
+        # other run it either never fires or fires with <=1 experiment left,
+        # where it cannot do harm.
+        if run >= 6:
+            lines += [
+                '',
+                '**This branch is measured out.** Your last %d scored '
+                'experiments all sit within their error bars of the best '
+                '(%.6f +/- %.6f). None of them has been distinguished from it, '
+                'or from each other. Another variant of the same node will be '
+                'unmeasurable too, and costs a full experiment to learn that.'
+                % (run, top['valid_primary'], tsd),
+                'That does not mean the direction is wrong - it means valid '
+                'cannot resolve it. Either change mechanism, or screen the '
+                'variant on `dev` first, where being wrong is cheap and does '
+                'not spend an experiment.']
+
     st = ledger.convergence_status()
     if st['window_improvement'] is None:
         lines += ['', '**Convergence:** %d scored experiments so far; the rule '

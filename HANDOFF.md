@@ -4,8 +4,8 @@ State, decisions, and what's next. **`CLAUDE.md` holds the task facts** — labe
 metrics, splits, baselines, dead ends. This file holds the *decisions* and the
 reasoning behind them, which is the part that's expensive to reconstruct.
 
-Last updated: 2026-08-28, after record run 6 converged. Code frozen at tag
-`record-run-6-code`. **Run 3 remains the submission candidate.**
+Last updated: 2026-08-29, after record run 8 converged. Code frozen at tag
+`record-run-9-code`. **Run 3 remains the submission candidate.**
 
 ---
 
@@ -107,6 +107,8 @@ would leave the fixes looking like guesses.
 | `logs/record-run-4/` | 32 experiments, converged at +0.0031 | the search policy under test; run 3 held |
 | `logs/record-run-5/` | 28 experiments, **interrupted** at +0.0039 | Zheng's; not a valid autonomy run |
 | `logs/record-run-6/` | 34 experiments, converged at +0.0035 | the GBDT capability test; run 3 held |
+| `logs/record-run-7/` | 3 experiments, **crashed** | a UnicodeEncodeError on an arrow; fixed |
+| `logs/record-run-8/` | 31 experiments, converged at +0.0033 | the plateau detector; run 3 held |
 
 **shakedown-02** is the one worth reading. Twelve experiments, all inside
 direction 1, ending in five consecutive tweaks of one loss weight across a
@@ -1159,6 +1161,108 @@ three wasted attempts during the feature audit on 2026-08-28.
 **Guards, regression-tested:** `--split test`, `--split train` and any unknown
 split are refused by the harness; the agent's tool schema offers only
 `valid | dev` and its handler refuses anything else independently.
+
+---
+
+## record-run-8 - ahead at iteration 13, lost in the tail
+
+Converged on the rule at 0.604793 (+0.0033), 31 experiments in 97 minutes,
+$4.01. Run 3 stands. The interesting part is not the number but *where* it was
+lost.
+
+```
+matched best-so-far
+run       it3        it8        it13       it20       it30
+run-3   0.602909   0.603725   0.604521   0.605092   0.605493
+run-8   0.603625   0.603625   0.604659   0.604746   0.604793
+                              ^ AHEAD                ^ 0.0007 behind
+```
+
+It cleared the +0.0020 bar at **iteration 3** - the fastest of any run, against
+run 3's it8 and run 6's it16 - and was still ahead at it13. Then it stopped.
+From it13 to it31 it gained **+0.00013** across 18 experiments; run 3 gained
++0.00097 over the same span.
+
+The tail explains all of it:
+
+```
+it20-it31   12 experiments, every one a LightGBM-residual variant
+range       0.604632 .. 0.604793  =  0.000161
+typical +/- 0.000205
+            the ENTIRE spread is 0.79x ONE error bar
+compute     37 of 67 minutes - 55% of the run
+```
+
+Twelve experiments that are statistically the same number. It found a good node
+at it17 and spent half the run generating variations it could not tell apart.
+
+**This is record-run-6's failure in new clothes.** Run 6 burned nine
+experiments on ensemble re-weighting for +0.00003; we answered that with the
+batching guidance in the `secs` block, and run 8 invented a different way to do
+the identical thing. Fixing one shape of the pathology moved it rather than
+removing it.
+
+### Two things it got right, both worth keeping
+
+**It reached for LightGBM unprompted, for the second run running.** Nothing in
+the prompt names it; only `lightgbm 4.x` in the installed list. It crashed on a
+misplaced bracket (`os.path.dirname(path, '..')`), read the traceback, and
+shipped a fix in the next iteration.
+
+**It independently invented the residual-ranker design we deliberately withheld.**
+Its it17 hypothesis: *"the independent LambdaRank ranker degraded the strong FM
+ensemble; use the FM rank ensemble as LightGBM `init_score` and feature so
+LambdaRank learns residual top-k corrections rather than replacing the incumbent
+ranking."* That is the stage-one/stage-two plan proposed on 2026-08-28 and kept
+out of the prompt on purpose. The agent got there from its own failed
+standalone attempt. Had we injected it, this would have been our result.
+
+It did miss the part of that plan that mattered most: **out-of-fold**. It used
+the ensemble's in-fold scores as `init_score`, which leaks stage-one fit into
+stage two, and is the likeliest reason a correctly-built mechanism bought
+nothing. The train-only holdout exists to build a time-forward stage-one score
+cheaply, and across 31 iterations it took **zero dev screens**.
+
+### The fix: report the plateau, do not diagnose its cause
+
+`_plateau_note()` in `agent/prompt.py`. The agent can already see every `+/-`,
+and the table already warns that two results closer than their spread have not
+been told apart - but it has to infer a plateau by eyeballing a dozen rows, and
+across two runs it did not. So the harness now counts it and says so.
+
+It is a statement about the agent's own numbers: that the branch is
+*unmeasurable*, not that it is wrong, with no suggestion of what to try instead
+beyond "change mechanism, or screen it on `dev` where being wrong is cheap".
+That last clause is also the only targeted nudge toward the unused holdout, at
+the one moment it is obviously useful.
+
+**Threshold tuned against all five archived runs, not chosen.**
+
+```
+thr   run-3            run-4        run-5    run-6    run-8
+4     it12 (+0.00097)  it10         it16     never    it23
+5     it13 (+0.00097)  it11         never    never    it24
+6     it29 (1 left)    it32 (0)     never    never    it25 (6 left)
+```
+
+At 4 or 5 it fires on record-run-3 at iteration 12-13 - a **false alarm on the
+best run we have**, which went on to gain +0.00097 after that point. At 6 it
+catches run 8 at it25 with six experiments still to spend, and everywhere else
+either never fires or fires with at most one experiment left, where it cannot
+do harm.
+
+Two subtleties in the implementation, both found by testing rather than
+reasoning:
+
+- A row with no spread (`None` from a screened seed or a deterministic
+  solution, or `0.0` in records written before deterministic runs were
+  detected) has an **unknown** spread, not a zero one. Treating it as zero
+  makes it impossible to call indistinguishable, which is how run 6's
+  re-weightings escaped detection entirely. It now substitutes the median
+  measured spread.
+- Run 6 still does not fire, and that is correct. Its nine re-weightings sat
+  0.0005-0.0008 *below* its best - genuinely distinguishable, just useless.
+  That is a different failure and the batching guidance already addresses it.
 
 ---
 
