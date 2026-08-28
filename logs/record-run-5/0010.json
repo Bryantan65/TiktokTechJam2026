@@ -1,0 +1,57 @@
+{
+  "iteration": 10,
+  "solution": "logs/record-run-5/solutions/010_ensemble3_multineg_bpr_fm.py",
+  "hypothesis": "improve 6: the best multi-negative BPR is just below target and has meaningful seed wobble, so average three independent K=4 BPR FMs to reduce variance without diluting the mechanism in a low-weight ensemble.",
+  "parent": "6",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:59:14+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60369,
+  "GAUC": 0.670451,
+  "nDCG@5": 0.53693,
+  "source_hash": "65ab5dc93757",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "b55ace2e4e64",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00019,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670463,
+      "nDCG@5": 0.536651,
+      "primary": 0.603557
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670668,
+      "nDCG@5": 0.537148,
+      "primary": 0.603908
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670222,
+      "nDCG@5": 0.53699,
+      "primary": 0.603606
+    }
+  ],
+  "seconds": 436.2,
+  "verdict": "KEPT",
+  "delta": 0.00219,
+  "tokens_in": 79267,
+  "tokens_out": 3227,
+  "tokens_cached": 62208,
+  "cost_usd": 0.106022,
+  "model": "gpt-5.5",
+  "agent_iteration": 9,
+  "wall_seconds": 472.9,
+  "recovery_events": []
+}

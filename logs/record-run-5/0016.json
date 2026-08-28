@@ -1,0 +1,57 @@
+{
+  "iteration": 16,
+  "solution": "logs/record-run-5/solutions/016_mtl_aux_bpr_time_fm.py",
+  "hypothesis": "draft multi-task: following multi-task recommendation practice such as MMoE/shared-bottom auxiliary feedback learning (https://dl.acm.org/doi/10.1145/3219819.3220007), add raw is_click/is_like/is_follow/is_comment/is_forward BCE heads as a small shared-embedding regularizer on top of node 15. The submitted prediction remains the main BPR ranking head, so the auxiliary tasks must help representation rather than directly leak metrics.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:53:05+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604801,
+  "GAUC": 0.671606,
+  "nDCG@5": 0.537998,
+  "source_hash": "3f0aeb4ffbd0",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['weekday','hour','tab_hour']+aux\nauxiliary tasks: ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "ca4394e3e449",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00025,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671363,
+      "nDCG@5": 0.537952,
+      "primary": 0.604657
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67203,
+      "nDCG@5": 0.53815,
+      "primary": 0.60509
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671424,
+      "nDCG@5": 0.537891,
+      "primary": 0.604657
+    }
+  ],
+  "seconds": 890.4,
+  "verdict": "KEPT",
+  "delta": 0.003301,
+  "tokens_in": 104064,
+  "tokens_out": 7057,
+  "tokens_cached": 80000,
+  "cost_usd": 0.17073,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 982.8,
+  "recovery_events": []
+}

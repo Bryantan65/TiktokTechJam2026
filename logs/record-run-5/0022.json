@@ -1,0 +1,32 @@
+{
+  "iteration": 22,
+  "solution": "logs/record-run-5/solutions/022_bpr_time_personal_history_fm.py",
+  "hypothesis": "draft watch/user-history features: add leakage-safe per-user history signals (user-author counts/CTR, repeated user-video state, user-tab CTR) to node 15 so the FM can rank candidates by personal familiarity rather than only global IDs/time. This follows the history-feature idea behind DIN-style personalization (https://arxiv.org/abs/1706.06978) but uses compact causal categories to make the signal readable in the current FM.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T15:19:04+08:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "840b9eb7b3dc",
+  "seeds_completed": 0,
+  "seconds": 901.9,
+  "verdict": "failed",
+  "tokens_in": 137400,
+  "tokens_out": 7030,
+  "tokens_cached": 115712,
+  "cost_usd": 0.182376,
+  "model": "gpt-5.5",
+  "agent_iteration": 20,
+  "wall_seconds": 989.0,
+  "recovery_events": []
+}

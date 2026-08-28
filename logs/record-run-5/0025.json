@@ -1,0 +1,57 @@
+{
+  "iteration": 25,
+  "solution": "logs/record-run-5/solutions/025_bpr_time_targetctr_fm.py",
+  "hypothesis": "draft different model/features: add leakage-safe smoothed video/author target-CTR bins with train leave-one-out to node 15, giving the FM compact popularity-quality priors that raw sparse IDs may not learn reliably. This is a final high-signal standalone feature test from the current best rather than another weak blend.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T16:03:36+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604176,
+  "GAUC": 0.670998,
+  "nDCG@5": 0.537354,
+  "source_hash": "9413c1141224",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['weekday','hour','tab_hour','video_ctr','author_ctr']; targetctr\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "cb8664791ba2",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000206,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671252,
+      "nDCG@5": 0.537345,
+      "primary": 0.604298
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670574,
+      "nDCG@5": 0.537303,
+      "primary": 0.603938
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671168,
+      "nDCG@5": 0.537413,
+      "primary": 0.604291
+    }
+  ],
+  "seconds": 676.5,
+  "verdict": "KEPT",
+  "delta": 0.002676,
+  "tokens_in": 92880,
+  "tokens_out": 5727,
+  "tokens_cached": 69120,
+  "cost_usd": 0.15123,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 734.1,
+  "recovery_events": []
+}

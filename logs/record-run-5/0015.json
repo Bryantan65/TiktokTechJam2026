@@ -1,0 +1,57 @@
+{
+  "iteration": 15,
+  "solution": "logs/record-run-5/solutions/015_bpr_weekday_hour_tabcross_fm.py",
+  "hypothesis": "improve 13: half-hour over-sparsified, but tab has very different positive rates, so add a compact tab\u00d7hour categorical cross to model tab-specific daily drift. This keeps the successful weekday+hour features and only adds 120 reusable buckets.",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:40:38+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605191,
+  "GAUC": 0.672034,
+  "nDCG@5": 0.538349,
+  "source_hash": "a5d5c232a97c",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['weekday','hour','tab_hour']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "33d9690af3e9",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000163,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671887,
+      "nDCG@5": 0.538141,
+      "primary": 0.605014
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67205,
+      "nDCG@5": 0.538623,
+      "primary": 0.605336
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672165,
+      "nDCG@5": 0.538283,
+      "primary": 0.605224
+    }
+  ],
+  "seconds": 656.1,
+  "verdict": "KEPT",
+  "delta": 0.003691,
+  "tokens_in": 91395,
+  "tokens_out": 4450,
+  "tokens_cached": 71424,
+  "cost_usd": 0.130139,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 705.3,
+  "recovery_events": []
+}

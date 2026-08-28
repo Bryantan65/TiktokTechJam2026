@@ -1,0 +1,57 @@
+{
+  "iteration": 11,
+  "solution": "logs/record-run-5/solutions/011_ensemble3_bpr_dow_fm.py",
+  "hypothesis": "draft time features: add a leakage-safe weekday embedding to the kept 3-model BPR ensemble so the FM can model recurring temporal interactions; raw date would not generalize across the chronological split. KuaiRand auxiliary/time columns context: https://kuairand.com/",
+  "parent": "10",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:07:37+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604088,
+  "GAUC": 0.670808,
+  "nDCG@5": 0.537367,
+  "source_hash": "450f70650d34",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['weekday']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e7397a34cc20",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000244,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670906,
+      "nDCG@5": 0.537397,
+      "primary": 0.604151
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670965,
+      "nDCG@5": 0.537623,
+      "primary": 0.604294
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670553,
+      "nDCG@5": 0.537082,
+      "primary": 0.603818
+    }
+  ],
+  "seconds": 499.1,
+  "verdict": "KEPT",
+  "delta": 0.002588,
+  "tokens_in": 79022,
+  "tokens_out": 5286,
+  "tokens_cached": 60544,
+  "cost_usd": 0.129327,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 566.9,
+  "recovery_events": []
+}

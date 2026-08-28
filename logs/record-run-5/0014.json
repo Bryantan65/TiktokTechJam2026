@@ -1,0 +1,57 @@
+{
+  "iteration": 14,
+  "solution": "logs/record-run-5/solutions/014_bpr_weekday_fine_time_fm.py",
+  "hypothesis": "improve 13: hour gave a clear gain, so add finer half-hour and weekday\u00d7half-hour reusable time categories to capture daily cycles without raw-date leakage. If this over-sparsifies, node 13 remains the simpler time-feature choice.",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:28:05+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604841,
+  "GAUC": 0.671617,
+  "nDCG@5": 0.538065,
+  "source_hash": "71738b3d1f17",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['weekday','hour','halfhour','weekday_halfhour']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "fcd5a46ef8e4",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000564,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672414,
+      "nDCG@5": 0.538485,
+      "primary": 0.605449
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670906,
+      "nDCG@5": 0.537767,
+      "primary": 0.604336
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671532,
+      "nDCG@5": 0.537944,
+      "primary": 0.604738
+    }
+  ],
+  "seconds": 703.0,
+  "verdict": "KEPT",
+  "delta": 0.003341,
+  "tokens_in": 47650,
+  "tokens_out": 4279,
+  "tokens_cached": 28928,
+  "cost_usd": 0.104059,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 742.2,
+  "recovery_events": []
+}

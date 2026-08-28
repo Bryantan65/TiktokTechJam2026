@@ -1,0 +1,57 @@
+{
+  "iteration": 8,
+  "solution": "logs/record-run-5/solutions/008_multineg_bpr_bce_fm.py",
+  "hypothesis": "improve 6: pure multi-negative BPR is best but ignores the stable calibration signal from pointwise BCE; add a small simultaneous BCE regularizer on the same positive and sampled same-user negatives so the BPR objective remains dominant.",
+  "parent": "6",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:50:45+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602826,
+  "GAUC": 0.669185,
+  "nDCG@5": 0.536466,
+  "source_hash": "5f8cfec8e1d8",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "7496f22ecde7",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000242,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669099,
+      "nDCG@5": 0.53661,
+      "primary": 0.602855
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669431,
+      "nDCG@5": 0.536672,
+      "primary": 0.603052
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669025,
+      "nDCG@5": 0.536115,
+      "primary": 0.60257
+    }
+  ],
+  "seconds": 172.4,
+  "verdict": "noise",
+  "delta": 0.001326,
+  "tokens_in": 41170,
+  "tokens_out": 3004,
+  "tokens_cached": 29184,
+  "cost_usd": 0.074597,
+  "model": "gpt-5.5",
+  "agent_iteration": 7,
+  "wall_seconds": 205.2,
+  "recovery_events": []
+}

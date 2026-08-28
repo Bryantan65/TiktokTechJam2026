@@ -1,0 +1,57 @@
+{
+  "iteration": 23,
+  "solution": "logs/record-run-5/solutions/023_debug22_light_history_fm.py",
+  "hypothesis": "debug 22: node 22 timed out, so test whether the history mechanism itself has signal with only two cheap leakage-safe fields (causal user-author CTR bin and repeated user-video state) and slightly shorter patience. If this scores, the timeout was capacity/runtime rather than a bad personalization signal.",
+  "parent": "22",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T15:34:57+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60495,
+  "GAUC": 0.671728,
+  "nDCG@5": 0.538171,
+  "source_hash": "1ddf292048db",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['weekday','hour','tab_hour','ua_ctr','uv_state']; debug22\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "afa7fd7297c0",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00029,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672218,
+      "nDCG@5": 0.538249,
+      "primary": 0.605234
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671452,
+      "nDCG@5": 0.53847,
+      "primary": 0.604961
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671514,
+      "nDCG@5": 0.537795,
+      "primary": 0.604654
+    }
+  ],
+  "seconds": 780.9,
+  "verdict": "KEPT",
+  "delta": 0.00345,
+  "tokens_in": 63704,
+  "tokens_out": 5449,
+  "tokens_cached": 44928,
+  "cost_usd": 0.123894,
+  "model": "gpt-5.5",
+  "agent_iteration": 21,
+  "wall_seconds": 833.6,
+  "recovery_events": []
+}

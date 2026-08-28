@@ -1,0 +1,57 @@
+{
+  "iteration": 28,
+  "solution": "logs/record-run-5/solutions/028_mixed_tabhour_history_ensemble.py",
+  "hypothesis": "improve 26: node 23's compact history model was close to node 15 and may be more complementary than the simple-time member; replace node 26's 33% weekday+hour member with a 33% tab-hour+history member. This tests history as a readable ensemble component without increasing ensemble size.",
+  "parent": "26",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T16:38:53+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60514,
+  "GAUC": 0.672106,
+  "nDCG@5": 0.538173,
+  "source_hash": "2f310083c7ec",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+two tab-hour members and one tab-hour+history member\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e0392afa8fff",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 1e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672181,
+      "nDCG@5": 0.538078,
+      "primary": 0.60513
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671825,
+      "nDCG@5": 0.538455,
+      "primary": 0.60514
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672312,
+      "nDCG@5": 0.537985,
+      "primary": 0.605149
+    }
+  ],
+  "seconds": 530.3,
+  "verdict": "KEPT",
+  "delta": 0.00364,
+  "tokens_in": 61714,
+  "tokens_out": 4304,
+  "tokens_cached": 42880,
+  "cost_usd": 0.111565,
+  "model": "gpt-5.5",
+  "agent_iteration": 26,
+  "wall_seconds": 573.4,
+  "recovery_events": []
+}

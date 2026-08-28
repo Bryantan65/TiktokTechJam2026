@@ -1,0 +1,57 @@
+{
+  "iteration": 27,
+  "solution": "logs/record-run-5/solutions/027_mixed_more_simple_time_ensemble.py",
+  "hypothesis": "improve 26: the 33% weekday+hour member improved node 15 and reduced variance, so test whether a stronger 67% simple-time share gives more diversity or starts losing the tab-hour signal. This keeps three members and changes only the ensemble composition.",
+  "parent": "26",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T16:31:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605321,
+  "GAUC": 0.672172,
+  "nDCG@5": 0.53847,
+  "source_hash": "a0391c2fbada",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+mixed one ['weekday','hour','tab_hour'] and two ['weekday','hour']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "45694799cf7a",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 8.9e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672395,
+      "nDCG@5": 0.538386,
+      "primary": 0.60539
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672081,
+      "nDCG@5": 0.538359,
+      "primary": 0.60522
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672039,
+      "nDCG@5": 0.538665,
+      "primary": 0.605352
+    }
+  ],
+  "seconds": 404.4,
+  "verdict": "KEPT",
+  "delta": 0.003821,
+  "tokens_in": 121577,
+  "tokens_out": 5140,
+  "tokens_cached": 95360,
+  "cost_usd": 0.164623,
+  "model": "gpt-5.5",
+  "agent_iteration": 25,
+  "wall_seconds": 476.2,
+  "recovery_events": []
+}

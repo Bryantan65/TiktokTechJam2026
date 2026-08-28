@@ -1,0 +1,57 @@
+{
+  "iteration": 21,
+  "solution": "logs/record-run-5/solutions/021_recent_weighted_bpr_time_fm.py",
+  "hypothesis": "improve 15: time features are the strongest added signal, so weight BPR positives toward recent train days with a 7-day half-life to match the chronological validation distribution. This keeps all data and the node-15 architecture, changing only the loss weights.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T15:04:49+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602946,
+  "GAUC": 0.66866,
+  "nDCG@5": 0.537232,
+  "source_hash": "a3d2881df08d",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['weekday','hour','tab_hour']; recent-weighted BPR\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "9d19cd5390f1",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000246,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669052,
+      "nDCG@5": 0.537376,
+      "primary": 0.603214
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668396,
+      "nDCG@5": 0.537064,
+      "primary": 0.60273
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668532,
+      "nDCG@5": 0.537255,
+      "primary": 0.602893
+    }
+  ],
+  "seconds": 767.0,
+  "verdict": "noise",
+  "delta": 0.001446,
+  "tokens_in": 60088,
+  "tokens_out": 5022,
+  "tokens_cached": 41856,
+  "cost_usd": 0.116728,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 816.6,
+  "recovery_events": []
+}

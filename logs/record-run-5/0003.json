@@ -1,0 +1,57 @@
+{
+  "iteration": 3,
+  "solution": "logs/record-run-5/solutions/003_bce_warm_bpr_fm.py",
+  "hypothesis": "improve 2: pure BPR improved ranking but has higher seed spread; initialize with 5 epochs of stable BCE then checkpoint only during BPR fine-tuning so the pairwise objective still reaches the saved model. This should reduce sampling variance while keeping same-user ranking alignment.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:35:02+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601259,
+  "GAUC": 0.667014,
+  "nDCG@5": 0.535504,
+  "source_hash": "b51ed5c09d59",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "6cffb3a08d2a",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000656,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667698,
+      "nDCG@5": 0.535885,
+      "primary": 0.601792
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667215,
+      "nDCG@5": 0.535703,
+      "primary": 0.601459
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.666128,
+      "nDCG@5": 0.534923,
+      "primary": 0.600526
+    }
+  ],
+  "seconds": 105.3,
+  "verdict": "noise",
+  "delta": -0.000241,
+  "tokens_in": 49024,
+  "tokens_out": 3083,
+  "tokens_cached": 41472,
+  "cost_usd": 0.070446,
+  "model": "gpt-5.5",
+  "agent_iteration": 2,
+  "wall_seconds": 137.1,
+  "recovery_events": []
+}

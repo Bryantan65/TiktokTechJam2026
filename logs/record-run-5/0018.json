@@ -1,0 +1,57 @@
+{
+  "iteration": 18,
+  "solution": "logs/record-run-5/solutions/018_mtl_playtime_bpr_time_fm.py",
+  "hypothesis": "improve 16: the first multi-task draft used sparse action labels and slightly regularized the model downward; use a denser, ranking-related auxiliary target, standardized log(play_time_ms), plus a very low-weight click head. This keeps the node-15 main BPR/time architecture while testing whether auxiliary watch-time representation helps.",
+  "parent": "16",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T14:24:47+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604685,
+  "GAUC": 0.671432,
+  "nDCG@5": 0.537937,
+  "source_hash": "45e95f76d2be",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['weekday','hour','tab_hour']+click/play_aux\nplay_time log mean=7.8164 std=3.4588\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "ff539c96bb16",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000544,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67189,
+      "nDCG@5": 0.538418,
+      "primary": 0.605154
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671634,
+      "nDCG@5": 0.537988,
+      "primary": 0.604811
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670773,
+      "nDCG@5": 0.537404,
+      "primary": 0.604089
+    }
+  ],
+  "seconds": 842.0,
+  "verdict": "KEPT",
+  "delta": 0.003185,
+  "tokens_in": 126079,
+  "tokens_out": 5784,
+  "tokens_cached": 100736,
+  "cost_usd": 0.171566,
+  "model": "gpt-5.5",
+  "agent_iteration": 16,
+  "wall_seconds": 904.5,
+  "recovery_events": []
+}

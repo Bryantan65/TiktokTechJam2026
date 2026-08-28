@@ -355,10 +355,13 @@ def _summarize_args(name: str, args: dict) -> str:
     return ''
 
 
-def _setup_run_dir(run_name: str) -> str:
+def _setup_run_dir(run_name: str, run_id: str = None) -> str:
     """Create a new per-run folder and redirect all output paths to it."""
     from agent.tools import init_solutions_dir
-    run_dir = ledger.next_run_dir(run_name)
+    if run_id:
+        run_dir = os.path.join(ROOT, 'logs', run_id)
+    else:
+        run_dir = ledger.next_run_dir(run_name)
     ledger.init_run_dir(run_dir)
     ledger.setup_control_row(run_dir)
     sol_dir = os.path.join(run_dir, 'solutions')
@@ -367,8 +370,8 @@ def _setup_run_dir(run_name: str) -> str:
 
 
 def run_loop(supervised: bool = False, max_iter: int = 100,
-             run_name: str = 'run') -> None:
-    run_dir = _setup_run_dir(run_name)
+             run_name: str = 'run', run_id: str = None) -> None:
+    run_dir = _setup_run_dir(run_name, run_id)
     print(f'=== Run folder: {os.path.relpath(run_dir, ROOT)}/ ===')
 
     client = OpenAI()          # .env is loaded at import, above

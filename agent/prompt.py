@@ -144,12 +144,17 @@ is outvoted whether it is excellent or useless.
 
 So:
 - **After one ensemble-member addition that does not improve the score, do not
-  add another.** Adding members is spent as a mechanism.
-- **Test a new mechanism standalone, or as the dominant component.** Blend it
-  into the incumbent only after it has shown an independent gain.
-- A cheap decisive experiment beats an expensive ambiguous one. If your best
-  takes fifteen minutes to retrain, that is a reason to test the next idea on
-  its own, not on top of it.
+  add another at low weight.** The approach is unreadable, not necessarily wrong.
+- **Test a new mechanism so its signal is readable:** standalone (cheap,
+  decisive), or blended at >=30% weight (answers whether it complements the
+  ensemble). Never blend below 20% — the result cannot be distinguished from
+  noise.
+- Before adding a member, check whether its per-user rankings differ from the
+  ensemble's. A member that agrees with the incumbent on most users adds
+  nothing regardless of its score. Diversity is the value of ensembling.
+- A cheap decisive experiment beats an expensive ambiguous one. Averaging is
+  not the only combination strategy — learned weights or stacking on held-out
+  predictions can extract value that equal-weight misses.
 
 ## What is installed
 Your solutions are standalone scripts, so anything importable is available:

@@ -1,0 +1,57 @@
+{
+  "iteration": 24,
+  "solution": "logs/record-run-5/solutions/024_watchtime_weighted_bpr_time_fm.py",
+  "hypothesis": "draft watch-time modelling: use raw play_time_ms as a bounded completion-based weight on positive BPR anchors while keeping node-15 inference features unchanged; watch-time weighting is a standard engagement objective for video recommenders (https://research.google/pubs/deep-neural-networks-for-youtube-recommendations/). This is a standalone >=30% signal test via the full loss, not a low-weight ensemble add-on.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T15:49:15+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604095,
+  "GAUC": 0.670856,
+  "nDCG@5": 0.537334,
+  "source_hash": "62d5e6189751",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['weekday','hour','tab_hour']; watch-time weighted positives\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e0100c55fd69",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000346,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671484,
+      "nDCG@5": 0.537486,
+      "primary": 0.604485
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670515,
+      "nDCG@5": 0.537133,
+      "primary": 0.603824
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67057,
+      "nDCG@5": 0.537383,
+      "primary": 0.603976
+    }
+  ],
+  "seconds": 803.0,
+  "verdict": "KEPT",
+  "delta": 0.002595,
+  "tokens_in": 121122,
+  "tokens_out": 6322,
+  "tokens_cached": 98688,
+  "cost_usd": 0.168649,
+  "model": "gpt-5.5",
+  "agent_iteration": 22,
+  "wall_seconds": 880.2,
+  "recovery_events": []
+}

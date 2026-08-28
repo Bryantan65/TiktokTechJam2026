@@ -1,0 +1,57 @@
+{
+  "iteration": 20,
+  "solution": "logs/record-run-5/solutions/020_bpr_weekday_hour_tabtime_fm.py",
+  "hypothesis": "improve 15: tab\u00d7hour was the best time cross, and a very small tab\u00d7weekday cross may capture tab-specific weekly drift without the sparsity that hurt half-hour. This is a targeted refinement of the current best time+BPR model, adding only 35 buckets.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T14:52:08+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604882,
+  "GAUC": 0.671598,
+  "nDCG@5": 0.538166,
+  "source_hash": "c6547503f0b4",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['weekday','hour','tab_hour','tab_weekday']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8c4327173f14",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000435,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672174,
+      "nDCG@5": 0.538589,
+      "primary": 0.605381
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671312,
+      "nDCG@5": 0.538054,
+      "primary": 0.604683
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671309,
+      "nDCG@5": 0.537856,
+      "primary": 0.604583
+    }
+  ],
+  "seconds": 711.7,
+  "verdict": "KEPT",
+  "delta": 0.003382,
+  "tokens_in": 99589,
+  "tokens_out": 4896,
+  "tokens_cached": 80640,
+  "cost_usd": 0.136653,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 764.7,
+  "recovery_events": []
+}

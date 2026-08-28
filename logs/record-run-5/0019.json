@@ -1,0 +1,57 @@
+{
+  "iteration": 19,
+  "solution": "logs/record-run-5/solutions/019_primary_weighted_bpr_time_fm.py",
+  "hypothesis": "improve 15: node 15 optimizes equal-per-positive BPR, which matches GAUC but underweights the per-user nDCG half of the primary; reweight positives by a 50/50 mixture of positive-weighted and user-balanced losses. This is still the successful time+BPR direction, but better aligned with primary's mixed aggregation.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T14:40:09+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603459,
+  "GAUC": 0.669688,
+  "nDCG@5": 0.53723,
+  "source_hash": "54b8ed3559ee",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['weekday','hour','tab_hour']; user-weighted BPR\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e0b588e52174",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000465,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670247,
+      "nDCG@5": 0.537693,
+      "primary": 0.60397
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669446,
+      "nDCG@5": 0.537244,
+      "primary": 0.603345
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.66937,
+      "nDCG@5": 0.536753,
+      "primary": 0.603062
+    }
+  ],
+  "seconds": 665.7,
+  "verdict": "noise",
+  "delta": 0.001959,
+  "tokens_in": 92375,
+  "tokens_out": 6582,
+  "tokens_cached": 45952,
+  "cost_usd": 0.204853,
+  "model": "gpt-5.5",
+  "agent_iteration": 17,
+  "wall_seconds": 745.0,
+  "recovery_events": []
+}

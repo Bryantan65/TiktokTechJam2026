@@ -1,0 +1,57 @@
+{
+  "iteration": 4,
+  "solution": "logs/record-run-5/solutions/004_listwise_softmax_fm.py",
+  "hypothesis": "improve 2: test the other standard ranking loss from direction 1, a same-user listwise softmax over each mixed user's impressions, rather than one sampled negative per positive. This directly optimizes a user-local probability mass on positives and should reduce BPR sampling noise.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:37:15+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.598912,
+  "GAUC": 0.663189,
+  "nDCG@5": 0.534636,
+  "source_hash": "476d14caeb78",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "1ac52e3cc2af",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000284,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.663035,
+      "nDCG@5": 0.534728,
+      "primary": 0.598882
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.662785,
+      "nDCG@5": 0.534506,
+      "primary": 0.598645
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.663747,
+      "nDCG@5": 0.534674,
+      "primary": 0.59921
+    }
+  ],
+  "seconds": 112.6,
+  "verdict": "worse",
+  "delta": -0.002588,
+  "tokens_in": 32143,
+  "tokens_out": 2617,
+  "tokens_cached": 22400,
+  "cost_usd": 0.061727,
+  "model": "gpt-5.5",
+  "agent_iteration": 3,
+  "wall_seconds": 140.9,
+  "recovery_events": []
+}

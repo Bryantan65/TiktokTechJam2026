@@ -1,0 +1,57 @@
+{
+  "iteration": 9,
+  "solution": "logs/record-run-5/solutions/009_seqcount_bpr_fm.py",
+  "hypothesis": "draft user behaviour sequences: following DIN's candidate-conditioned history idea (https://arxiv.org/abs/1706.06978), add leakage-safe per-user historical counts/rates for the candidate video/author/tab/duration to the best multi-negative BPR FM.",
+  "parent": "6",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:54:51+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602164,
+  "GAUC": 0.668257,
+  "nDCG@5": 0.536071,
+  "source_hash": "5f5597567ed7",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "36b88ba9f2ad",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000218,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667816,
+      "nDCG@5": 0.536031,
+      "primary": 0.601924
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668195,
+      "nDCG@5": 0.536245,
+      "primary": 0.60222
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.66876,
+      "nDCG@5": 0.535938,
+      "primary": 0.602349
+    }
+  ],
+  "seconds": 225.3,
+  "verdict": "noise",
+  "delta": 0.000664,
+  "tokens_in": 47130,
+  "tokens_out": 5438,
+  "tokens_cached": 34304,
+  "cost_usd": 0.103597,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 299.3,
+  "recovery_events": []
+}
