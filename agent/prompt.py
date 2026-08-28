@@ -157,8 +157,6 @@ So:
   predictions can extract value that equal-weight misses.
 
 ## Search strategy — spend your budget wisely
-- Try your most ambitious direction EARLY, while convergence headroom is large,
-  not after the cheap gains are exhausted.
 - The metric is nDCG@5 + GAUC. A method that directly optimises a ranking metric
   may have an advantage over one that optimises a proxy like logloss or BPR;
   judge it on the combined primary, not one component alone.
@@ -302,6 +300,15 @@ def _ledger_table() -> str:
         'apart** - treating that gap as a result is reading noise. To beat a',
         'number you must beat it by more than the +/-, not by any amount.',
         '',
+        '`+/-` can also read:',
+        '  `1seed` - scored on one seed because it landed well below the best,',
+        '            so the remaining seeds were not spent. The number is real',
+        '            but noisy. Re-testing the idea properly is up to you.',
+        '  `det`   - every seed produced byte-identical predictions, so your',
+        '            solution ignored `--seed`. Three runs measured one thing',
+        '            three times and the spread is UNKNOWN, not zero. If you',
+        '            want a spread, let the harness seed control the run.',
+        '',
         '`secs` is what the experiment cost to run, and it is a budget you are',
         'spending. An experiment is killed at 900s, so anything near that fails',
         'and teaches you nothing. Cost is mostly set by how many models you',
@@ -327,7 +334,9 @@ def _ledger_table() -> str:
             fmt(r.get('GAUC')),
             fmt(r.get('nDCG@5')),
             fmt(p),
-            ('%.6f' % sd) if sd is not None else '--',
+            ('%.6f' % sd) if sd is not None
+            else 'det' if r.get('deterministic')
+            else '1seed' if r.get('seed_mode') == 'screened' else '--',
             ('%d' % round(secs)) if isinstance(secs, (int, float)) else '--',
             ('%+.4f' % (p - ledger.BASELINE_VALID)) if p is not None else '--',
             r.get('verdict', '?'),

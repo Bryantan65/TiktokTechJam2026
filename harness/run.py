@@ -52,6 +52,19 @@ _SPLIT_CACHE = {}
 # single-seed scoring (faster, and what the organisers' epsilon assumes).
 N_SEEDS = int(os.environ.get('HARNESS_SEEDS', 3))
 
+# Adaptive seeding: score seed 0 first, and only spend the remaining seeds if
+# the result could plausibly become the new best. Two thirds of experiments
+# never improve on the incumbent, and measuring a dud to three-seed precision
+# buys nothing - record-run-6 spent 121 of its 180 compute minutes on
+# experiments that did not move the best. A screened row is still logged, still
+# scored, and still visible to the agent; it is just measured once.
+#
+# The margin is the official epsilon. A solution landing more than epsilon
+# below the incumbent cannot become best on a re-measurement: seed spread on
+# this data is ~0.0008, so 0.002 is about 2.5 sigma.
+ADAPTIVE_SEEDS = os.environ.get('HARNESS_ADAPTIVE_SEEDS', '1') != '0'
+SCREEN_MARGIN = float(os.environ.get('HARNESS_SCREEN_MARGIN', 0.002))
+
 
 def _splits(data_dir):
     if data_dir not in _SPLIT_CACHE:
@@ -236,46 +249,69 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
     uids = [r[1] for r in rows]
     labels = [r[6] for r in rows]
 
-    per_seed = []
-    for s, (scores, err, stdout, stderr) in zip(
-            seeds, _run_seeds(solution, split, data_dir, seeds, timeout,
-                              len(rows))):
-        if stdout:
-            rec['stdout_tail'] = stdout
-        if err:
-            # One seed failing means the solution is broken, not unlucky.
-            # Report it immediately rather than averaging over the survivors:
-            # a mean of the runs that happened to work is not a measurement of
-            # anything, and it would hide a solution that fails 1 time in 3.
-            rec['error'] = err
-            if stderr:
-                rec['stderr_tail'] = stderr
-            rec['seeds_completed'] = len(per_seed)
-            rec['seconds'] = round(time.time() - t0, 1)
-            # The run log has to carry this too. A solution crash is an "error
-            # event" under the run-log requirements, but events.jsonl only ever
-            # saw API-level failures, so a run whose best robustness moment was
-            # crash -> diagnose -> fix showed no trace of it there.
-            ledger.log_event('solution_error', rec['error'],
-                             iteration=rec['iteration'],
-                             solution=os.path.basename(solution),
-                             stderr_tail=(stderr or '')[-600:])
-            ledger.write(rec)
-            return rec
+    # Phase the seeds so a clear dud can stop after one. Contenders still run
+    # their remaining seeds concurrently, which is faster than running all
+    # three sequentially at higher thread counts.
+    batches = ([seeds[:1], seeds[1:]]
+               if ADAPTIVE_SEEDS and len(seeds) > 1 else [seeds])
+    incumbent = (ledger.best() or {}).get('valid_primary')
 
-        res = evaluate(uids, labels, scores)
-        per_seed.append({'seed': s,
-                         'GAUC': round(res['GAUC'], 6),
-                         'nDCG@5': round(res['nDCG@5'], 6),
-                         'primary': round(res['primary'], 6)})
-        if s == seeds[0]:
-            # Fingerprint the first seed's predictions. Identical output from
-            # different code means nothing was actually tested - the change was
-            # computed and then discarded. Scoring it anyway records a no-op as
-            # evidence about the technique.
-            rec['predictions_hash'] = hashlib.sha256(
+    per_seed, hashes, screened = [], [], False
+    for _bi, _batch in enumerate(batches):
+        if not _batch:
+            continue
+        for s, (scores, err, stdout, stderr) in zip(
+                _batch, _run_seeds(solution, split, data_dir, _batch,
+                                   timeout, len(rows))):
+            if stdout:
+                rec['stdout_tail'] = stdout
+            if err:
+                # One seed failing means the solution is broken, not unlucky.
+                # Report it immediately rather than averaging over the survivors:
+                # a mean of the runs that happened to work is not a measurement of
+                # anything, and it would hide a solution that fails 1 time in 3.
+                rec['error'] = err
+                if stderr:
+                    rec['stderr_tail'] = stderr
+                rec['seeds_completed'] = len(per_seed)
+                rec['seconds'] = round(time.time() - t0, 1)
+                # The run log has to carry this too. A solution crash is an "error
+                # event" under the run-log requirements, but events.jsonl only ever
+                # saw API-level failures, so a run whose best robustness moment was
+                # crash -> diagnose -> fix showed no trace of it there.
+                ledger.log_event('solution_error', rec['error'],
+                                 iteration=rec['iteration'],
+                                 solution=os.path.basename(solution),
+                                 stderr_tail=(stderr or '')[-600:])
+                ledger.write(rec)
+                return rec
+
+            res = evaluate(uids, labels, scores)
+            per_seed.append({'seed': s,
+                             'GAUC': round(res['GAUC'], 6),
+                             'nDCG@5': round(res['nDCG@5'], 6),
+                             'primary': round(res['primary'], 6)})
+            # Fingerprint EVERY seed. Across experiments, an identical hash
+            # from different code means nothing was actually tested - the
+            # change was computed and then discarded. Within one experiment,
+            # identical hashes across seeds mean the solution ignored --seed,
+            # so the three runs measured one thing three times and the
+            # resulting +/- of 0.000000 is unmeasured rather than stable.
+            h = hashlib.sha256(
                 np.ascontiguousarray(scores.astype(np.float64))).hexdigest()[:12]
-            rec.update({'users': res['users'], 'rows': res['rows']})
+            hashes.append(h)
+            if s == seeds[0]:
+                rec['predictions_hash'] = h
+                rec.update({'users': res['users'], 'rows': res['rows']})
+
+        # Between batches: is this worth measuring properly? A solution more
+        # than SCREEN_MARGIN below the incumbent cannot become the best on a
+        # re-measurement, so the remaining seeds would only sharpen a number
+        # nobody will act on.
+        if (_bi == 0 and len(batches) > 1 and incumbent is not None
+                and per_seed and per_seed[0]['primary'] < incumbent - SCREEN_MARGIN):
+            screened = True
+            break
 
     def _mean(key):
         return round(sum(p[key] for p in per_seed) / len(per_seed), 6)
@@ -291,11 +327,34 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
     # act on a measurement rather than on one draw. primary_std is what says
     # whether a margin is readable at all: a gap smaller than it is not a
     # result, and the agent is shown both.
+    # All seeds byte-identical => the solution ignored --seed. Report the
+    # spread as unknown rather than as 0.000000: the latter reads as the most
+    # stable result ever recorded when in fact nothing was measured. AIRA_2
+    # (arXiv 2603.26499) finds that apparent overfitting in research agents is
+    # driven by evaluation noise rather than memorisation, which makes an
+    # unmeasured spread actively misleading rather than merely uninformative.
+    # NOT a hash comparison. Two processes running byte-identical code produce
+    # slightly different floats, so the prediction hashes differ even when the
+    # seed had no effect - measured here on record-run-6's 016, whose seed bag
+    # is hard-coded: three different hashes, identical metrics. The signal that
+    # the seed did nothing is that every seed scored the SAME on every metric.
+    # Rounded to 6dp, which is right: a difference below 1e-6 in GAUC and in
+    # nDCG@5 simultaneously is not a measurement of seed variance.
+    deterministic = len(per_seed) > 1 and all(
+        p['GAUC'] == per_seed[0]['GAUC']
+        and p['nDCG@5'] == per_seed[0]['nDCG@5'] for p in per_seed[1:])
+    sd = None if deterministic else _std('primary')
+
     rec.update({'status': 'ok', 'error': None,
                 'GAUC': _mean('GAUC'),
                 'nDCG@5': _mean('nDCG@5'),
                 'valid_primary': _mean('primary'),
-                'primary_std': _std('primary'),
+                'primary_std': sd,
+                'deterministic': deterministic,
+                'seed_mode': ('screened' if screened
+                              else 'deterministic' if deterministic
+                              else 'measured'),
+                'seeds_run': [p['seed'] for p in per_seed],
                 'per_seed': per_seed})
 
     twin, why = ledger.find_twin(rec['predictions_hash'], rec,
