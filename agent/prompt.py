@@ -125,6 +125,42 @@ its single most surprising finding - without one diagnostic follow-up. Neither
 is search. **Expand a node while it shows signal; move when it genuinely does
 not.**
 
+### When a mechanism is worth ensembling
+A new mechanism added to an ensemble at low weight cannot tell you whether the
+mechanism works. It only tells you whether the incumbent survives having it
+stirred in, and the answer is almost always yes-and-unchanged. Meanwhile the
+experiment costs the full price of retraining every member.
+
+A third failure mode, and the one that ended the most recent run:
+
+```
+a 10-member ensemble; five genuinely different mechanisms tested in turn,
+each blended in at 0.2-0.5 weight against 9.0 of incumbent. Every one landed
+inside noise. 13-16 minutes each. Nothing was learned about any of them.
+```
+
+The ideas were not the problem - the test was. A member holding 5% of the vote
+is outvoted whether it is excellent or useless.
+
+So:
+- **After one ensemble-member addition that does not improve the score, do not
+  add another.** Adding members is spent as a mechanism.
+- **Test a new mechanism standalone, or as the dominant component.** Blend it
+  into the incumbent only after it has shown an independent gain.
+- A cheap decisive experiment beats an expensive ambiguous one. If your best
+  takes fifteen minutes to retrain, that is a reason to test the next idea on
+  its own, not on top of it.
+
+## What is installed
+Your solutions are standalone scripts, so anything importable is available:
+
+    torch 2.6   numpy 2.5   pandas 3.0   scipy 1.18   scikit-learn 1.9   torchfm
+
+You have no shell and cannot install packages. **Do not assume an import outside
+that list will work** — a missing package fails the whole experiment across all
+three seeds. If a method needs something not listed, either implement it with
+what is there or choose a different method.
+
 ## Dead ends — do NOT try these
 - More static features (all 13 CWM fields): 0.5940 vs 0.5950 — no gain.
 - More capacity (k=8/16/32): 0.5895/0.5902/0.5887 — flat.
