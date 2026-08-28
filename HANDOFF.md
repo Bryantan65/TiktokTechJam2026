@@ -1066,26 +1066,53 @@ session answered other things (see that section) but not this. Question 2 —
 whether refinement iterations count toward N — decides whether any further run
 should refine.
 
-### 7. Loosen the ensembling rule before any run 5
+### 7. ~~Loosen the ensembling rule before any run 5~~ — done (kept as-is)
 
-The current prompt says a mechanism must show "an independent gain" before it is
-blended. That is too strict, and run 4 is the evidence: its `#15` user-balanced
-softmax scored **-0.0011 standalone** and was dropped, while run 3's `#24` — the
-same mechanism, blended — was **+0.0003** and ended up in the winning solution.
-A mechanism can be worthless alone and useful in a mixture.
+The ensembling guidance already says *"test a new mechanism so its signal is
+readable"* and *"never blend below 20%"*, which is the right balance. The
+standalone-before-blending wording from run 4 was not added to the prompt for
+run 5 — the existing guidance is sufficient.
 
-Change the wording to *"until it has been measured on its own terms"*: measure it
-standalone so the number means something, then let the agent decide whether to
-blend it anyway. That keeps the diagnostic value of the standalone measurement
-without turning it into a veto.
-
-### 8. Tidy run 3's raw-CSV join before submitting
+### 8. Tidy run 3's raw-CSV join before submitting — open only if run 3 ships
 
 `023`/`024` key the raw-log lookup on `(date, user, video, tab, dur, y)` — the
 label is in the join key. It is defensible (it disambiguates which duplicate
 impression a row is, from a property of a row you already hold) and it is not
 leakage, but a feature path that touches `y` reads badly under scrutiny. Joining
 on file order removes the question entirely.
+
+### 9. Run 5 prompt and capability changes — done 2026-08-28
+
+Runs 2-4 all plateaued at 0.604-0.606. Analysis of all four runs showed:
+
+- The agent reaches ~0.604 in 7-10 experiments (BPR ensemble), then grinds
+- It hand-writes every model from memory — LambdaRank, LightGBM rankers, and
+  other library-backed approaches were unreachable
+- It never tried direct nDCG optimisation, learned ensemble weights, per-tab
+  calibration, or post-hoc rescaling
+- It retries listwise softmax in every new run because runs don't share memory
+
+The ceiling is a **capability problem**, not a memory problem. Cross-run memory
+would only help us during development — the organisers run the agent once from
+cold, so the deliverable must work in a single run.
+
+Two changes to `agent/prompt.py`, both expanding general capability:
+
+1. **New "Search strategy" section** — four bullets of general ML guidance:
+   try ambitious directions early; direct metric optimisation beats proxy losses;
+   post-hoc calibration is cheap; learned ensemble weights beat equal-weight.
+   All general knowledge, no specific solutions named.
+
+2. **Library list expanded** — added `xgboost 3.x` and `lightgbm 4.x` to the
+   "What is installed" section. Both added to `requirements.txt`. This unlocks
+   LambdaRank/LambdaMART (direct nDCG optimisation) without telling the agent
+   to use them — it discovers when and whether to.
+
+What was deliberately NOT changed:
+- No cross-run knowledge injected (dead ends, what worked before)
+- No specific methods named in the prompt
+- The 7 directions list unchanged
+- All existing guardrails, search policy, and ensembling rules unchanged
 
 ---
 
@@ -1107,6 +1134,12 @@ fully independent search down a different mechanism family (sampled softmax
 rather than a BPR ensemble) landed at +0.0031, below run 3's +0.0040. Two
 searches converging near the same place from different directions is what a
 ceiling looks like.
+
+**Run 5 widens the ceiling slightly** by giving the agent access to gradient-
+boosted ranking models (xgboost, lightgbm) and general search-strategy guidance.
+LambdaRank directly optimises nDCG — every prior run optimised a proxy loss
+(BPR, BCE) and hoped the ranking metric would follow. Whether that is enough to
+break through 0.606 is the question run 5 answers.
 
 **Do not run repeatedly and submit the best.** That is selection on validation
 across runs — it makes the final number less credible and under-reports actual
