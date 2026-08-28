@@ -302,20 +302,33 @@ def _ledger_table() -> str:
         'apart** - treating that gap as a result is reading noise. To beat a',
         'number you must beat it by more than the +/-, not by any amount.',
         '',
-        '| # | parent | GAUC | nDCG@5 | primary | +/- | delta | verdict | hypothesis |',
-        '|---|---|---|---|---|---|---|---|---|',
+        '`secs` is what the experiment cost to run, and it is a budget you are',
+        'spending. An experiment is killed at 900s, so anything near that fails',
+        'and teaches you nothing. Cost is mostly set by how many models you',
+        'train: an N-member ensemble costs about N times a single model, every',
+        'time, even when the thing you are testing is not the members.',
+        'If you are comparing ways of COMBINING the same members - weights,',
+        'rank vs score averaging, blend ratios - evaluate several of them',
+        'inside ONE solution rather than one per experiment. Retraining the',
+        'same members to re-weight predictions you already have is the most',
+        'expensive way to learn the least.',
+        '',
+        '| # | parent | GAUC | nDCG@5 | primary | +/- | secs | delta | verdict | hypothesis |',
+        '|---|---|---|---|---|---|---|---|---|---|',
     ]
     notes = []
     for r in recs:
         p = r.get('valid_primary')
         sd = r.get('primary_std')
-        lines.append('| %d | %s | %s | %s | %s | %s | %s | %s | %s |' % (
+        secs = r.get('seconds')
+        lines.append('| %d | %s | %s | %s | %s | %s | %s | %s | %s | %s |' % (
             r.get('iteration', 0),
             r.get('parent') or '-',
             fmt(r.get('GAUC')),
             fmt(r.get('nDCG@5')),
             fmt(p),
             ('%.6f' % sd) if sd is not None else '--',
+            ('%d' % round(secs)) if isinstance(secs, (int, float)) else '--',
             ('%+.4f' % (p - ledger.BASELINE_VALID)) if p is not None else '--',
             r.get('verdict', '?'),
             (r.get('hypothesis') or '').replace('|', '/')[:100],

@@ -294,7 +294,18 @@ trainings per experiment. At `#31` it proposed adding same-user BPR pressure
 inside DeepFM, a good idea for this metric, and died on the 15-minute timeout
 with no way to know it was already at 60% of the limit. The prompt already tells
 it *"a cheap decisive experiment beats an expensive ambiguous one"* — advice it
-currently cannot act on. **Fix: add a `secs` column to `_ledger_table()`.**
+could not act on.
+
+**Fixed 2026-08-28.** Note the data was never missing: `seconds` and
+`wall_seconds` have been in every `NNNN.json` since the harness was written. The
+defect was purely in rendering — `_ledger_table()` did not show it, so the agent
+was blind to a cost we were already recording. It now renders a `secs` column,
+plus two things the number alone does not convey: that 900 s is fatal, and that
+an N-member ensemble costs N times a single model *every time*, including when
+the thing being tested is not the members. It also says to evaluate several
+combination rules inside one solution rather than one per experiment — run 6
+spent ~67 minutes, a third of its compute, retraining 24 models repeatedly to
+re-weight predictions it already had.
 
 **3. The convergence floor cuts both ways.** We raised it to 30 to stop
 premature stopping. Run 6 found DeepFM at `#28`-`#29` with three experiments
