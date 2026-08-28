@@ -4,7 +4,7 @@ State, decisions, and what's next. **`CLAUDE.md` holds the task facts** — labe
 metrics, splits, baselines, dead ends. This file holds the *decisions* and the
 reasoning behind them, which is the part that's expensive to reconstruct.
 
-Last updated: 2026-08-28, after record run 3.
+Last updated: 2026-08-28, code frozen at tag `record-run-4-code`, run 4 not yet launched.
 
 ---
 
@@ -61,6 +61,7 @@ Spend across every run to date: ~3.1M in / 235k out, ~$8.2.
 | `harness/watch.py` | follow a long unattended run; one line per experiment and event |
 | `harness/make_submission.py` | solution -> validated submission CSV. **The only tool allowed to touch test.** |
 | `logs/<run>-N/` | every run auto-creates its own folder (Zheng, `ledger.init_run_dir`) |
+| tags `*-code` | one per run, immutable, pointing at the code that produced it. **No `record-run-3-code`** — run 3 started 20:15 and the run-folder commit landed 23:54, so the exact code it ran is not cleanly identifiable. Left untagged rather than mislabelled. |
 | `src/` | CWM paper code, ported and working. **Reference only** — see below. |
 
 ### Verified numbers
@@ -889,44 +890,142 @@ authoritative. Mitigation is mechanical: the agent's write access is
 
 ## Next
 
-### 1. Score on test — ONCE. Still not done.
+Ordered. Item 1 blocks the run; items 3-5 happen while it runs.
+
+### 1. Benchmark the second machine before choosing where to run
+
+Two candidates, and the paper specs do not settle it:
 
 ```
-python harness/make_submission.py 027_deepfm_member.py     --split test --out submission.csv --seeds 1
+AMD Ryzen 5 5600X          6 cores / 12 threads, desktop, 3.7 GHz sustained
+Intel Core Ultra 5 125H   14 cores / 18 threads, laptop, hybrid P + E cores
 ```
 
-Read *"The decision waiting for whoever submits"* above first and choose
-`--seeds 1` or `--seeds 3`.
+The 125H's fourteen "cores" are not fourteen of the same thing — 4 P-cores,
+8 E-cores, 2 low-power E-cores — and torch will schedule onto the slow ones.
+More importantly this is a **multi-hour all-core load**, and a laptop throttles
+where a desktop holds its clocks. A short benchmark will not show that.
 
-What to expect: valid has run ~0.007 above test throughout, so **~0.598 on test
-is the expected transfer, not a regression.** Compare the *delta* against the
-official FM's test 0.5946, never the raw valid number. A delta far below +0.0040
-would mean the gains were valid-specific — worth knowing, since the best solution
-was selected across 30 experiments on valid alone.
+**Run this on the Intel machine, twice, back to back:**
 
-### 2. Answer from the organisers
+```
+python harness/seedsweep.py 001_torch_fm.py
+```
+
+**Reference, measured on the 5600X: 84.8 s.** Note `seedsweep.py` runs its three
+seeds *sequentially*, unlike the harness — that is deliberate here, because a
+sequential benchmark compares single-core-ish throughput rather than how well
+each machine schedules three concurrent processes. Do not compare it to the
+harness's ~50 s parallel figure; compare Intel-sequential against
+5600X-sequential, i.e. against 84.8 s.
+
+- **Slower than ~85 s** ⇒ the desktop is faster per unit work; prefer it.
+- **Faster than ~85 s** ⇒ the Intel machine wins on raw speed, and its 14 cores
+  should also parallelise the three seeds at least as well.
+- **Second run meaningfully slower than the first** ⇒ thermal throttling. That
+  is the decisive signal: it compounds over a 3 h load, and a laptop that starts
+  fast can finish slower than the desktop. Prefer the desktop in that case even
+  if the first run looked good.
+
+`seedsweep.py` writes nothing to the ledger, so this is safe to run at any time,
+including while something else is going on.
+
+### 2. Launch record run 4
+
+```
+python -m agent --run-name record-run
+```
+
+No other flags. Auto-creates `logs/record-run-4/` and copies the control row in.
+
+**Estimate on the 5600X: 2-4 hours.** record-run-3 was 356 min of compute plus
+33 min of LLM; parallel seeds halve the compute, and the new standalone-before-
+blending policy should make individual experiments much cheaper (1 model x 3
+seeds instead of 10 x 3). It may also run more of them — cheaper experiments
+delay convergence. The 6 h guard stops it either way.
+
+**Pre-committed, before the run starts so it cannot become a rationalisation:**
+run 4 replaces `record-run-3/solutions/027_deepfm_member.py` as the submission
+candidate **only if it exceeds 0.605493 by at least 0.0005**. That solution's
+seed spread is 0.0002, so the SE of a 3-seed mean is ~0.0001 and of the
+difference ~0.00016 — the threshold is about three standard errors. Below it,
+027 stands and we say so.
+
+### 3. Rewrite the README — the biggest visible gap
+
+It is still the **upstream CWM paper's readme**. A judge opening the repo sees
+"Counterfactual Watch Model" and a paper abstract. The deliverables require:
+
+```
+project overview          setup and installation
+steps to reproduce        limitations and what you would improve
+team member contributions
+```
+
+The material exists — this file for the reasoning, `logs/record-run-*/` for the
+evidence, and the ceiling analysis for a genuinely good limitations section.
+
+### 4. Compile the resource-usage report
+
+Deliverable 4 asks for total tokens (in + out), total agent wall-clock, and
+iterations used out of 50. `ledger.totals()` has the first; `run_start` and
+`run_end` in `events.jsonl` bracket the second.
+
+**Report within-run interventions separately from development.** An unattended
+run has **zero within-run interventions** — that is the number the autonomy
+criterion asks for. Prompt and harness revisions between runs are development,
+listed separately and honestly.
+
+### 5. Generate and validate the submission, then score test ONCE
+
+Note the wording. `make_submission.py` **generates and validates** a submission;
+it does not score test, by choice. The test labels *are* in the downloaded file —
+test is hidden by discipline, not by cryptography — so scoring locally is
+possible and is a decision, not a capability.
+
+**Agreed plan:** lock the candidate by the ≥0.0005 rule first, then score test
+locally **once**, purely to learn whether the gain transfers. After the candidate
+is fixed, so it cannot influence selection.
+
+```
+python harness/make_submission.py <best>.py --split test --out submission.csv --seeds 1
+```
+
+Read *"The decision waiting for whoever submits"* above and choose `--seeds 1`
+or `--seeds 3` first.
+
+Expect **~0.598 on test**: valid has run ~0.007 above test throughout. Compare
+the *delta* against the official FM's test **0.5946**, never the raw valid
+number. A delta far below +0.0040 would mean the gains were valid-specific,
+which is worth knowing — the candidate was selected across 30 experiments on
+valid alone.
+
+### 6. Answer from the organisers
 
 `docs/email-convergence-question.md` is sent. Question 2 — whether refinement
-iterations count toward N — decides whether a further run should refine at all.
+iterations count toward N — decides whether any further run should refine.
 
-### 3. Write the submission
+---
 
-Everything the deliverables need is in `logs/record-run-3/`.
+## If you want a higher score
 
-### If you want a higher score
+**Not by hand, and not by naming a method in the prompt.** This is an autonomy
+track: Innovation (20%) is scored on *what the agent identified as worth trying*,
+so a method we supply is a result we produced, not one it found. The legitimate
+lever is the agent's **capability** — what it can do and how it searches — never
+its knowledge.
 
-**Not by hand.** This is an autonomy track: writing a solution ourselves puts a
-human result inside an agent run, and Innovation (20%) is scored on *what the
-agent identified as worth trying*. The legitimate lever is the agent's
-**capability** — search policy, measurement, harness bugs — never its knowledge.
+The agent finds methods on its own: ESMM, DIN, CWM and DeepFM all came from its
+own web searches in record-run-3, and it found CWM with no access to `src/`,
+which contains a working implementation.
 
-The agent already finds methods on its own: ESMM, DIN, CWM and DeepFM all came
-from its own web searches in record-run-3, and it found CWM without any access
-to `src/`, which contains a working implementation.
+Realistic reach is **0.607-0.608**; **0.610 needs a genuinely new source of
+signal** and is unlikely given the deceleration above.
 
-So the options are: run it again and let it search differently; improve how it
-searches without telling it what to find; or accept +0.0040. Realistic reach is
-0.607-0.608; **0.61 is unlikely** given the deceleration above.
+**Do not run repeatedly and submit the best.** That is selection on validation
+across runs — it makes the final number less credible and under-reports actual
+resource use. Re-running after *changing the agent* is legitimate and is what
+run 4 is; re-running the same agent to fish for a good draw is not.
 
 ---
 
