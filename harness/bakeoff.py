@@ -39,6 +39,14 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGS = os.path.join(ROOT, 'logs')
+
+# agent/loop.py loads .env at import, but that is the CHILD process. This is the
+# parent, and it needs the provider credentials itself to decide how to launch
+# each child. Without this the first DeepSeek model aborts the whole runner on a
+# key that is sitting in .env the entire time - which is exactly what happened
+# on the first bake-off attempt.
+from dotenv import load_dotenv                        # noqa: E402
+load_dotenv(os.path.join(ROOT, '.env'))
 DEFAULT_MODELS = ['gpt-5.5', 'gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra']
 BASELINE_VALID = 0.6015
 
@@ -83,14 +91,20 @@ MODEL_COST = {
 }
 
 
+class _SkipModel(Exception):
+    """This model cannot be run; skip it and continue with the rest."""
+
+
 def _provider_env(model):
     for prefix, (url, keyvar) in PROVIDERS.items():
         if model.startswith(prefix):
             key = os.environ.get(keyvar, '')
             if not key or key.startswith('paste-'):
-                raise SystemExit(
-                    '%s needs %s in .env (currently unset or still the '
-                    'placeholder)' % (model, keyvar))
+                # Skip this model, do not abort the run. A bake-off is several
+                # independent runs; losing the rest of them because one
+                # provider is unconfigured throws away work already done.
+                raise _SkipModel('%s needs %s in .env (unset or still the '
+                                 'placeholder)' % (model, keyvar))
             return {'AGENT_BASE_URL': url, 'AGENT_API_KEY': key}
     return {}
 
@@ -239,7 +253,11 @@ def main():
         env['AGENT_MODEL'] = model
         extra = dict(MODEL_ENV.get(model, {}))
         extra.update(MODEL_COST.get(model, {}))
-        extra.update(_provider_env(model))
+        try:
+            extra.update(_provider_env(model))
+        except _SkipModel as exc:
+            print('== %-14s SKIP, %s' % (model, exc))
+            continue
         env.update(extra)
         # Never print a credential.
         shown = {k: ('<set>' if k == 'AGENT_API_KEY' else v)
