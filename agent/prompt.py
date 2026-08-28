@@ -160,7 +160,8 @@ So:
 - Try your most ambitious direction EARLY, while convergence headroom is large,
   not after the cheap gains are exhausted.
 - The metric is nDCG@5 + GAUC. A method that directly optimises a ranking metric
-  has a structural advantage over one that optimises a proxy like logloss or BPR.
+  may have an advantage over one that optimises a proxy like logloss or BPR;
+  judge it on the combined primary, not one component alone.
 - Post-hoc calibration is cheap. If your model's predictions have different
   scales across user groups, rescaling per group before ranking costs one
   experiment and may help.

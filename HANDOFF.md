@@ -1182,8 +1182,9 @@ one.** Right now the saturation argument rests on runs 3 and 4 converging to
 +0.0040 and +0.0031 down two different mechanism families. If run 5 is handed
 gradient boosting *and* direct nDCG optimisation and still lands near 0.605,
 that is a third structurally independent search arriving at the same place, and
-the ceiling claim stops being an inference and becomes a demonstration. That is
-worth more to the writeup than +0.0005 on the primary metric would be.
+the saturation case becomes materially stronger. It is evidence, not a proof of
+a global ceiling. That is worth more to the writeup than +0.0005 on the primary
+metric would be.
 
 Either way run 5 answers something. Frame it that way before launching, so a
 flat result is read as evidence rather than as failure.
