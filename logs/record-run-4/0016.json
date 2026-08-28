@@ -1,0 +1,57 @@
+{
+  "iteration": 16,
+  "solution": "logs/record-run-4/solutions/016_history_stats_blend.py",
+  "hypothesis": "improve 11: the learned DIN-style history branch was flat/unstable, so debug the same user-behaviour direction with a low-variance train-only memorized affinity adjustment for repeated authors/videos/tabs on top of node 9. This tests whether history signal exists without adding sequence-model capacity; CWM search note: watch-time censoring is a survival-style direction but too risky for this final convergence step.",
+  "parent": "11",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:00:45+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604422,
+  "GAUC": 0.671245,
+  "nDCG@5": 0.537599,
+  "source_hash": "9f7fca2d9e9a",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') history_stats_blend\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "7ce7336dbe51",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000101,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671347,
+      "nDCG@5": 0.537657,
+      "primary": 0.604502
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671311,
+      "nDCG@5": 0.5376,
+      "primary": 0.604456
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671077,
+      "nDCG@5": 0.537541,
+      "primary": 0.604309
+    }
+  ],
+  "seconds": 180.8,
+  "verdict": "KEPT",
+  "delta": 0.002922,
+  "tokens_in": 81313,
+  "tokens_out": 7914,
+  "tokens_cached": 58880,
+  "cost_usd": 0.164662,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 268.6,
+  "recovery_events": []
+}

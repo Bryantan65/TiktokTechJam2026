@@ -1,0 +1,57 @@
+{
+  "iteration": 9,
+  "solution": "logs/record-run-4/solutions/009_multitask_aux_time_softmax.py",
+  "hypothesis": "draft multi-task: following MMoE-style shared representation for related recommender feedback tasks (https://research.google/pubs/modeling-task-relationships-in-multi-task-learning-with-multi-gate-mixture-of-experts/), add small auxiliary BCE heads for click/like/follow/comment/forward/profile/hate while preserving node 7's dominant sampled-softmax long_view loss.",
+  "parent": "7",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:27:25+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604353,
+  "GAUC": 0.671186,
+  "nDCG@5": 0.537519,
+  "source_hash": "d381f765b79f",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate')\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "901b47ab76be",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000185,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671502,
+      "nDCG@5": 0.537597,
+      "primary": 0.604549
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670997,
+      "nDCG@5": 0.537367,
+      "primary": 0.604182
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67106,
+      "nDCG@5": 0.537593,
+      "primary": 0.604327
+    }
+  ],
+  "seconds": 168.9,
+  "verdict": "KEPT",
+  "delta": 0.002853,
+  "tokens_in": 46237,
+  "tokens_out": 5927,
+  "tokens_cached": 33280,
+  "cost_usd": 0.108302,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 241.0,
+  "recovery_events": []
+}

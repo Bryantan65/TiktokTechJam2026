@@ -1,0 +1,57 @@
+{
+  "iteration": 26,
+  "solution": "logs/record-run-4/solutions/026_neg32_recent_history.py",
+  "hypothesis": "improve 25: neg16 gave a small but stable gain, so test whether the same sampled-softmax approximation continues to improve with 32 same-user negatives; this is a direct refinement of the only still-moving mechanism.",
+  "parent": "25",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:44:43+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604218,
+  "GAUC": 0.671116,
+  "nDCG@5": 0.53732,
+  "source_hash": "d33dc107be30",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') recent_history neg32\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "82f2afc36125",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000202,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671503,
+      "nDCG@5": 0.537382,
+      "primary": 0.604442
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670999,
+      "nDCG@5": 0.537324,
+      "primary": 0.604161
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670845,
+      "nDCG@5": 0.537255,
+      "primary": 0.60405
+    }
+  ],
+  "seconds": 449.1,
+  "verdict": "KEPT",
+  "delta": 0.002718,
+  "tokens_in": 91397,
+  "tokens_out": 5208,
+  "tokens_cached": 68096,
+  "cost_usd": 0.14438,
+  "model": "gpt-5.5",
+  "agent_iteration": 25,
+  "wall_seconds": 495.4,
+  "recovery_events": []
+}

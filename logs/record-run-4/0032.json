@@ -1,0 +1,57 @@
+{
+  "iteration": 32,
+  "solution": "logs/record-run-4/solutions/032_user_trend_datepos.py",
+  "hypothesis": "improve 31: the row-order user-trend residual improved nDCG; add a second tiny trend term based on target date position so single-impression users and cross-day drift get the same train-learned rising/falling-user correction.",
+  "parent": "31",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T14:25:32+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604519,
+  "GAUC": 0.671393,
+  "nDCG@5": 0.537645,
+  "source_hash": "0ef6762ce510",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') recent_history neg16 user_trend_datepos\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "709c2af00105",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0001,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671279,
+      "nDCG@5": 0.537537,
+      "primary": 0.604408
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671407,
+      "nDCG@5": 0.537796,
+      "primary": 0.604601
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671493,
+      "nDCG@5": 0.537601,
+      "primary": 0.604547
+    }
+  ],
+  "seconds": 271.5,
+  "verdict": "KEPT",
+  "delta": 0.003019,
+  "tokens_in": 114073,
+  "tokens_out": 6157,
+  "tokens_cached": 84480,
+  "cost_usd": 0.177792,
+  "model": "gpt-5.5",
+  "agent_iteration": 31,
+  "wall_seconds": 326.6,
+  "recovery_events": []
+}

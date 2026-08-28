@@ -1,0 +1,57 @@
+{
+  "iteration": 30,
+  "solution": "logs/record-run-4/solutions/030_target_frequency.py",
+  "hypothesis": "improve 27: with training-time changes saturated, use a label-free target-split exposure-frequency residual: repeated same user-video/author impressions in the requested split may reflect recommender persistence and can only affect within-user ordering.",
+  "parent": "27",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T14:11:31+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60448,
+  "GAUC": 0.671429,
+  "nDCG@5": 0.537531,
+  "source_hash": "e8c349c135e3",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') target_frequency\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "4fe6a077db36",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 7.6e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671293,
+      "nDCG@5": 0.53754,
+      "primary": 0.604417
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671489,
+      "nDCG@5": 0.537638,
+      "primary": 0.604564
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671505,
+      "nDCG@5": 0.537415,
+      "primary": 0.60446
+    }
+  ],
+  "seconds": 330.2,
+  "verdict": "KEPT",
+  "delta": 0.00298,
+  "tokens_in": 93449,
+  "tokens_out": 8103,
+  "tokens_cached": 69120,
+  "cost_usd": 0.176412,
+  "model": "gpt-5.5",
+  "agent_iteration": 29,
+  "wall_seconds": 412.4,
+  "recovery_events": []
+}

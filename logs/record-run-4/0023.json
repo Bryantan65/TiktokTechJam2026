@@ -1,0 +1,57 @@
+{
+  "iteration": 23,
+  "solution": "logs/record-run-4/solutions/023_deepfm_residual.py",
+  "hypothesis": "draft different models: add a DeepFM-style MLP branch over the same field embeddings to capture higher-order interactions, following https://www.ijcai.org/proceedings/2017/0239.pdf. It is tested as a dominant trained component on node 19 rather than a tiny ensemble member.",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:31:19+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603981,
+  "GAUC": 0.670698,
+  "nDCG@5": 0.537264,
+  "source_hash": "9be1a6b01ec6",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time aux DeepFM residual\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "dfa013cd8b29",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000518,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671454,
+      "nDCG@5": 0.537658,
+      "primary": 0.604556
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670441,
+      "nDCG@5": 0.537235,
+      "primary": 0.603838
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.6702,
+      "nDCG@5": 0.5369,
+      "primary": 0.60355
+    }
+  ],
+  "seconds": 220.3,
+  "verdict": "KEPT",
+  "delta": 0.002481,
+  "tokens_in": 119239,
+  "tokens_out": 5792,
+  "tokens_cached": 93312,
+  "cost_usd": 0.169394,
+  "model": "gpt-5.5",
+  "agent_iteration": 22,
+  "wall_seconds": 284.5,
+  "recovery_events": []
+}

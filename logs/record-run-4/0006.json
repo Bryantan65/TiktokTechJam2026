@@ -1,0 +1,57 @@
+{
+  "iteration": 6,
+  "solution": "logs/record-run-4/solutions/006_softmax8_bce_aux_fm.py",
+  "hypothesis": "improve 5: add a small BCE auxiliary term to the sampled-softmax candidate set, so the best listwise FM keeps absolute positive/negative calibration while still being dominated by within-user ranking loss.",
+  "parent": "5",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:18:18+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603518,
+  "GAUC": 0.670148,
+  "nDCG@5": 0.536889,
+  "source_hash": "657959d7bd75",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "87c81f918ced",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000108,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670066,
+      "nDCG@5": 0.536737,
+      "primary": 0.603401
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67,
+      "nDCG@5": 0.537082,
+      "primary": 0.603541
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670378,
+      "nDCG@5": 0.536848,
+      "primary": 0.603613
+    }
+  ],
+  "seconds": 81.3,
+  "verdict": "KEPT",
+  "delta": 0.002018,
+  "tokens_in": 27181,
+  "tokens_out": 2772,
+  "tokens_cached": 18304,
+  "cost_usd": 0.059064,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 108.6,
+  "recovery_events": []
+}

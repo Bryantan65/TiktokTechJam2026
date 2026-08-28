@@ -1,0 +1,57 @@
+{
+  "iteration": 29,
+  "solution": "logs/record-run-4/solutions/029_hard_negatives.py",
+  "hypothesis": "improve 25: the strongest gains came from same-user sampled softmax; make the negative sampler adaptive by replacing half the random negatives after epoch 2 with each user's highest-scoring training negatives, so the loss focuses on within-user rank mistakes instead of easy negatives.",
+  "parent": "25",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T14:05:02+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604447,
+  "GAUC": 0.671404,
+  "nDCG@5": 0.537489,
+  "source_hash": "6820f539c506",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_hate', 'is_profile_enter') hard_negatives\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "4f1826993794",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000339,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671144,
+      "nDCG@5": 0.537282,
+      "primary": 0.604213
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671093,
+      "nDCG@5": 0.53749,
+      "primary": 0.604292
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671976,
+      "nDCG@5": 0.537695,
+      "primary": 0.604835
+    }
+  ],
+  "seconds": 306.8,
+  "verdict": "KEPT",
+  "delta": 0.002947,
+  "tokens_in": 78059,
+  "tokens_out": 7214,
+  "tokens_cached": 54144,
+  "cost_usd": 0.158999,
+  "model": "gpt-5.5",
+  "agent_iteration": 28,
+  "wall_seconds": 382.0,
+  "recovery_events": []
+}

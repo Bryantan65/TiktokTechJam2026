@@ -1,0 +1,57 @@
+{
+  "iteration": 15,
+  "solution": "logs/record-run-4/solutions/015_user_balanced_softmax.py",
+  "hypothesis": "improve 9: node 9 optimizes one listwise row per positive, but primary includes unweighted per-user nDCG@5; reweight positives by 1/sqrt(user positive count), normalized to mean 1, to trade a little GAUC weighting for better top-5 user balance.",
+  "parent": "9",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:56:21+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603213,
+  "GAUC": 0.669426,
+  "nDCG@5": 0.537,
+  "source_hash": "96ffd8fcd831",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') user_balanced\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "3cdd8ce08752",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000277,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669312,
+      "nDCG@5": 0.53685,
+      "primary": 0.603081
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669883,
+      "nDCG@5": 0.537181,
+      "primary": 0.603532
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669083,
+      "nDCG@5": 0.53697,
+      "primary": 0.603027
+    }
+  ],
+  "seconds": 175.9,
+  "verdict": "noise",
+  "delta": 0.001713,
+  "tokens_in": 116346,
+  "tokens_out": 5454,
+  "tokens_cached": 91904,
+  "cost_usd": 0.161597,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 232.8,
+  "recovery_events": []
+}

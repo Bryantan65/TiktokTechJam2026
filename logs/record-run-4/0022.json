@@ -1,0 +1,57 @@
+{
+  "iteration": 22,
+  "solution": "logs/record-run-4/solutions/022_watchtime_debug_stronger.py",
+  "hypothesis": "debug 21: the watch-time pairwise loss was no-op, likely too weak or discarded by checkpointing; raise its weight and add a small train-only watch-ratio residual so deployed predictions must differ. This diagnoses whether the raw play_time_ms signal has useful within-user ranking information.",
+  "parent": "21",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:26:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604073,
+  "GAUC": 0.670694,
+  "nDCG@5": 0.537451,
+  "source_hash": "93d9e3714391",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time aux stronger_watch debug\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "c5c8942cc2b6",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000155,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670584,
+      "nDCG@5": 0.537312,
+      "primary": 0.603948
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670567,
+      "nDCG@5": 0.53748,
+      "primary": 0.604024
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670931,
+      "nDCG@5": 0.537561,
+      "primary": 0.604246
+    }
+  ],
+  "seconds": 228.5,
+  "verdict": "KEPT",
+  "delta": 0.002573,
+  "tokens_in": 111927,
+  "tokens_out": 7917,
+  "tokens_cached": 83456,
+  "cost_usd": 0.192076,
+  "model": "gpt-5.5",
+  "agent_iteration": 21,
+  "wall_seconds": 312.4,
+  "recovery_events": []
+}

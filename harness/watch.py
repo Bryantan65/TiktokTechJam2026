@@ -11,15 +11,46 @@ Emits failures as loudly as successes on purpose: a watcher that only prints
 good news is silent through a crash loop, and silence looks exactly like
 "still running".
 """
+import argparse
 import json
 import os
+import re
 import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LOG_DIR = os.path.join(ROOT, 'logs', 'iterations')
-EVENTS = os.path.join(ROOT, 'logs', 'events.jsonl')
 POLL = 15
+
+
+def newest_run_dir():
+    """The most recently modified logs/<name>-N/ folder, else logs/iterations/.
+
+    Runs write into their own folder now (ledger.init_run_dir), so a fixed path
+    would watch the wrong place. Picking by mtime rather than by highest number
+    means this follows whichever run is actually live, including a re-run of an
+    earlier name.
+    """
+    logs = os.path.join(ROOT, 'logs')
+    cands = []
+    for name in os.listdir(logs):
+        d = os.path.join(logs, name)
+        if os.path.isdir(d) and re.match(r'^[a-z-]+-\d+$', name):
+            cands.append((os.path.getmtime(d), d))
+    if not cands:
+        return os.path.join(logs, 'iterations')
+    return max(cands)[1]
+
+
+ap = argparse.ArgumentParser(description=__doc__)
+ap.add_argument('--run-dir', default=None,
+                help='folder to watch (default: the most recently active run)')
+_args = ap.parse_args()
+LOG_DIR = _args.run_dir or newest_run_dir()
+EVENTS = os.path.join(LOG_DIR, 'events.jsonl')
+if not os.path.isfile(EVENTS):          # pre-run-folder layout
+    alt = os.path.join(ROOT, 'logs', 'events.jsonl')
+    if os.path.isfile(alt):
+        EVENTS = alt
 
 # Everything worth interrupting for. Deliberately includes every terminal
 # state, not just the happy one.
@@ -60,7 +91,8 @@ def main():
     if os.path.isdir(LOG_DIR):
         seen = {f for f in os.listdir(LOG_DIR) if f.endswith('.json')}
     pos = os.path.getsize(EVENTS) if os.path.isfile(EVENTS) else 0
-    emit('watching: %d experiments already logged' % len(seen))
+    emit('watching %s: %d experiments already logged'
+         % (os.path.relpath(LOG_DIR, ROOT).replace(os.sep, '/'), len(seen)))
 
     while True:
         if os.path.isdir(LOG_DIR):

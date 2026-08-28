@@ -1,0 +1,57 @@
+{
+  "iteration": 17,
+  "solution": "logs/record-run-4/solutions/017_stronger_history_stats.py",
+  "hypothesis": "improve 16: history affinities gave the only recent stable gain, so increase author/video recurrence weights and reduce the broad user-tab term to test whether the useful signal is repeated content rather than context. This is a targeted tuning of node 16's post-fit adjustment.",
+  "parent": "16",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:04:25+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603932,
+  "GAUC": 0.670641,
+  "nDCG@5": 0.537223,
+  "source_hash": "36e99d9ca6f8",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') stronger_history\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "9ee48472c631",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000152,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670791,
+      "nDCG@5": 0.537368,
+      "primary": 0.604079
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670607,
+      "nDCG@5": 0.536943,
+      "primary": 0.603775
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670526,
+      "nDCG@5": 0.537358,
+      "primary": 0.603942
+    }
+  ],
+  "seconds": 181.6,
+  "verdict": "KEPT",
+  "delta": 0.002432,
+  "tokens_in": 44733,
+  "tokens_out": 4569,
+  "tokens_cached": 29568,
+  "cost_usd": 0.098387,
+  "model": "gpt-5.5",
+  "agent_iteration": 16,
+  "wall_seconds": 221.1,
+  "recovery_events": []
+}

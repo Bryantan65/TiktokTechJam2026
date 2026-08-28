@@ -1,0 +1,57 @@
+{
+  "iteration": 10,
+  "solution": "logs/record-run-4/solutions/010_multitask_playtime_aux.py",
+  "hypothesis": "improve 9: sparse action heads barely moved the model; add a dense standardized log(play_time_ms/duration_ms) SmoothL1 auxiliary head so the shared FM factors learn watch-time signal more directly while keeping long_view sampled-softmax dominant.",
+  "parent": "9",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:30:56+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604221,
+  "GAUC": 0.671056,
+  "nDCG@5": 0.537385,
+  "source_hash": "75b090fbc127",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate')+play_ratio\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "d2c54e8e3e89",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000132,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671366,
+      "nDCG@5": 0.537361,
+      "primary": 0.604364
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671026,
+      "nDCG@5": 0.537362,
+      "primary": 0.604194
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670777,
+      "nDCG@5": 0.537433,
+      "primary": 0.604105
+    }
+  ],
+  "seconds": 222.8,
+  "verdict": "KEPT",
+  "delta": 0.002721,
+  "tokens_in": 40651,
+  "tokens_out": 4801,
+  "tokens_cached": 26496,
+  "cost_usd": 0.096645,
+  "model": "gpt-5.5",
+  "agent_iteration": 9,
+  "wall_seconds": 265.3,
+  "recovery_events": []
+}

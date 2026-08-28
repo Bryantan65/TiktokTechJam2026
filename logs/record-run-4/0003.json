@@ -1,0 +1,57 @@
+{
+  "iteration": 3,
+  "solution": "logs/record-run-4/solutions/003_sampled_softmax_fm.py",
+  "hypothesis": "improve 2: BPR helped, so replace one-vs-one pairs with a sampled within-user softmax where each positive competes against 4 same-user negatives. This should better target top-of-list separation and nDCG while preserving the ranking objective.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:13:08+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603486,
+  "GAUC": 0.670099,
+  "nDCG@5": 0.536874,
+  "source_hash": "4dc69f2746d8",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "f30fa2910456",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000953,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671084,
+      "nDCG@5": 0.537291,
+      "primary": 0.604187
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670645,
+      "nDCG@5": 0.537097,
+      "primary": 0.603871
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668568,
+      "nDCG@5": 0.536235,
+      "primary": 0.602401
+    }
+  ],
+  "seconds": 69.5,
+  "verdict": "noise",
+  "delta": 0.001986,
+  "tokens_in": 47359,
+  "tokens_out": 2885,
+  "tokens_cached": 41472,
+  "cost_usd": 0.064303,
+  "model": "gpt-5.5",
+  "agent_iteration": 2,
+  "wall_seconds": 101.3,
+  "recovery_events": []
+}

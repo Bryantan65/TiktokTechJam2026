@@ -1,0 +1,57 @@
+{
+  "iteration": 13,
+  "solution": "logs/record-run-4/solutions/013_hard_tab_negatives.py",
+  "hypothesis": "improve 9: refine the strongest loss node by sampling half the within-user negatives from the positive row's tab, making the sampled softmax compare items in comparable contexts instead of mostly learning coarse tab preference.",
+  "parent": "9",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T12:45:59+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603945,
+  "GAUC": 0.670683,
+  "nDCG@5": 0.537207,
+  "source_hash": "73f9ee72c75a",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') hard_tab_neg\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "97a9d90d4b45",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00065,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671628,
+      "nDCG@5": 0.537761,
+      "primary": 0.604695
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670249,
+      "nDCG@5": 0.536836,
+      "primary": 0.603543
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670172,
+      "nDCG@5": 0.537024,
+      "primary": 0.603598
+    }
+  ],
+  "seconds": 196.8,
+  "verdict": "KEPT",
+  "delta": 0.002445,
+  "tokens_in": 95768,
+  "tokens_out": 5458,
+  "tokens_cached": 74496,
+  "cost_usd": 0.145008,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 254.2,
+  "recovery_events": []
+}

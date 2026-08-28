@@ -1,0 +1,57 @@
+{
+  "iteration": 25,
+  "solution": "logs/record-run-4/solutions/025_neg16_recent_history.py",
+  "hypothesis": "improve 19: the best node is still the listwise FM with history; make the final attempt a direct loss refinement by increasing same-user negatives from 8 to 16 so the sampled softmax better approximates the per-user ranking set without adding a new mechanism.",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:40:04+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604531,
+  "GAUC": 0.67148,
+  "nDCG@5": 0.537581,
+  "source_hash": "2e40d98770d4",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux=('is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_profile_enter', 'is_hate') recent_history neg16\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "0fbeb74af400",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 8.8e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671328,
+      "nDCG@5": 0.537535,
+      "primary": 0.604432
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671477,
+      "nDCG@5": 0.537639,
+      "primary": 0.604558
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671634,
+      "nDCG@5": 0.53757,
+      "primary": 0.604602
+    }
+  ],
+  "seconds": 232.7,
+  "verdict": "KEPT",
+  "delta": 0.003031,
+  "tokens_in": 76053,
+  "tokens_out": 5495,
+  "tokens_cached": 55808,
+  "cost_usd": 0.133466,
+  "model": "gpt-5.5",
+  "agent_iteration": 24,
+  "wall_seconds": 281.8,
+  "recovery_events": []
+}

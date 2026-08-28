@@ -1,0 +1,58 @@
+{
+  "iteration": 21,
+  "solution": "logs/record-run-4/solutions/021_watchtime_pairs.py",
+  "hypothesis": "draft watch-time modelling: following censored/watch-time ranking ideas (search: Censored Watch Model / video watch time analysis), add a small within-user pairwise auxiliary loss from raw play_time_ms/duration so the FM learns finer preference than the binary long_view label. It is standalone-dominant on node 19 training, not a weak ensemble add-on.",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T13:21:38+08:00",
+  "status": "no-op",
+  "error": "no-op: identical GAUC and nDCG@5 as iteration 19 (019_recent_history.py). Different code, same model - nothing was actually tested. Common cause: the new method ran but a \"keep the best checkpoint\" rule discarded its result, so the final model is the parent. Check that your change reaches the model that gets saved. This is NOT evidence about the technique.",
+  "valid_primary": 0.60448,
+  "GAUC": 0.671323,
+  "nDCG@5": 0.537636,
+  "source_hash": "e10f9ccfd23a",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour,dow,hour_tab aux watch_pairs recent_history\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "2696c774f732",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 4.5e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671453,
+      "nDCG@5": 0.537609,
+      "primary": 0.604531
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671343,
+      "nDCG@5": 0.537582,
+      "primary": 0.604462
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671174,
+      "nDCG@5": 0.537718,
+      "primary": 0.604446
+    }
+  ],
+  "no_op_twin": 19,
+  "seconds": 205.3,
+  "verdict": "no-op",
+  "delta": 0.00298,
+  "tokens_in": 167487,
+  "tokens_out": 7505,
+  "tokens_cached": 136576,
+  "cost_usd": 0.220615,
+  "model": "gpt-5.5",
+  "agent_iteration": 20,
+  "wall_seconds": 288.4,
+  "recovery_events": []
+}
