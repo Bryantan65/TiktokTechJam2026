@@ -719,6 +719,35 @@ Two of our three caps are therefore compliance limits now, not choices:
 — and nothing was watching the clock. It also used 30 of the 50 iterations, so
 only the wall-clock rule was breached.
 
+### Seeds run concurrently — the run is 2x faster
+
+record-run-3 was **91% training compute** (356 min of 389 min wall clock), and
+the three seeds of each experiment ran one after another while torch used only 6
+of the machine's 12 cores. The seeds are independent by construction — same
+code, different RNG — so that was throwing away half the machine.
+
+`_run_seeds()` now launches all seeds at once and divides the cores between
+them (`OMP_NUM_THREADS = cpu_count // n_seeds`). Dividing the threads is the
+part that matters: three processes each grabbing half the cores would thrash.
+
+```
+sequential, 6 threads    99.9 s     0.601413 +/- 0.000154
+concurrent, 4 threads    49.9 s     0.601413 +/- 0.000154
+```
+
+**Identical numbers, half the time.** On record-run-3's workload that is roughly
+6 h 29 m -> 3 h 20 m, comfortably inside the 6 h ceiling.
+
+Failure semantics are unchanged and were re-tested: one seed failing still fails
+the whole experiment rather than averaging the survivors, the error names which
+seed, the traceback survives, `solution_error` is logged, and a `finally` block
+kills siblings so a crash cannot leave orphan processes.
+
+**What this does not buy is a better score.** record-run-3 stopped on
+`converged`, not on the clock — it used 30 of the 50 allowed iterations. Speed
+buys compliance and headroom for more expensive experiments; it does not make
+the search find more.
+
 ### The wall-clock stop reserves time rather than stopping at the line
 
 The ceiling applies to the **run**, so an experiment that starts at 5 h 55 m and
