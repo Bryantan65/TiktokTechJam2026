@@ -1,0 +1,64 @@
+{
+  "iteration": 2,
+  "solution": "logs/record-run-7/solutions/002_bpr_fm.py",
+  "hypothesis": "draft loss: replace pointwise BCE with same-user BPR pairs, following Rendle et al.'s BPR objective (-log sigmoid(s_pos-s_neg)) for implicit-feedback ranking (https://arxiv.org/abs/1205.2618). This directly trains positives above negatives within the user groups used by GAUC/nDCG.",
+  "parent": "1",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:35:48+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601847,
+  "GAUC": 0.667823,
+  "nDCG@5": 0.535871,
+  "source_hash": "91cc239de72d",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "68c201d9c470",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000364,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667652,
+      "nDCG@5": 0.535824,
+      "primary": 0.601738
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667332,
+      "nDCG@5": 0.53577,
+      "primary": 0.601551
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668486,
+      "nDCG@5": 0.53602,
+      "primary": 0.602253
+    }
+  ],
+  "seconds": 81.2,
+  "verdict": "noise",
+  "delta": 0.000347,
+  "tokens_in": 33140,
+  "tokens_out": 2901,
+  "tokens_cached": 26112,
+  "cost_usd": 0.059636,
+  "model": "gpt-5.5",
+  "agent_iteration": 1,
+  "wall_seconds": 125.9,
+  "recovery_events": []
+}

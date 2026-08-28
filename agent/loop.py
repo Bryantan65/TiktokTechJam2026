@@ -167,6 +167,40 @@ def _compact(messages, keep_iterations=HISTORY_ITERATIONS):
     return messages[:1] + messages[bounds[-keep_iterations]:]
 
 
+def _make_stdout_safe():
+    """Never let printing the model's own words kill the run.
+
+    The agent writes arrows, box-drawing and em-dashes constantly. On Windows,
+    stdout defaults to cp1252 when redirected to a file, and printing U+2192
+    raises UnicodeEncodeError from inside the print itself - which is not
+    caught as an API error or a solution error, so it takes down the whole
+    loop. Observed in record-run-7: crashed at iteration 2 on a single arrow,
+    three experiments in.
+
+    `errors='replace'` always, so an unencodable character degrades to '?'
+    instead of raising. UTF-8 additionally when stdout is NOT a terminal, i.e.
+    redirected to a log: there the encoding is ours to choose and a readable
+    log beats a lossy one. A real console keeps its own encoding, so nothing
+    turns to mojibake on screen.
+
+    The spinner has its own narrower guard below; this covers every other
+    print, including ones nobody has written yet.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if stream is None:
+                continue
+            if stream.isatty():
+                stream.reconfigure(errors='replace')
+            else:
+                stream.reconfigure(encoding='utf-8', errors='replace')
+        except (AttributeError, ValueError, OSError):
+            pass        # a stream that cannot be reconfigured is left alone
+
+
+_make_stdout_safe()
+
+
 def _console_supports_unicode():
     """Windows consoles often use cp1252, which cannot encode braille frames.
     Writing them raises UnicodeEncodeError inside the spinner thread and spams
