@@ -431,6 +431,7 @@ def run_loop(supervised: bool = False, max_iter: int = 100,
                      max_iter=max_iter, max_experiments=MAX_EXPERIMENTS,
                      max_wall_seconds=MAX_WALL_SECONDS,
                      max_cost_usd=MAX_COST_USD, supervised=supervised,
+                     min_scored_before_convergence=ledger.MIN_SCORED_BEFORE_CONVERGENCE,
                      ledger_rows_at_start=ledger.totals()['iterations'])
 
     stop_reason = 'max_iter reached'

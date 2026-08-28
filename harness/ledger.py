@@ -122,10 +122,26 @@ N_CONVERGE = 3           # official: 3 consecutive iterations below epsilon
 # (under epsilon) across the only three experiments that existed. It would have
 # ended having tried two ideas, which is the opposite of what the rule is for.
 #
-# 8 leaves five experiments to establish a best before any three can be judged
-# against it - roughly two directions' worth at ~2 min each.
+# Raised 8 -> 30 for record-run-4 (team decision, 2026-08-28).
+#
+# 8 was the minimum that makes the rule meaningful: five experiments to
+# establish a best, three to judge against it. 30 is a different argument - it
+# is 60% of the organisers' 50-iteration cap, so a run that genuinely plateaus
+# at experiment 12 is forced to keep going for another 18.
+#
+# The case for it: record-run-3 was still finding small gains deep into the run
+# (+0.0034 at #14, +0.0040 at #24), and its last six experiments failed to
+# resolve anything mainly because they were weak blends into a heavy incumbent -
+# a measurement problem now addressed by the standalone-before-blending policy.
+# More runway plus better tests may convert that dead tail into real search.
+#
+# The case against, recorded so it is not forgotten: this floor is OUR
+# invention, not the organisers' rule, and record-run-3 converged at exactly 30
+# scored experiments - so choosing 30 after observing that is fitting the
+# threshold to an outcome. If run 4 grinds through experiments 12-30 without
+# gains, that is this decision showing up, not the agent failing.
 MIN_SCORED_BEFORE_CONVERGENCE = int(
-    os.environ.get('HARNESS_MIN_SCORED', 8))
+    os.environ.get('HARNESS_MIN_SCORED', 30))
 
 HEADER = """# Experiment ledger
 
