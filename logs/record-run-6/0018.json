@@ -1,0 +1,57 @@
+{
+  "iteration": 18,
+  "solution": "logs/record-run-6/solutions/018_ensemble8_time_histfm.py",
+  "hypothesis": "improve 17: the five-seed bag still improved the same model without adding an ambiguous mechanism, so push seed averaging to eight members as the last high-probability variance-reduction step.",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T19:13:33+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604149,
+  "GAUC": 0.670453,
+  "nDCG@5": 0.537845,
+  "source_hash": "9631a10d28ee",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields+coarse_time; 8x ensemble\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "a58fcc7cbc6d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670453,
+      "nDCG@5": 0.537845,
+      "primary": 0.604149
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670453,
+      "nDCG@5": 0.537845,
+      "primary": 0.604149
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670453,
+      "nDCG@5": 0.537845,
+      "primary": 0.604149
+    }
+  ],
+  "seconds": 336.0,
+  "verdict": "KEPT",
+  "delta": 0.002649,
+  "tokens_in": 43183,
+  "tokens_out": 5028,
+  "tokens_cached": 31616,
+  "cost_usd": 0.095006,
+  "model": "gpt-5.5",
+  "agent_iteration": 17,
+  "wall_seconds": 392.7,
+  "recovery_events": []
+}

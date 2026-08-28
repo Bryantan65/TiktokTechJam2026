@@ -1,0 +1,57 @@
+{
+  "iteration": 21,
+  "solution": "logs/record-run-6/solutions/021_debug_watch_rankblend.py",
+  "hypothesis": "debug 20: the raw watch logits dominated/warped the ranking, so test whether the watch head has any usable ordering after per-user rank normalization and only a 20% readable blend with the incumbent ranks.",
+  "parent": "20",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T19:35:06+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602338,
+  "GAUC": 0.667711,
+  "nDCG@5": 0.536964,
+  "source_hash": "12806e095e89",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields+coarse_time; 8x rank ensemble; watch-rank alpha=0.2\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "03130115c1b3",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667711,
+      "nDCG@5": 0.536964,
+      "primary": 0.602338
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667711,
+      "nDCG@5": 0.536964,
+      "primary": 0.602338
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667711,
+      "nDCG@5": 0.536964,
+      "primary": 0.602338
+    }
+  ],
+  "seconds": 412.6,
+  "verdict": "noise",
+  "delta": 0.000838,
+  "tokens_in": 107774,
+  "tokens_out": 4974,
+  "tokens_cached": 86784,
+  "cost_usd": 0.145607,
+  "model": "gpt-5.5",
+  "agent_iteration": 20,
+  "wall_seconds": 466.4,
+  "recovery_events": []
+}

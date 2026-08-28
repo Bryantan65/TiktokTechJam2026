@@ -1,0 +1,57 @@
+{
+  "iteration": 30,
+  "solution": "logs/record-run-6/solutions/030_blend_fm_deepfm_w80.py",
+  "hypothesis": "improve 29: the 65% DeepFM blend was a clear gain, so test a stronger 80% DeepFM weight to see whether the high-order tower should dominate while FM remains a top-5 stabilizer.",
+  "parent": "29",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T20:56:01+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604998,
+  "GAUC": 0.671973,
+  "nDCG@5": 0.538023,
+  "source_hash": "106078bc4bbc",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} FM+DeepFM 8x/8x rank+margin blend dw=0.8\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "545bae5a8122",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000102,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671898,
+      "nDCG@5": 0.537968,
+      "primary": 0.604933
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672056,
+      "nDCG@5": 0.538174,
+      "primary": 0.605115
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671964,
+      "nDCG@5": 0.537926,
+      "primary": 0.604945
+    }
+  ],
+  "seconds": 743.4,
+  "verdict": "KEPT",
+  "delta": 0.003498,
+  "tokens_in": 50140,
+  "tokens_out": 4840,
+  "tokens_cached": 34688,
+  "cost_usd": 0.104374,
+  "model": "gpt-5.5",
+  "agent_iteration": 29,
+  "wall_seconds": 787.6,
+  "recovery_events": []
+}

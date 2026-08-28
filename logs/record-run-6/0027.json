@@ -1,0 +1,57 @@
+{
+  "iteration": 27,
+  "solution": "logs/record-run-6/solutions/027_bpr_hybrid_rank_margin.py",
+  "hypothesis": "improve 24: BPR fine-tune was near-best but not combined with the strongest per-user rank+margin calibration, so blend four BCE checkpoints and their same-user BPR-finetuned variants at full ensemble weight.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T20:27:10+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603469,
+  "GAUC": 0.669492,
+  "nDCG@5": 0.537446,
+  "source_hash": "a1d7748fd898",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} 8x BCE+BPR hybrid rank+margin blend\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "be5a0ef0f35d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669492,
+      "nDCG@5": 0.537446,
+      "primary": 0.603469
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669492,
+      "nDCG@5": 0.537446,
+      "primary": 0.603469
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669492,
+      "nDCG@5": 0.537446,
+      "primary": 0.603469
+    }
+  ],
+  "seconds": 304.9,
+  "verdict": "noise",
+  "delta": 0.001969,
+  "tokens_in": 104863,
+  "tokens_out": 6316,
+  "tokens_cached": 84736,
+  "cost_usd": 0.155845,
+  "model": "gpt-5.5",
+  "agent_iteration": 26,
+  "wall_seconds": 372.4,
+  "recovery_events": []
+}

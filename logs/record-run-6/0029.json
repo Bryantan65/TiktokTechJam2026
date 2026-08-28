@@ -1,0 +1,57 @@
+{
+  "iteration": 29,
+  "solution": "logs/record-run-6/solutions/029_blend_fm_deepfm.py",
+  "hypothesis": "improve 28: DeepFM raised GAUC but hurt nDCG@5 versus the FM rank ensemble, so blend it readably at 65% with the prior FM rank+margin ensemble to keep the high-order signal while recovering top-5 ordering.",
+  "parent": "28",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T20:42:44+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605024,
+  "GAUC": 0.671959,
+  "nDCG@5": 0.538089,
+  "source_hash": "ee9ded7995e5",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} FM+DeepFM 8x/8x rank+margin blend dw=0.65\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e18cce598cd0",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000129,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672153,
+      "nDCG@5": 0.538106,
+      "primary": 0.60513
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671996,
+      "nDCG@5": 0.538128,
+      "primary": 0.605062
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671727,
+      "nDCG@5": 0.538032,
+      "primary": 0.60488
+    }
+  ],
+  "seconds": 753.5,
+  "verdict": "KEPT",
+  "delta": 0.003524,
+  "tokens_in": 50148,
+  "tokens_out": 5344,
+  "tokens_cached": 34688,
+  "cost_usd": 0.109434,
+  "model": "gpt-5.5",
+  "agent_iteration": 28,
+  "wall_seconds": 806.1,
+  "recovery_events": []
+}

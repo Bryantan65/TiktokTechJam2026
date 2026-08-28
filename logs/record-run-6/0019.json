@@ -1,0 +1,57 @@
+{
+  "iteration": 19,
+  "solution": "logs/record-run-6/solutions/019_ensemble8_rankavg.py",
+  "hypothesis": "improve 18: for ranking metrics only within-user order matters, so average per-user normalized ranks across the eight members instead of raw logits to remove seed-specific scale noise.",
+  "parent": "18",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T19:20:07+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.6045,
+  "GAUC": 0.670787,
+  "nDCG@5": 0.538212,
+  "source_hash": "9f10d9fca361",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields+coarse_time; 8x rank ensemble\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "d5223a00b9bb",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670787,
+      "nDCG@5": 0.538212,
+      "primary": 0.6045
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670787,
+      "nDCG@5": 0.538212,
+      "primary": 0.6045
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670787,
+      "nDCG@5": 0.538212,
+      "primary": 0.6045
+    }
+  ],
+  "seconds": 346.6,
+  "verdict": "KEPT",
+  "delta": 0.003,
+  "tokens_in": 41742,
+  "tokens_out": 5449,
+  "tokens_cached": 29568,
+  "cost_usd": 0.099709,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 403.3,
+  "recovery_events": []
+}

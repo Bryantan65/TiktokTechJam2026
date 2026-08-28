@@ -1,0 +1,57 @@
+{
+  "iteration": 34,
+  "solution": "logs/record-run-6/solutions/034_prior_calib_blend.py",
+  "hypothesis": "improve 29: the current ensemble may smooth away high-confidence item/author priors, so add a readable 30% per-user rank correction from smoothed video/author/tab empirical positive-rate logits computed on train only.",
+  "parent": "29",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T21:52:52+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603187,
+  "GAUC": 0.669311,
+  "nDCG@5": 0.537064,
+  "source_hash": "a576ec00c491",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} FM+DeepFM 8x/8x + smoothed prior calibration pw=0.3\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e6e95f68b8f1",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 7.4e-05,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669217,
+      "nDCG@5": 0.53699,
+      "primary": 0.603103
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669346,
+      "nDCG@5": 0.53709,
+      "primary": 0.603218
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.66937,
+      "nDCG@5": 0.537111,
+      "primary": 0.60324
+    }
+  ],
+  "seconds": 684.5,
+  "verdict": "noise",
+  "delta": 0.001687,
+  "tokens_in": 95381,
+  "tokens_out": 7403,
+  "tokens_cached": 71168,
+  "cost_usd": 0.170147,
+  "model": "gpt-5.5",
+  "agent_iteration": 33,
+  "wall_seconds": 769.7,
+  "recovery_events": []
+}

@@ -1,0 +1,57 @@
+{
+  "iteration": 20,
+  "solution": "logs/record-run-6/solutions/020_watch_aux_score.py",
+  "hypothesis": "draft watch-time: use the trained auxiliary watch-ratio heads as a readable scoring component (main long-view logit + 0.35 * mean watch-threshold logits) before per-user rank ensembling; CWM motivation from survival/censoring watch-time modelling search.",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T19:27:56+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.596673,
+  "GAUC": 0.660735,
+  "nDCG@5": 0.53261,
+  "source_hash": "de438960e64e",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields+coarse_time; 8x rank ensemble; watch_beta=0.35\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "29f8257752e7",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 2e-06,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.660734,
+      "nDCG@5": 0.532607,
+      "primary": 0.59667
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.660736,
+      "nDCG@5": 0.532612,
+      "primary": 0.596674
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.660736,
+      "nDCG@5": 0.532612,
+      "primary": 0.596674
+    }
+  ],
+  "seconds": 377.8,
+  "verdict": "worse",
+  "delta": -0.004827,
+  "tokens_in": 56334,
+  "tokens_out": 9185,
+  "tokens_cached": 42496,
+  "cost_usd": 0.147693,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 500.5,
+  "recovery_events": []
+}

@@ -1,0 +1,57 @@
+{
+  "iteration": 23,
+  "solution": "logs/record-run-6/solutions/023_lgbm_fm_rank_correction.py",
+  "hypothesis": "improve 15: standalone LambdaRank was weak, but use it readably as a 30% per-user rank correction on top of the strong FM ensemble, with FM predictions included as features so trees learn residual top-order interactions rather than replacing FM.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T19:51:10+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603956,
+  "GAUC": 0.670354,
+  "nDCG@5": 0.537558,
+  "source_hash": "5fb830d7275a",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} 8x FM rank + 0.30 LGB rank correction\ntraining lightgbm rank correction ...\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "bf721ae0526f",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000185,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670065,
+      "nDCG@5": 0.537454,
+      "primary": 0.60376
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670427,
+      "nDCG@5": 0.537535,
+      "primary": 0.603981
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670569,
+      "nDCG@5": 0.537686,
+      "primary": 0.604128
+    }
+  ],
+  "seconds": 482.9,
+  "verdict": "KEPT",
+  "delta": 0.002456,
+  "tokens_in": 73764,
+  "tokens_out": 7755,
+  "tokens_cached": 54784,
+  "cost_usd": 0.152392,
+  "model": "gpt-5.5",
+  "agent_iteration": 22,
+  "wall_seconds": 570.2,
+  "recovery_events": []
+}

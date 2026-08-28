@@ -1,0 +1,57 @@
+{
+  "iteration": 15,
+  "solution": "logs/record-run-6/solutions/015_lgbm_lambdarank_hist.py",
+  "hypothesis": "draft model: standalone LightGBM LambdaRank grouped by user directly optimizes an nDCG-style ranking objective, using native categorical IDs plus the history features from the best branch (https://lightgbm.readthedocs.io/en/latest/Parameters.html#objective). This is a readable standalone test rather than a low-weight ensemble member.",
+  "parent": "12",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T19:01:42+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.598312,
+  "GAUC": 0.662981,
+  "nDCG@5": 0.533643,
+  "source_hash": "0637f2dc0fa4",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hist; lgbm_lambdarank\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "26f62de5db2c",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000192,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.662667,
+      "nDCG@5": 0.533755,
+      "primary": 0.598211
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.662772,
+      "nDCG@5": 0.533611,
+      "primary": 0.598192
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.663505,
+      "nDCG@5": 0.533563,
+      "primary": 0.598534
+    }
+  ],
+  "seconds": 112.3,
+  "verdict": "worse",
+  "delta": -0.003188,
+  "tokens_in": 83319,
+  "tokens_out": 3346,
+  "tokens_cached": 60928,
+  "cost_usd": 0.119901,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 155.9,
+  "recovery_events": []
+}

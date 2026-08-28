@@ -1,0 +1,57 @@
+{
+  "iteration": 8,
+  "solution": "logs/record-run-6/solutions/008_multitask_histfm.py",
+  "hypothesis": "draft multi-task: use auxiliary feedback heads (click/like/follow/comment/forward and watch-ratio tasks) as shared-representation regularisation, following multi-task recommender practice such as ESMM-style shared learning https://arxiv.org/abs/1804.07931.",
+  "parent": "6",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T18:43:09+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602884,
+  "GAUC": 0.669079,
+  "nDCG@5": 0.536688,
+  "source_hash": "2e14a77e9b8b",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwarning: 1138907 raw auxiliary rows missing for train\nwarning: 124900 raw auxiliary rows missing for valid\nwarning: 170584 raw auxiliary rows missing for test\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e7da3d79ea14",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000262,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668579,
+      "nDCG@5": 0.536674,
+      "primary": 0.602627
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669665,
+      "nDCG@5": 0.536636,
+      "primary": 0.603151
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668994,
+      "nDCG@5": 0.536753,
+      "primary": 0.602873
+    }
+  ],
+  "seconds": 87.9,
+  "verdict": "noise",
+  "delta": 0.001384,
+  "tokens_in": 59995,
+  "tokens_out": 6193,
+  "tokens_cached": 34304,
+  "cost_usd": 0.14331,
+  "model": "gpt-5.5",
+  "agent_iteration": 7,
+  "wall_seconds": 166.0,
+  "recovery_events": []
+}

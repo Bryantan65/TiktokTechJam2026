@@ -4,8 +4,8 @@ State, decisions, and what's next. **`CLAUDE.md` holds the task facts** — labe
 metrics, splits, baselines, dead ends. This file holds the *decisions* and the
 reasoning behind them, which is the part that's expensive to reconstruct.
 
-Last updated: 2026-08-28, after record run 4 converged. Code frozen at tag
-`record-run-4-code`. **Run 3 remains the submission candidate.**
+Last updated: 2026-08-28, after record run 6 converged. Code frozen at tag
+`record-run-6-code`. **Run 3 remains the submission candidate.**
 
 ---
 
@@ -26,8 +26,10 @@ Last updated: 2026-08-28, after record run 4 converged. Code frozen at tag
 ✅ **record run 3 (Zheng) — converged at +0.0040**
 ✅ compute caps aligned to the organisers' 50-iteration / 6 h rules
 ✅ **record run 4 — converged at +0.0031, did not displace run 3**
+✅ **record run 6 — converged at +0.0035, did not displace run 3**
+✅ GBDT capability disclosed; agent found LambdaRank unprompted and it lost
 ✅ README rewritten from the upstream CWM readme to the project's own
-⬜ **score on test — once. Never done. See Next.**
+⬜ **test score — Zheng ran it; the number is not recorded anywhere in the repo**
 ⬜ write the submission
 ```
 
@@ -48,8 +50,8 @@ Node 24 (`024_time_watch_userbalanced.py`) ties it at 0.605492 — the two are
 indistinguishable. Either is defensible as the submission; #27 is the recorded
 best by six decimal places.
 
-Spend across every run to date: ~5.5M in / 420k out, ~$12.5 (run 4 added
-$4.24 across 128 API calls, 74% of its input tokens served from cache).
+Spend across every run to date: ~7.8M in / 605k out, ~$16.8. Run 6 added $4.28
+across 131 API calls with 72% of its input tokens served from cache.
 
 ### What's built
 
@@ -86,7 +88,7 @@ which is stronger evidence than the final number alone. Runtime: 50 s numpy,
 
 **Target: valid 0.6035** (baseline 0.6015 + the official ε of 0.002).
 
-### The six runs
+### The seven runs
 
 Each archive is kept because it is the evidence behind a fix, and deleting them
 would leave the fixes looking like guesses.
@@ -100,6 +102,8 @@ would leave the fixes looking like guesses.
 | `logs/record-run-2/` | 9 experiments, converged at +0.0031 | the search policy working |
 | **`logs/record-run-3/`** | **30 experiments, converged at +0.0040** | **the result** |
 | `logs/record-run-4/` | 32 experiments, converged at +0.0031 | the search policy under test; run 3 held |
+| `logs/record-run-5/` | 28 experiments, **interrupted** at +0.0039 | Zheng's; not a valid autonomy run |
+| `logs/record-run-6/` | 34 experiments, converged at +0.0035 | the GBDT capability test; run 3 held |
 
 **shakedown-02** is the one worth reading. Twelve experiments, all inside
 direction 1, ending in five consecutive tweaks of one loss weight across a
@@ -202,6 +206,106 @@ identical-metrics guards flagged both, the agent read the flag and moved on, and
 `#22` scored 0.604073 immediately after `#21` failed. One `solution_recovered`
 event in `logs/record-run-4/events.jsonl`. **Zero crashes, zero API failures,
 zero human interventions.**
+
+**record-run-6** (2026-08-28, 5600X) is the capability test: `xgboost` and
+`lightgbm` were added to the environment and every hint pointing at them was
+removed from the prompt first. It converged on the rule, inside both caps.
+
+```
+best      #29  029_blend_fm_deepfm.py   0.605024 +/- 0.000129   +0.0035
+          GAUC 0.6720   nDCG@5 0.5381
+records   34 (30 scored, 2 failed, 2 no-op)   of the 50-iteration cap
+wall      18:30:52 -> 22:04:19 = 3 h 33 m     of the 6 h ceiling
+compute   180 min - 131 API calls - 8 web searches - $4.28
+stopped   converged, -0.000233 across the last 3 (it went backwards)
+failures  0 crashes, 3 recoveries, 0 human interventions
+```
+
+It needed 0.605993 to displace run 3 and fell **0.00097 short**. Run 3 stands.
+
+### What run 6 was for, and what it answered
+
+**Capability disclosure alone is sufficient — naming the method is not needed.**
+The agent found LightGBM on its own at `#15`, from nothing but `lightgbm 4.x` in
+the installed list, and cited the docs page it searched. This is the cleanest
+autonomy evidence we have: we made a thing possible, it decided the thing was
+worth trying.
+
+**Direct nDCG optimisation loses here.** That was the hypothesis behind adding
+the libraries at all.
+
+```
+#15  015_lgbm_lambdarank_hist    0.598312 +/- 0.000192   -0.0032   standalone
+#23  023_lgbm_fm_rank_correction 0.603956 +/- 0.000185   +0.0025   as a rank correction on FM
+```
+
+The implementation is competent — `objective: lambdarank`, grouped by user,
+`label_gain: [0, 1]` correct for binary relevance, native categoricals, history
+features from the best branch. Its one weakness is `num_boost_round=260` fixed
+with no early stopping. Both rows carry real error bars, so neither number is
+noise. LambdaRank does not beat a bagged FM on this data.
+
+**A fourth independent search landed in the same band.** Four runs, four
+mechanism families, none able to read another's ledger:
+
+```
+record-run-3   0.605493   BPR ensemble + watch-time weighting
+record-run-5   0.605368   mixed tab/hour ensembles       (interrupted)
+record-run-6   0.605024   FM rank ensemble + DeepFM blend
+record-run-4   0.604615   same-user sampled softmax
+                          mean 0.605002, sd 0.000498
+```
+
+0.610 is **ten standard deviations** above that mean. It is not a matter of more
+draws; the distribution has no mass there. Combined with the ceiling analysis
+(non-personalised half-fitted ceiling 0.6048, pair coverage 1.62%) this is the
+saturation case, and run 6 is the strongest single piece of it because the
+method it tested was the one most likely to break through.
+
+**Listwise softmax failed a sixth time**, `#3` at -0.0049. Six implementations
+across five runs that cannot see each other's ledgers: -0.0026, -0.0051, -0.0056,
+-0.0020, -0.0049, -0.0049.
+
+**The best reasoning artifact of any run is `#29`'s hypothesis:**
+
+> *"DeepFM raised GAUC but hurt nDCG@5 versus the FM rank ensemble, so blend it
+> readably at 65% with the prior FM rank+margin ensemble to keep the high-order
+> signal while recovering top-5 ordering."*
+
+It read the two metrics separately, worked out which model was better at which,
+and combined them at a readable weight. That is only possible because the ledger
+shows GAUC and nDCG@5 as separate columns rather than the mean.
+
+### Three harness defects run 6 exposed
+
+**1. The 3-seed measurement can silently measure nothing.** Solutions like `016`
+hard-code `seed_bag = [0, 1, 2]` internally and ignore the harness's `--seed`,
+so all three seeds produce byte-identical predictions and the row reports
+`+/- 0.000000`. Six consecutive bests (0.603731 -> 0.604500) carry no error bar
+at all, and the steps between them are smaller than the seed noise of every model
+in the run that *did* vary. We paid 3x the compute for one number and presented
+it as maximally stable. **Fix: compare `predictions_hash` across seeds; if they
+match, skip the remaining seeds and label the row `deterministic`.**
+
+**2. The agent is blind to cost, and it cost an experiment.** Its ledger has no
+time column. Experiment cost grew from 82 s (single model) to 526 s (8-member
+bag) as it enlarged the ensemble — roughly +42 s per member, x3 seeds = 24 model
+trainings per experiment. At `#31` it proposed adding same-user BPR pressure
+inside DeepFM, a good idea for this metric, and died on the 15-minute timeout
+with no way to know it was already at 60% of the limit. The prompt already tells
+it *"a cheap decisive experiment beats an expensive ambiguous one"* — advice it
+currently cannot act on. **Fix: add a `secs` column to `_ledger_table()`.**
+
+**3. The convergence floor cuts both ways.** We raised it to 30 to stop
+premature stopping. Run 6 found DeepFM at `#28`-`#29` with three experiments
+left, then converged. The floor that saved run 1 truncated run 6.
+
+Also worth noting: experiments 19-26 re-trained all 24 models from scratch to
+test *combination rules* over predictions that already existed — `power_rankavg`,
+`rank_margin_blend`, `margin50_rank_blend`. Caching predictions between
+experiments would remove that waste, but it breaks the property that any archived
+solution re-runs standalone and reproduces its number, which is doing real work
+for the submission's credibility. Not recommended.
 
 ### What is actually demonstrated
 
@@ -1212,11 +1316,14 @@ run 4 is; re-running the same agent to fish for a good draw is not.
   record-run-1 found time features gave nothing on plain BPR. If a further run
   reproduces it on top of an ensemble, that is an interaction worth stating; one
   observation is not.
-- ~~The search policy has been exercised exactly once.~~ **Three times now** —
-  runs 2, 3 and 4 all produced real trees, run 4 the deepest (12 levels). The
-  draft/improve/debug policy reproduces. The *standalone-before-blending* addition
-  has been exercised once, in run 4, and appears to have cost score; see item 7
-  under Next.
+- ~~The search policy has been exercised exactly once.~~ **Four times now** —
+  runs 2, 3, 4 and 6 all produced real trees. The draft/improve/debug policy
+  reproduces. Run 6's shape: four children off `#29`, three each off `#1`, `#8`
+  and `#12`.
+- **New, from run 6:** two harness defects worth fixing before any run 7 — the
+  agent cannot see experiment cost, and identical per-seed predictions are
+  reported as `+/- 0.000000` rather than flagged as unmeasured. Both are written
+  up under *Three harness defects run 6 exposed*.
 - **A solution already in the ledger cannot be re-measured in place.** The
   source-hash guard returns `duplicate`. Fine for a fresh ledger; use
   `harness/seedsweep.py` (which writes nothing) to re-measure anything old.
@@ -1225,10 +1332,13 @@ run 4 is; re-running the same agent to fish for a good draw is not.
 - **`_budget_check()` counts every ledger row, not this session's.** Fine for a
   fresh-ledger record run; misleading if you ever want "20 more experiments" on
   top of an existing ledger.
-- **Test has never been scored.** Everything claimed here is validation-only.
-  Until that one run happens, transfer is an assumption. With no validation
-  leaderboard (organiser Q&A), this single check is the only ground truth
-  available before submission.
+- **The test score exists but is not recorded.** Zheng ran `harness/score_test.py`
+  against the `submission.csv` dated 2026-08-28 11:09; the number lives in his
+  terminal and nowhere in the repo. Everything written here is still
+  validation-only. **Get the figure and commit it** — with no validation
+  leaderboard (organiser Q&A) it is the only ground truth we have, and an
+  unrecorded measurement cannot be cited in the writeup. Note also that the
+  11:09 submission predates runs 5 and 6, so confirm which solution produced it.
 - **The submission artifact does not exist yet.** The tooling is built and
   validated on valid; nobody has produced `submission.csv`.
 - **Spinner rendering is only fixed for width.** If the terminal is *resized*

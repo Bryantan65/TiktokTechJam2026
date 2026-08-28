@@ -1,0 +1,57 @@
+{
+  "iteration": 10,
+  "solution": "logs/record-run-6/solutions/010_multitask_seqaux.py",
+  "hypothesis": "debug 8: key-based raw alignment failed and produced all-zero auxiliaries, so follow the data contract directly: concatenate the two raw log files in order and slice auxiliary targets by train/valid/test row counts.",
+  "parent": "8",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T18:47:40+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602523,
+  "GAUC": 0.668448,
+  "nDCG@5": 0.536599,
+  "source_hash": "4ad8bd85da07",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "5ccdf76eb8e2",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000787,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.666976,
+      "nDCG@5": 0.536625,
+      "primary": 0.6018
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669911,
+      "nDCG@5": 0.536813,
+      "primary": 0.603362
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668458,
+      "nDCG@5": 0.536358,
+      "primary": 0.602408
+    }
+  ],
+  "seconds": 82.2,
+  "verdict": "noise",
+  "delta": 0.001023,
+  "tokens_in": 49237,
+  "tokens_out": 4800,
+  "tokens_cached": 32640,
+  "cost_usd": 0.105813,
+  "model": "gpt-5.5",
+  "agent_iteration": 9,
+  "wall_seconds": 131.0,
+  "recovery_events": []
+}

@@ -1,0 +1,57 @@
+{
+  "iteration": 14,
+  "solution": "logs/record-run-6/solutions/014_order_coarse_time.py",
+  "hypothesis": "debug 13: key-based raw matching was still a no-op because nearly all rows missed; follow the data contract and align hour/block by raw CSV row order instead. I also checked LambdaRank as a possible next direction (https://lightgbm.readthedocs.io/en/latest/Parameters.html#objective), but first this undiagnosed no-op must be resolved.",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T18:59:20+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602255,
+  "GAUC": 0.667943,
+  "nDCG@5": 0.536567,
+  "source_hash": "88913196ef75",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+order_coarse_time\nwarning: 1138907 raw auxiliary rows missing for train\nwarning: 124900 raw auxiliary rows missing for valid\nwarning: 170584 raw auxiliary rows missing for test\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "fbe8b5a44e5f",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000683,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.66823,
+      "nDCG@5": 0.536546,
+      "primary": 0.602388
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668497,
+      "nDCG@5": 0.537227,
+      "primary": 0.602862
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667102,
+      "nDCG@5": 0.535929,
+      "primary": 0.601515
+    }
+  ],
+  "seconds": 98.2,
+  "verdict": "noise",
+  "delta": 0.000755,
+  "tokens_in": 104238,
+  "tokens_out": 6799,
+  "tokens_cached": 80000,
+  "cost_usd": 0.168585,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 180.2,
+  "recovery_events": []
+}

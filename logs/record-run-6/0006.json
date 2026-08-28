@@ -1,0 +1,57 @@
+{
+  "iteration": 6,
+  "solution": "logs/record-run-6/solutions/006_histfm.py",
+  "hypothesis": "draft sequence: add DIN-inspired user behaviour history features (target-aware past positives for author/video/tab/duration) to the FM, following the idea of attention over historical behaviours from DIN https://arxiv.org/abs/1706.06978.",
+  "parent": "1",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T18:38:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601923,
+  "GAUC": 0.667585,
+  "nDCG@5": 0.53626,
+  "source_hash": "6146aafe9112",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "9a2c11c75710",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000768,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667212,
+      "nDCG@5": 0.536032,
+      "primary": 0.601622
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668921,
+      "nDCG@5": 0.536669,
+      "primary": 0.602795
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.666623,
+      "nDCG@5": 0.536078,
+      "primary": 0.601351
+    }
+  ],
+  "seconds": 66.2,
+  "verdict": "noise",
+  "delta": 0.000423,
+  "tokens_in": 62276,
+  "tokens_out": 5972,
+  "tokens_cached": 45568,
+  "cost_usd": 0.124274,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 149.7,
+  "recovery_events": []
+}

@@ -1,0 +1,57 @@
+{
+  "iteration": 16,
+  "solution": "logs/record-run-6/solutions/016_ensemble3_time_histfm.py",
+  "hypothesis": "improve 12: the best single FM is seed-stable but still wobbles in top-5 ranks; average three full independently seeded node-12 models to reduce ranking variance. This is not a low-weight new mechanism: the incumbent mechanism is 100% of the prediction, just bagged.",
+  "parent": "12",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T19:04:54+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603731,
+  "GAUC": 0.669815,
+  "nDCG@5": 0.537648,
+  "source_hash": "e9b12d2cf61c",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+coarse_time; 3x ensemble\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "248a88b90c05",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669815,
+      "nDCG@5": 0.537648,
+      "primary": 0.603731
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669815,
+      "nDCG@5": 0.537648,
+      "primary": 0.603731
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669815,
+      "nDCG@5": 0.537648,
+      "primary": 0.603731
+    }
+  ],
+  "seconds": 169.8,
+  "verdict": "KEPT",
+  "delta": 0.002231,
+  "tokens_in": 69323,
+  "tokens_out": 6842,
+  "tokens_cached": 51712,
+  "cost_usd": 0.138303,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 250.4,
+  "recovery_events": []
+}

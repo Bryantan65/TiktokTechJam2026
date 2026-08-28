@@ -1,0 +1,58 @@
+{
+  "iteration": 9,
+  "solution": "logs/record-run-6/solutions/009_multitask_auxkey5.py",
+  "hypothesis": "debug 8: auxiliary targets were nearly all zero because the join key included raw duration_ms while load() appears to bucket that field; align by (date,user,video,author,tab) and preserve duplicate order with per-key deques.",
+  "parent": "8",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T18:45:29+08:00",
+  "status": "no-op",
+  "error": "no-op: identical GAUC and nDCG@5 as iteration 8 (008_multitask_histfm.py). Different code, same model - nothing was actually tested. Common cause: the new method ran but a \"keep the best checkpoint\" rule discarded its result, so the final model is the parent. Check that your change reaches the model that gets saved. This is NOT evidence about the technique.",
+  "valid_primary": 0.602884,
+  "GAUC": 0.669079,
+  "nDCG@5": 0.536688,
+  "source_hash": "ff2d35022bd5",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwarning: 1138907 raw auxiliary rows missing for train\nwarning: 124900 raw auxiliary rows missing for valid\nwarning: 170584 raw auxiliary rows missing for test\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "7398e74b098c",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000262,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668579,
+      "nDCG@5": 0.536674,
+      "primary": 0.602627
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669665,
+      "nDCG@5": 0.536636,
+      "primary": 0.603151
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668994,
+      "nDCG@5": 0.536753,
+      "primary": 0.602873
+    }
+  ],
+  "no_op_twin": 8,
+  "seconds": 83.0,
+  "verdict": "no-op",
+  "delta": 0.001384,
+  "tokens_in": 61478,
+  "tokens_out": 4877,
+  "tokens_cached": 43520,
+  "cost_usd": 0.115425,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 132.7,
+  "recovery_events": []
+}

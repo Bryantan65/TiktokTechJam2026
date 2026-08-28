@@ -1,0 +1,57 @@
+{
+  "iteration": 4,
+  "solution": "logs/record-run-6/solutions/004_hybrid_bce_listwise_fm.py",
+  "hypothesis": "improve 3: pure per-user softmax dropped single-class users and hurt calibration, so keep BCE on all rows and add a small alpha=0.10 listwise term only for mixed users. This checks whether ranking pressure helps when the baseline signal is preserved.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T18:33:50+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.598079,
+  "GAUC": 0.662567,
+  "nDCG@5": 0.533591,
+  "source_hash": "bedb9e20e610",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "6f9c1e48f39d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00045,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.66317,
+      "nDCG@5": 0.533993,
+      "primary": 0.598581
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.662488,
+      "nDCG@5": 0.533394,
+      "primary": 0.597941
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.662043,
+      "nDCG@5": 0.533385,
+      "primary": 0.597714
+    }
+  ],
+  "seconds": 54.0,
+  "verdict": "worse",
+  "delta": -0.003421,
+  "tokens_in": 55460,
+  "tokens_out": 3387,
+  "tokens_cached": 41472,
+  "cost_usd": 0.089576,
+  "model": "gpt-5.5",
+  "agent_iteration": 3,
+  "wall_seconds": 96.8,
+  "recovery_events": []
+}

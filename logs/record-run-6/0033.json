@@ -1,0 +1,57 @@
+{
+  "iteration": 33,
+  "solution": "logs/record-run-6/solutions/033_deepfm_nodropout_blend.py",
+  "hypothesis": "improve 29: DeepFM's gain is real but the ensemble is already averaging 8 seeds, so remove the 0.10 dropout from the deep tower to reduce underfitting while keeping the exact 65% FM/DeepFM rank+margin blend.",
+  "parent": "29",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T21:39:54+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604791,
+  "GAUC": 0.671657,
+  "nDCG@5": 0.537925,
+  "source_hash": "b2954e112f93",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} FM+DeepFM-no-dropout 8x/8x rank+margin blend dw=0.65\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "50604f363b2e",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000141,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671552,
+      "nDCG@5": 0.537977,
+      "primary": 0.604765
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671943,
+      "nDCG@5": 0.537943,
+      "primary": 0.604943
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671475,
+      "nDCG@5": 0.537854,
+      "primary": 0.604665
+    }
+  ],
+  "seconds": 691.6,
+  "verdict": "KEPT",
+  "delta": 0.003291,
+  "tokens_in": 94937,
+  "tokens_out": 5541,
+  "tokens_cached": 54784,
+  "cost_usd": 0.183185,
+  "model": "gpt-5.5",
+  "agent_iteration": 32,
+  "wall_seconds": 751.2,
+  "recovery_events": []
+}

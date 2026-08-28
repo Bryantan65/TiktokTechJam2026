@@ -1,0 +1,57 @@
+{
+  "iteration": 17,
+  "solution": "logs/record-run-6/solutions/017_ensemble5_time_histfm.py",
+  "hypothesis": "improve 16: the 3-model bag beat the target, so expand the same readable incumbent-only ensemble to five seeds to reduce residual rank variance further. No new mechanism is diluted; only the seed bag size changes.",
+  "parent": "16",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T19:08:35+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603955,
+  "GAUC": 0.670249,
+  "nDCG@5": 0.537661,
+  "source_hash": "cf87018d0ad5",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+coarse_time; 5x ensemble\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "21c2f07b4240",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670249,
+      "nDCG@5": 0.537661,
+      "primary": 0.603955
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670249,
+      "nDCG@5": 0.537661,
+      "primary": 0.603955
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670249,
+      "nDCG@5": 0.537661,
+      "primary": 0.603955
+    }
+  ],
+  "seconds": 241.6,
+  "verdict": "KEPT",
+  "delta": 0.002455,
+  "tokens_in": 50188,
+  "tokens_out": 5372,
+  "tokens_cached": 20352,
+  "cost_usd": 0.138486,
+  "model": "gpt-5.5",
+  "agent_iteration": 16,
+  "wall_seconds": 292.2,
+  "recovery_events": []
+}

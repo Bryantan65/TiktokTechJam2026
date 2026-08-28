@@ -1,0 +1,58 @@
+{
+  "iteration": 13,
+  "solution": "logs/record-run-6/solutions/013_key5_coarse_time.py",
+  "hypothesis": "improve 12: node 12 showed the time reader missed almost every row; align coarse hour/block fields with a duplicate-preserving (date,user,video,author,tab) key while holding the auxiliary-target path unchanged.",
+  "parent": "12",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T18:56:12+08:00",
+  "status": "no-op",
+  "error": "no-op: identical GAUC and nDCG@5 as iteration 12 (012_debug_time_coarse.py). Different code, same model - nothing was actually tested. Common cause: the new method ran but a \"keep the best checkpoint\" rule discarded its result, so the final model is the parent. Check that your change reaches the model that gets saved. This is NOT evidence about the technique.",
+  "valid_primary": 0.603154,
+  "GAUC": 0.669186,
+  "nDCG@5": 0.537122,
+  "source_hash": "000ac9ec359c",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+key5_coarse_time\nwarning: 1138907 raw time rows missing for train\nwarning: 124900 raw time rows missing for valid\nwarning: 170584 raw time rows missing for test\nwarning: 1138907 raw auxiliary rows missing for train\nwarning: 124900 raw auxiliary rows missing for valid\nwarning: 170584 raw auxiliary rows missing for test\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "6983eeecdab9",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00036,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669147,
+      "nDCG@5": 0.537229,
+      "primary": 0.603188
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669586,
+      "nDCG@5": 0.537404,
+      "primary": 0.603495
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668824,
+      "nDCG@5": 0.536732,
+      "primary": 0.602778
+    }
+  ],
+  "no_op_twin": 12,
+  "seconds": 105.9,
+  "verdict": "no-op",
+  "delta": 0.001654,
+  "tokens_in": 92318,
+  "tokens_out": 8040,
+  "tokens_cached": 71424,
+  "cost_usd": 0.168347,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 201.2,
+  "recovery_events": []
+}

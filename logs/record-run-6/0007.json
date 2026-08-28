@@ -1,0 +1,57 @@
+{
+  "iteration": 7,
+  "solution": "logs/record-run-6/solutions/007_histfm_recent.py",
+  "hypothesis": "improve 6: aggregate user histories nudged nDCG, so add DIN-style recent target-aware sequence summaries from the user's last positive/impression events and let a small MLP learn nonlinear history effects.",
+  "parent": "6",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T18:40:23+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601705,
+  "GAUC": 0.667564,
+  "nDCG@5": 0.535846,
+  "source_hash": "35bb805fccee",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "5f2a6e3111b3",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000578,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667248,
+      "nDCG@5": 0.535414,
+      "primary": 0.601331
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668467,
+      "nDCG@5": 0.536276,
+      "primary": 0.602371
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.666978,
+      "nDCG@5": 0.535849,
+      "primary": 0.601414
+    }
+  ],
+  "seconds": 90.4,
+  "verdict": "noise",
+  "delta": 0.000205,
+  "tokens_in": 60550,
+  "tokens_out": 5021,
+  "tokens_cached": 26496,
+  "cost_usd": 0.148593,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 144.0,
+  "recovery_events": []
+}

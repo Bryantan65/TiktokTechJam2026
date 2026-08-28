@@ -1,0 +1,57 @@
+{
+  "iteration": 22,
+  "solution": "logs/record-run-6/solutions/022_power_rankavg.py",
+  "hypothesis": "improve 19: nDCG@5 is top-heavy, so make the successful per-user rank ensemble more top-sensitive by averaging squared normalized ranks instead of linear ranks; related to LambdaRank/NDCG top-position weighting (https://www.microsoft.com/en-us/research/publication/from-ranknet-to-lambdarank-to-lambdamart-an-overview/).",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T19:42:58+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604502,
+  "GAUC": 0.670861,
+  "nDCG@5": 0.538142,
+  "source_hash": "89332ba1286a",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields+coarse_time; 8x power-rank ensemble gamma=2.0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "4fc9ca9c1dea",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670861,
+      "nDCG@5": 0.538142,
+      "primary": 0.604502
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670861,
+      "nDCG@5": 0.538142,
+      "primary": 0.604502
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670861,
+      "nDCG@5": 0.538142,
+      "primary": 0.604502
+    }
+  ],
+  "seconds": 403.6,
+  "verdict": "KEPT",
+  "delta": 0.003002,
+  "tokens_in": 87632,
+  "tokens_out": 4891,
+  "tokens_cached": 67072,
+  "cost_usd": 0.133846,
+  "model": "gpt-5.5",
+  "agent_iteration": 21,
+  "wall_seconds": 462.2,
+  "recovery_events": []
+}

@@ -1,0 +1,57 @@
+{
+  "iteration": 24,
+  "solution": "logs/record-run-6/solutions/024_bpr_finetune_rankavg.py",
+  "hypothesis": "improve 5: pure BPR underperformed, so test it as a small same-user BPR fine-tune after the strong BCE/multitask checkpoint and force the saved model to come from the pairwise phase, then use the successful 8-seed power-rank ensemble.",
+  "parent": "5",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T20:00:12+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604443,
+  "GAUC": 0.67087,
+  "nDCG@5": 0.538016,
+  "source_hash": "cfeef95bf13e",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields+coarse_time; 8x BPR-finetuned power-rank ensemble gamma=2.0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "3c2e0014ba91",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67087,
+      "nDCG@5": 0.538016,
+      "primary": 0.604443
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67087,
+      "nDCG@5": 0.538016,
+      "primary": 0.604443
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67087,
+      "nDCG@5": 0.538016,
+      "primary": 0.604443
+    }
+  ],
+  "seconds": 526.0,
+  "verdict": "KEPT",
+  "delta": 0.002943,
+  "tokens_in": 60278,
+  "tokens_out": 6067,
+  "tokens_cached": 41856,
+  "cost_usd": 0.127653,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 586.5,
+  "recovery_events": []
+}

@@ -1,0 +1,57 @@
+{
+  "iteration": 12,
+  "solution": "logs/record-run-6/solutions/012_debug_time_coarse.py",
+  "hypothesis": "debug 11: the time draft likely overfit high-cardinality date/day fields or misaligned raw rows, so use duplicate-preserving key alignment and only coarse hour/block categorical fields.",
+  "parent": "11",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T18:52:49+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603154,
+  "GAUC": 0.669186,
+  "nDCG@5": 0.537122,
+  "source_hash": "94c93c12e447",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+coarse_time\nwarning: 1138907 raw time rows missing for train\nwarning: 124900 raw time rows missing for valid\nwarning: 170584 raw time rows missing for test\nwarning: 1138907 raw auxiliary rows missing for train\nwarning: 124900 raw auxiliary rows missing for valid\nwarning: 170584 raw auxiliary rows missing for test\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "9302fd15e916",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00036,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669147,
+      "nDCG@5": 0.537229,
+      "primary": 0.603188
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669586,
+      "nDCG@5": 0.537404,
+      "primary": 0.603495
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668824,
+      "nDCG@5": 0.536732,
+      "primary": 0.602778
+    }
+  ],
+  "seconds": 107.3,
+  "verdict": "noise",
+  "delta": 0.001654,
+  "tokens_in": 55914,
+  "tokens_out": 5557,
+  "tokens_cached": 36736,
+  "cost_usd": 0.121883,
+  "model": "gpt-5.5",
+  "agent_iteration": 11,
+  "wall_seconds": 160.7,
+  "recovery_events": []
+}

@@ -1,0 +1,57 @@
+{
+  "iteration": 25,
+  "solution": "logs/record-run-6/solutions/025_rank_margin_blend.py",
+  "hypothesis": "improve 22: squared ranks helped nDCG but discard score-margin confidence, so blend 30% per-user z-scored mean-logit margin back into the successful power-rank ensemble to break rank ties and recover GAUC without making a low-weight new-mechanism ensemble.",
+  "parent": "22",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T20:10:21+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604534,
+  "GAUC": 0.670891,
+  "nDCG@5": 0.538177,
+  "source_hash": "91187c188356",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields+coarse_time; 8x rank+margin blend gamma=2.0 mw=0.3\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "192e6333d042",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670891,
+      "nDCG@5": 0.538177,
+      "primary": 0.604534
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670891,
+      "nDCG@5": 0.538177,
+      "primary": 0.604534
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670891,
+      "nDCG@5": 0.538177,
+      "primary": 0.604534
+    }
+  ],
+  "seconds": 464.1,
+  "verdict": "KEPT",
+  "delta": 0.003034,
+  "tokens_in": 114049,
+  "tokens_out": 6811,
+  "tokens_cached": 91904,
+  "cost_usd": 0.169425,
+  "model": "gpt-5.5",
+  "agent_iteration": 24,
+  "wall_seconds": 545.6,
+  "recovery_events": []
+}

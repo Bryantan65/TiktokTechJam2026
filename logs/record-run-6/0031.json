@@ -1,0 +1,32 @@
+{
+  "iteration": 31,
+  "solution": "logs/record-run-6/solutions/031_deepfm_bce_bpr_mix.py",
+  "hypothesis": "improve 29: DeepFM is the best readable mechanism but is still trained pointwise; add a small same-user BPR term inside each minibatch so the saved checkpoints directly optimize within-user ordering without replacing the strong BCE+aux objective.",
+  "parent": "29",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T21:09:32+08:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "0af9df6a3015",
+  "seeds_completed": 0,
+  "seconds": 902.1,
+  "verdict": "failed",
+  "tokens_in": 76985,
+  "tokens_out": 6487,
+  "tokens_cached": 56832,
+  "cost_usd": 0.143669,
+  "model": "gpt-5.5",
+  "agent_iteration": 30,
+  "wall_seconds": 971.0,
+  "recovery_events": []
+}

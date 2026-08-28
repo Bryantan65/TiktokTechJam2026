@@ -1,0 +1,57 @@
+{
+  "iteration": 11,
+  "solution": "logs/record-run-6/solutions/011_time_histfm.py",
+  "hypothesis": "draft time: add temporal context from raw hourmin/date as categorical FM fields (time-aware recommendation motivation: Koren temporal dynamics https://dl.acm.org/doi/10.1145/1721654.1721677), branching from the best history+aux model so hour/date can interact with user/video/tab.",
+  "parent": "8",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T18:50:13+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.594391,
+  "GAUC": 0.657389,
+  "nDCG@5": 0.531393,
+  "source_hash": "bc49cf282f79",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "670f2a484f87",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.001924,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.660041,
+      "nDCG@5": 0.532837,
+      "primary": 0.596439
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.654914,
+      "nDCG@5": 0.530328,
+      "primary": 0.592621
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.657212,
+      "nDCG@5": 0.531014,
+      "primary": 0.594113
+    }
+  ],
+  "seconds": 101.9,
+  "verdict": "worse",
+  "delta": -0.007109,
+  "tokens_in": 63375,
+  "tokens_out": 6060,
+  "tokens_cached": 44544,
+  "cost_usd": 0.129949,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 172.8,
+  "recovery_events": []
+}

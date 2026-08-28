@@ -183,9 +183,17 @@ multi-task auxiliary heads, sequence attention and extra capacity each added
 nothing measurable on top of a pairwise loss — five directions, all correctly
 implemented, all inside their own seed spread.
 
-**Listwise softmax is wrong for this data.** Four independently written
-implementations, across four runs that could not see each other's ledgers,
-scored **-0.0026, -0.0051, -0.0056 and -0.0020**. A softmax over a user's
+**Direct nDCG optimisation does not beat a bagged FM here.** We added `xgboost`
+and `lightgbm` to the environment and removed every hint pointing at them from
+the prompt. The agent found LightGBM on its own, wrote a competent LambdaRank —
+grouped by user, `label_gain: [0, 1]`, native categoricals — and measured it at
+**-0.0032** standalone, **+0.0025** reused as a rank correction on top of the FM.
+Both with real error bars. The single most plausible untried direction, tested
+properly, loses.
+
+**Listwise softmax is wrong for this data.** Six independently written
+implementations, across five runs that could not see each other's ledgers,
+scored **-0.0026, -0.0051, -0.0056, -0.0020, -0.0049 and -0.0049**. A softmax over a user's
 impressions assumes exactly one relevant item, but this dataset is 33% positive,
 so a user's positives compete against each other and the loss penalises ranking
 the second one highly.
@@ -212,6 +220,20 @@ official baseline                       0.6016
 itself, so it is optimistic — estimate the rates from half the data and it falls
 to 0.6048. The honest non-personalised ceiling is somewhere in 0.605-0.62, which
 is to say we are at or near it.)
+
+Four independent searches make the same point empirically. Four runs, four
+mechanism families, none able to read another's ledger:
+
+```
+BPR ensemble + watch-time weighting      0.605493
+mixed tab/hour ensembles                 0.605368
+FM rank ensemble + DeepFM blend          0.605024
+same-user sampled softmax                0.604615
+                            mean 0.605002, sd 0.000498
+```
+
+0.610 sits ten standard deviations above that mean. This is not a search that
+needs more attempts; it is a task that has run out of signal.
 
 The gap between 0.6055 and 0.8484 looks like room. It is not. **Only 1.62% of
 validation rows involve a (user, video) pair the model has ever seen in
