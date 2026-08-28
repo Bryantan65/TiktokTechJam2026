@@ -71,54 +71,98 @@ def syntax_check(path):
         return 'cannot read solution: %s' % exc
 
 
-def _run_one(solution, split, data_dir, seed, timeout, n_rows):
-    """Execute the solution once. Returns (scores, error, stdout, stderr).
+def _seed_env(n_parallel):
+    """Environment for a solution subprocess.
 
-    scores is None whenever error is set. Every failure mode a solution can
-    reach is converted to a string here, so the caller never has to catch.
+    Solutions find the starter kit relative to their own file, which stops
+    resolving once a run is archived into logs/<run>/solutions/. PYTHONPATH
+    keeps an archived solution runnable wherever it lives, and grants no access
+    it did not already have.
+
+    Thread count matters when seeds run concurrently. Torch defaults to half the
+    cores per process, so three concurrent runs would ask for 3x that and
+    thrash. Dividing the machine between them is what turns concurrency into
+    speedup: measured 2.10x for 3 seeds on 12 cores.
     """
-    out_fd, out_path = tempfile.mkstemp(suffix='.npy')
-    os.close(out_fd)
+    env = dict(os.environ)
+    env['PYTHONPATH'] = KIT + os.pathsep + env.get('PYTHONPATH', '')
+    per = max(1, (os.cpu_count() or 4) // max(1, n_parallel))
+    for var in ('OMP_NUM_THREADS', 'MKL_NUM_THREADS', 'OPENBLAS_NUM_THREADS',
+                'NUMEXPR_NUM_THREADS'):
+        env.setdefault(var, str(per))
+    return env
+
+
+def _collect(proc, out_path, seed, n_rows, stdout, stderr):
+    """Turn a finished subprocess into (scores, error, stdout, stderr)."""
+    if proc.returncode != 0:
+        return None, 'exited %d (seed %d)' % (proc.returncode, seed), \
+               stdout, stderr
     try:
-        cmd = [sys.executable, solution, '--data_dir', data_dir,
-               '--split', split, '--out', out_path, '--seed', str(seed)]
-        # Solutions find the starter kit relative to their own file, which stops
-        # resolving once a run is archived into logs/<run>/solutions/. Putting
-        # the kit on PYTHONPATH keeps an archived solution runnable wherever it
-        # lives. It grants no access the solution did not already have.
-        env = dict(os.environ)
-        env['PYTHONPATH'] = KIT + os.pathsep + env.get('PYTHONPATH', '')
-        try:
-            proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
-                                  timeout=timeout, env=env)
-        except subprocess.TimeoutExpired:
-            return None, 'timeout after %ds (seed %d)' % (timeout, seed), '', ''
+        scores = np.load(out_path)
+    except Exception as exc:                           # noqa: BLE001
+        return None, 'could not read predictions (seed %d): %s: %s' % (
+            seed, type(exc).__name__, exc), stdout, stderr
+    scores = np.asarray(scores, dtype=np.float64).ravel()
+    if len(scores) != n_rows:
+        return None, ('wrote %d scores, split has %d rows (seed %d)'
+                      % (len(scores), n_rows, seed)), stdout, stderr
+    if not np.isfinite(scores).all():
+        return None, 'predictions contain NaN or Inf (seed %d)' % seed, \
+               stdout, stderr
+    return scores, None, stdout, stderr
 
-        stdout = '\n'.join(proc.stdout.strip().splitlines()[-15:])
-        stderr = '\n'.join(proc.stderr.strip().splitlines()[-25:])
-        if proc.returncode != 0:
-            return None, 'exited %d (seed %d)' % (proc.returncode, seed), \
-                   stdout, stderr
 
-        try:
-            scores = np.load(out_path)
-        except Exception as exc:                       # noqa: BLE001
-            return None, 'could not read predictions (seed %d): %s: %s' % (
-                seed, type(exc).__name__, exc), stdout, stderr
+def _run_seeds(solution, split, data_dir, seeds, timeout, n_rows):
+    """Run every seed CONCURRENTLY. Returns a list of (scores, err, out, err).
 
-        scores = np.asarray(scores, dtype=np.float64).ravel()
-        if len(scores) != n_rows:
-            return None, ('wrote %d scores, split has %d rows (seed %d)'
-                          % (len(scores), n_rows, seed)), stdout, stderr
-        if not np.isfinite(scores).all():
-            return None, 'predictions contain NaN or Inf (seed %d)' % seed, \
-                   stdout, stderr
-        return scores, None, stdout, stderr
+    The seeds are independent by construction - same code, different RNG - so
+    running them one after another wastes most of the machine. record-run-3 was
+    91% training compute and took 6 h 29 m against a 6 h ceiling; this is the
+    single change that brings a run back inside it.
+
+    Every failure mode is still converted to a string per seed, so the caller
+    never has to catch, and a seed that fails is reported as that seed rather
+    than silently dropped.
+    """
+    env = _seed_env(len(seeds))
+    procs, paths = [], []
+    try:
+        for s in seeds:
+            fd, path = tempfile.mkstemp(suffix='.npy')
+            os.close(fd)
+            paths.append(path)
+            procs.append(subprocess.Popen(
+                [sys.executable, solution, '--data_dir', data_dir,
+                 '--split', split, '--out', path, '--seed', str(s)],
+                cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, env=env))
+
+        results = []
+        deadline = time.time() + timeout
+        for proc, path, s in zip(procs, paths, seeds):
+            try:
+                out, err = proc.communicate(timeout=max(1, deadline - time.time()))
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.communicate()
+                results.append((None, 'timeout after %ds (seed %d)'
+                                % (timeout, s), '', ''))
+                continue
+            results.append(_collect(
+                proc, path, s, n_rows,
+                '\n'.join((out or '').strip().splitlines()[-15:]),
+                '\n'.join((err or '').strip().splitlines()[-25:])))
+        return results
     finally:
-        try:
-            os.remove(out_path)
-        except OSError:
-            pass
+        for proc in procs:
+            if proc.poll() is None:      # a sibling failed; do not leave orphans
+                proc.kill()
+        for path in paths:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
 
 def run_experiment(solution, hypothesis='', parent=None, by='agent',
@@ -193,9 +237,9 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
     labels = [r[6] for r in rows]
 
     per_seed = []
-    for s in seeds:
-        scores, err, stdout, stderr = _run_one(solution, split, data_dir, s,
-                                               timeout, len(rows))
+    for s, (scores, err, stdout, stderr) in zip(
+            seeds, _run_seeds(solution, split, data_dir, seeds, timeout,
+                              len(rows))):
         if stdout:
             rec['stdout_tail'] = stdout
         if err:
