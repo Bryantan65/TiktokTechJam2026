@@ -167,6 +167,22 @@ So:
   learned weights (e.g. stacking on held-out predictions) can extract value
   that equal-weight averaging cannot.
 
+## When you do not know which part is doing the work
+A solution with several parts - an ensemble of members, a base model plus a
+correction, a loss with three terms - hides which part earns the score. Refining
+it blind means guessing, and a guess costs a full experiment to disprove.
+
+Find out instead: in ONE script, score the full solution and then score it again
+with each part removed or zeroed, and print all of them. N+1 evaluations, one
+experiment, no retraining of the parts you are not testing if you can avoid it.
+A part whose removal costs nothing is not carrying anything, however good the
+idea behind it sounded - drop it and spend the slot elsewhere. A part whose
+removal hurts a lot is the one worth refining.
+
+This is the difference between a search and a sequence of hopeful edits, and it
+is cheap: the information arrives in the stdout of an experiment you were going
+to run anyway.
+
 ## Screening an idea without spending an experiment
 You develop against `valid`, and `valid` also picks the early-stopping epoch
 inside every experiment. That is two rounds of selection on one set of labels,
