@@ -72,11 +72,17 @@ REASONING_EFFORT = os.environ.get('AGENT_REASONING_EFFORT') or None
 MAX_EXPERIMENTS = int(os.environ.get('AGENT_MAX_EXPERIMENTS', 50))
 MAX_WALL_SECONDS = float(os.environ.get('AGENT_MAX_WALL_SECONDS', 6 * 3600))
 
-# Ours, not theirs. Token spend is reported for Feasibility, not capped:
-# "graded in three coarse tiers (low / medium / high consumption)" and only
-# "among submissions whose hidden-test primary score exceeds the official
-# baseline". So this is a runaway guard, not a target to optimise against.
-MAX_COST_USD = float(os.environ.get('AGENT_MAX_COST_USD', 15.0))
+# OFF by default. Token spend is reported for Feasibility, never capped by the
+# organisers: it is "graded in three coarse tiers (low / medium / high
+# consumption)" and scored only "among submissions whose hidden-test primary
+# score exceeds the official baseline". So a dollar cap can only ever hurt -
+# it risks killing a compliant run part-way and forfeiting the score that gates
+# the criterion, in exchange for a saving nobody measures.
+#
+# The run is already bounded twice over by the organisers' own limits: 50
+# experiments and 6 h wall clock. At record-run-3's rate that is about $6.
+# Set AGENT_MAX_COST_USD to a positive number to re-enable the cap.
+MAX_COST_USD = float(os.environ.get('AGENT_MAX_COST_USD', 0))
 
 
 # Transient API failures. A 500, a gateway timeout or a dropped connection says
@@ -410,17 +416,20 @@ def run_loop(supervised: bool = False, max_iter: int = 100,
                     'proposing experiments and summarise what you found.'
                     % (elapsed / 3600, MAX_WALL_SECONDS / 3600, longest / 60))
 
-        if tokens.total_cost() >= MAX_COST_USD:
+        if MAX_COST_USD > 0 and tokens.total_cost() >= MAX_COST_USD:
             return ('cost budget exhausted: $%.2f of $%.2f spent. Stop '
                     'proposing experiments and summarise what you found.'
                     % (tokens.total_cost(), MAX_COST_USD))
         return None
 
+    cap = ('$%.2f' % MAX_COST_USD) if MAX_COST_USD > 0 else 'off'
     print(f'=== Agent loop started (supervised={supervised}, '
           f'max_iter={max_iter}, max_experiments={MAX_EXPERIMENTS}, '
-          f'max_cost=${MAX_COST_USD:.2f}) ===\n')
+          f'max_wall={MAX_WALL_SECONDS / 3600:.1f}h, '
+          f'max_cost={cap}) ===\n')
     ledger.log_event('run_start', 'agent loop started', model=MODEL,
                      max_iter=max_iter, max_experiments=MAX_EXPERIMENTS,
+                     max_wall_seconds=MAX_WALL_SECONDS,
                      max_cost_usd=MAX_COST_USD, supervised=supervised,
                      ledger_rows_at_start=ledger.totals()['iterations'])
 

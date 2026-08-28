@@ -713,7 +713,7 @@ Two of our three caps are therefore compliance limits now, not choices:
 | --- | --- | --- |
 | `MAX_EXPERIMENTS` | **50** (was 80) | organisers |
 | `MAX_WALL_SECONDS` | **6 h** (new) | organisers |
-| `MAX_COST_USD` | 15 | ours |
+| `MAX_COST_USD` | **off** (0) | ours — disabled |
 
 **record-run-3 would have been non-compliant.** It ran 20:15 → 02:44 — 6 h 29 m
 — and nothing was watching the clock. It also used 30 of the 50 iterations, so
@@ -753,8 +753,17 @@ The organisers say why: *"Without the quality gate the criterion would fight the
 Primary metric — an agent that stopped after three iterations would look
 cheapest and score worst."*
 
-**So `MAX_COST_USD` stays a runaway guard, not a target.** Do not optimise
-tokens further; it buys nothing and risks the score that gates the criterion.
+**So the dollar cap is now OFF by default** (`AGENT_MAX_COST_USD=0`). It could
+only ever hurt: killing a compliant run part-way forfeits the score that *gates*
+the Feasibility criterion, in exchange for a saving nobody measures. The run is
+already bounded twice by the organisers' own limits — 50 experiments and 6 h —
+which at record-run-3's rate is about $6.
+
+Cost is still tracked and reported in full; only the cap is gone. Set
+`AGENT_MAX_COST_USD` to a positive number to re-enable it.
+
+**Do not optimise tokens further.** It buys nothing at the tier granularity and
+risks the score the criterion depends on.
 
 ---
 
