@@ -7,10 +7,15 @@ result, and decides what to try next — until the organisers' convergence rule
 stops it.
 
 ```
-official FM baseline (valid)   0.6016
-our agent's converged result   0.6055        +0.0040
-the organisers' bar            +0.0020       (epsilon, ~2.5 sigma)
+                       valid     test
+official FM baseline   0.6016    0.5946
+our agent's result     0.6055    0.5985
+delta                  +0.0040   +0.0039
+the organisers' bar    +0.0020   (epsilon, ~2.5 sigma)
 ```
+
+Test was scored **once**, after the candidate was locked, and the gain
+transferred: +0.0040 on validation became +0.0039 on test.
 
 The agent found that gain on its own. It searched the literature, tried six of
 the seven suggested directions, diagnosed its own crashes, and stopped when it

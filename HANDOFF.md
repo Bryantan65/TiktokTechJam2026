@@ -29,8 +29,8 @@ Last updated: 2026-08-28, after record run 6 converged. Code frozen at tag
 ✅ **record run 6 — converged at +0.0035, did not displace run 3**
 ✅ GBDT capability disclosed; agent found LambdaRank unprompted and it lost
 ✅ README rewritten from the upstream CWM readme to the project's own
-⬜ **test score — Zheng ran it; the number is not recorded anywhere in the repo**
-⬜ write the submission
+✅ **test scored once — +0.0039. The gain transferred.**
+✅ submission generated from the locked candidate and validated
 ```
 
 **Record run 3 is the result.** One uninterrupted process, no human
@@ -1061,6 +1061,35 @@ authoritative. Mitigation is mechanical: the agent's write access is
 
 ---
 
+## The test score — the gain transferred
+
+Scored once, after the candidate was locked by the pre-committed rule, so it
+could not influence selection. `harness/score_test.py`, official `evaluate.py`.
+
+```
+                    GAUC      nDCG@5    primary   delta
+valid   0.672469    0.538518            0.605493  +0.0040
+test    0.665391    0.531626            0.598508  +0.0039
+```
+
+**+0.0040 on valid became +0.0039 on test.** That was the real risk in this whole
+project and it did not materialise. The candidate was chosen as the best of 30
+experiments *on validation alone*, and validation was also used inside every
+experiment to pick the early-stopping epoch — two rounds of selection on the same
+split. A large valid-to-test drop would have meant the ladder was selection
+noise rather than modelling. It transferred essentially intact.
+
+Note the raw numbers still show the expected ~0.007 valid-to-test offset
+(0.6055 vs 0.5985). That offset is a property of the splits, not of our method —
+the official FM shows the same thing (0.6016 valid, 0.5946 test). **Always
+compare deltas, never raw primaries across splits.**
+
+A second file, `submission.csv`, generated earlier the same day, rescored to
+0.598411 (+0.0038). The 0.0001 gap is process-level float nondeterminism, and
+confirms both files came from the same candidate.
+
+---
+
 ## Organiser Q&A, 2026-08-28 — what it settles
 
 A live Q&A session with the organisers. Four points bear on decisions we had
@@ -1332,13 +1361,8 @@ run 4 is; re-running the same agent to fish for a good draw is not.
 - **`_budget_check()` counts every ledger row, not this session's.** Fine for a
   fresh-ledger record run; misleading if you ever want "20 more experiments" on
   top of an existing ledger.
-- **The test score exists but is not recorded.** Zheng ran `harness/score_test.py`
-  against the `submission.csv` dated 2026-08-28 11:09; the number lives in his
-  terminal and nowhere in the repo. Everything written here is still
-  validation-only. **Get the figure and commit it** — with no validation
-  leaderboard (organiser Q&A) it is the only ground truth we have, and an
-  unrecorded measurement cannot be cited in the writeup. Note also that the
-  11:09 submission predates runs 5 and 6, so confirm which solution produced it.
+- ~~Test has never been scored.~~ **Done 2026-08-28, recorded in
+  `test_scores.json`.** See *The test score* below.
 - **The submission artifact does not exist yet.** The tooling is built and
   validated on valid; nobody has produced `submission.csv`.
 - **Spinner rendering is only fixed for width.** If the terminal is *resized*
