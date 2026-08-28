@@ -59,6 +59,41 @@ BASELINE_VALID = 0.6015
 MODEL_ENV = {m: {'AGENT_REASONING_EFFORT': 'none'}
              for m in ('gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra')}
 
+# Providers whose endpoints speak /v1/chat/completions. A model id prefixed
+# with the key below is routed there instead of to OpenAI, using the named
+# environment variable for its credential, so both keys can live in .env at
+# once and nothing has to be edited to switch.
+PROVIDERS = {
+    'deepseek': ('https://api.deepseek.com', 'DEEPSEEK_API_KEY'),
+}
+
+# Reported cost is a graded deliverable, so a model priced differently from the
+# one in .env must carry its own rates or the number is fiction. Off-peak rates
+# from api-docs.deepseek.com/quick_start/pricing, USD per million tokens:
+# peak (01:00-04:00 and 06:00-10:00 UTC, Mon-Fri) is double these. DeepSeek
+# charges cache hits at the same rate as misses, unlike OpenAI's 10x discount,
+# so cached is set equal to input rather than left to the /10 default.
+MODEL_COST = {
+    'deepseek-v4-pro':   {'AGENT_INPUT_COST_PER_M': '0.66',
+                          'AGENT_OUTPUT_COST_PER_M': '1.98',
+                          'AGENT_CACHED_COST_PER_M': '0.66'},
+    'deepseek-v4-flash': {'AGENT_INPUT_COST_PER_M': '0.22',
+                          'AGENT_OUTPUT_COST_PER_M': '0.66',
+                          'AGENT_CACHED_COST_PER_M': '0.22'},
+}
+
+
+def _provider_env(model):
+    for prefix, (url, keyvar) in PROVIDERS.items():
+        if model.startswith(prefix):
+            key = os.environ.get(keyvar, '')
+            if not key or key.startswith('paste-'):
+                raise SystemExit(
+                    '%s needs %s in .env (currently unset or still the '
+                    'placeholder)' % (model, keyvar))
+            return {'AGENT_BASE_URL': url, 'AGENT_API_KEY': key}
+    return {}
+
 
 def _slug(model):
     return 'bakeoff-' + model.replace('.', '').replace('-', '')
@@ -175,8 +210,19 @@ def main():
                          'produce a result.')
     ap.add_argument('--report', action='store_true',
                     help='re-print the comparison without running anything')
+    ap.add_argument('--list', metavar='PROVIDER', default=None,
+                    help='list model ids offered by a provider, e.g. '
+                         '--list deepseek, then pick one for --models')
     a = ap.parse_args()
     models = [m.strip() for m in a.models.split(',') if m.strip()]
+
+    if a.list:
+        from openai import OpenAI
+        url, keyvar = PROVIDERS[a.list]
+        c = OpenAI(api_key=os.environ.get(keyvar, ''), base_url=url)
+        for m in sorted(x.id for x in c.models.list()):
+            print('  ', m)
+        return
 
     if a.report:
         report(models)
@@ -191,12 +237,17 @@ def main():
             continue
         env = dict(os.environ)
         env['AGENT_MODEL'] = model
-        extra = MODEL_ENV.get(model, {})
+        extra = dict(MODEL_ENV.get(model, {}))
+        extra.update(MODEL_COST.get(model, {}))
+        extra.update(_provider_env(model))
         env.update(extra)
+        # Never print a credential.
+        shown = {k: ('<set>' if k == 'AGENT_API_KEY' else v)
+                 for k, v in extra.items()}
         print('== %-14s -> logs/%s%s'
               % (model, run_id,
-                 ('  [%s]' % ', '.join('%s=%s' % kv for kv in extra.items()))
-                 if extra else ''))
+                 ('  [%s]' % ', '.join('%s=%s' % kv for kv in shown.items()))
+                 if shown else ''))
         t0 = time.time()
         rc = subprocess.call(
             [sys.executable, '-m', 'agent', '--run-id', run_id,

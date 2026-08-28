@@ -55,6 +55,15 @@ CACHED_COST_PER_M = float(os.environ.get('AGENT_CACHED_COST_PER_M',
 # accept tools natively (gpt-5.5 and earlier), which keeps reasoning on.
 REASONING_EFFORT = os.environ.get('AGENT_REASONING_EFFORT') or None
 
+# Any OpenAI-compatible endpoint. DeepSeek, Together, Groq and vLLM all speak
+# /v1/chat/completions, so pointing the client elsewhere is the whole port:
+#   AGENT_BASE_URL=https://api.deepseek.com  AGENT_API_KEY=sk-...
+# Unset means the OpenAI default and OPENAI_API_KEY, which is what every run so
+# far has used. Kept separate from OPENAI_API_KEY so both can sit in .env at
+# once and the bake-off can switch providers per model without editing files.
+BASE_URL = os.environ.get('AGENT_BASE_URL') or None
+API_KEY = os.environ.get('AGENT_API_KEY') or os.environ.get('OPENAI_API_KEY')
+
 # Two of these are now ORGANISER RULES, not our own backstops. The problem
 # statement of 2026-08-27 replaced "Compute budget: TBD" with:
 #
@@ -374,7 +383,8 @@ def run_loop(supervised: bool = False, max_iter: int = 100,
     run_dir = _setup_run_dir(run_name, run_id)
     print(f'=== Run folder: {os.path.relpath(run_dir, ROOT)}/ ===')
 
-    client = OpenAI()          # .env is loaded at import, above
+    # .env is loaded at import, above. base_url is None for OpenAI itself.
+    client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
     tokens = TokenTracker()
 
     messages = [{'role': 'system', 'content': system_prompt()}]
