@@ -1,0 +1,64 @@
+{
+  "iteration": 5,
+  "solution": "logs/bakeoff-gpt55/solutions/005_bpr_hardneg_fm.py",
+  "hypothesis": "improve 3: BPR is the only improving mechanism and random negatives may be too easy after early epochs. Keep node 3's 3 pairs/positive but sample each negative as the highest-scoring item among 4 same-user candidates, focusing updates on top-rank mistakes.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:42:44+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601067,
+  "GAUC": 0.666881,
+  "nDCG@5": 0.535253,
+  "source_hash": "0a0c0101e826",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8e180b72076d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000198,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.66714,
+      "nDCG@5": 0.535396,
+      "primary": 0.601268
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.666532,
+      "nDCG@5": 0.535212,
+      "primary": 0.600872
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.666971,
+      "nDCG@5": 0.535152,
+      "primary": 0.601061
+    }
+  ],
+  "seconds": 40.9,
+  "verdict": "noise",
+  "delta": -0.000433,
+  "tokens_in": 75746,
+  "tokens_out": 4817,
+  "tokens_cached": 60160,
+  "cost_usd": 0.117215,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 104.9,
+  "recovery_events": []
+}

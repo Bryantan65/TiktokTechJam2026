@@ -1,0 +1,64 @@
+{
+  "iteration": 9,
+  "solution": "logs/bakeoff-gpt55/solutions/009_history_blend.py",
+  "hypothesis": "draft user behaviour sequences: approximate history attention with smoothed user-author/user-video/user-tab and item/author CTR history ranks blended at 30% with node 8; this tests whether explicit prior user behaviour beyond learned embeddings adds readable signal. Citation: https://arxiv.org/abs/1706.06978",
+  "parent": "8",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:56:41+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601884,
+  "GAUC": 0.668303,
+  "nDCG@5": 0.535464,
+  "source_hash": "f93bd6836b9e",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "c30cb29a278f",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000752,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669032,
+      "nDCG@5": 0.535837,
+      "primary": 0.602435
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667189,
+      "nDCG@5": 0.534866,
+      "primary": 0.601027
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668689,
+      "nDCG@5": 0.535689,
+      "primary": 0.602189
+    }
+  ],
+  "seconds": 301.3,
+  "verdict": "noise",
+  "delta": 0.000384,
+  "tokens_in": 67976,
+  "tokens_out": 8508,
+  "tokens_cached": 51712,
+  "cost_usd": 0.151596,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 406.6,
+  "recovery_events": []
+}

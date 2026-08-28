@@ -1,0 +1,64 @@
+{
+  "iteration": 3,
+  "solution": "logs/bakeoff-gpt56sol/solutions/003_bpr_fm_fix_users.py",
+  "hypothesis": "debug 2: encoded user IDs are returned as a Python sequence, so convert them to a NumPy array before advanced indexing; this is the sole change and should let the intended same-user positive-negative BPR training run.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:03:08+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.600917,
+  "GAUC": 0.666402,
+  "nDCG@5": 0.535433,
+  "source_hash": "470e0139a33c",
+  "stdout_tail": "wrote 124,909 predictions for split=valid",
+  "predictions_hash": "c2708feb7032",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000196,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.666336,
+      "nDCG@5": 0.535353,
+      "primary": 0.600844
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.666406,
+      "nDCG@5": 0.535872,
+      "primary": 0.601139
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.666463,
+      "nDCG@5": 0.535075,
+      "primary": 0.600769
+    }
+  ],
+  "seconds": 66.5,
+  "verdict": "noise",
+  "delta": -0.000583,
+  "tokens_in": 56287,
+  "tokens_out": 1747,
+  "tokens_cached": 49999,
+  "cost_usd": 0.058189,
+  "model": "gpt-5.6-sol",
+  "agent_iteration": 2,
+  "wall_seconds": 83.8,
+  "recovery_events": []
+}

@@ -1,0 +1,33 @@
+{
+  "iteration": 2,
+  "solution": "logs/bakeoff-gpt56sol/solutions/002_bpr_fm.py",
+  "hypothesis": "draft loss: train the FM with BPR's -log sigmoid score difference on balanced positive-negative pairs sampled strictly within each user, directly aligning learning with within-user ranking. Foundational formulation: https://arxiv.org/abs/1205.2618",
+  "parent": "1",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:02:12+08:00",
+  "status": "error",
+  "error": "exited 1 (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "1ca3af14a0e4",
+  "stderr_tail": "Traceback (most recent call last):\n  File \"D:\\github\\TiktokTechJam2026\\logs\\bakeoff-gpt56sol\\solutions\\002_bpr_fm.py\", line 121, in <module>\n    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs,\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\github\\TiktokTechJam2026\\logs\\bakeoff-gpt56sol\\solutions\\002_bpr_fm.py\", line 72, in run\n    pos, neg = make_pairs(ytr, utr, rng)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\github\\TiktokTechJam2026\\logs\\bakeoff-gpt56sol\\solutions\\002_bpr_fm.py\", line 43, in make_pairs\n    us = users[order]\n         ~~~~~^^^^^^^\nTypeError: only integer scalar arrays can be converted to a scalar index",
+  "seeds_completed": 0,
+  "seconds": 39.6,
+  "verdict": "failed",
+  "tokens_in": 32163,
+  "tokens_out": 1739,
+  "tokens_cached": 22770,
+  "cost_usd": 0.052257,
+  "model": "gpt-5.6-sol",
+  "agent_iteration": 1,
+  "wall_seconds": 64.2,
+  "recovery_events": []
+}

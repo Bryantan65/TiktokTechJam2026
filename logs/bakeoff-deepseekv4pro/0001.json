@@ -1,0 +1,49 @@
+{
+  "iteration": 1,
+  "solution": "solutions/001_torch_fm.py",
+  "hypothesis": "control: official FM ported to PyTorch, pointwise BCE. 3-seed mean.",
+  "parent": null,
+  "by": "human",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-27T16:26:44+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601413,
+  "GAUC": 0.667165,
+  "nDCG@5": 0.535662,
+  "source_hash": "6108dd2fd381",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "c75ceb488e20",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000154,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667078,
+      "nDCG@5": 0.535722,
+      "primary": 0.6014
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667182,
+      "nDCG@5": 0.535966,
+      "primary": 0.601574
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667235,
+      "nDCG@5": 0.535298,
+      "primary": 0.601266
+    }
+  ],
+  "seconds": 99.9,
+  "verdict": "noise",
+  "delta": -8.7e-05
+}

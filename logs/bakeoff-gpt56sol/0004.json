@@ -1,0 +1,64 @@
+{
+  "iteration": 4,
+  "solution": "logs/bakeoff-gpt56sol/solutions/004_hybrid_bce_bpr_fm.py",
+  "hypothesis": "improve 3: pure BPR loses pointwise prevalence information, so jointly optimize balanced-pair BCE plus 0.5-weight same-user BPR; the BCE anchor should preserve the baseline while the ranking term directly improves within-user order.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:04:32+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.600929,
+  "GAUC": 0.666456,
+  "nDCG@5": 0.535404,
+  "source_hash": "a0a295c97619",
+  "stdout_tail": "wrote 124,909 predictions for split=valid",
+  "predictions_hash": "04081ce1fdb2",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000276,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.666709,
+      "nDCG@5": 0.535584,
+      "primary": 0.601146
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.666362,
+      "nDCG@5": 0.535687,
+      "primary": 0.601024
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.666296,
+      "nDCG@5": 0.53494,
+      "primary": 0.600618
+    }
+  ],
+  "seconds": 64.0,
+  "verdict": "noise",
+  "delta": -0.000571,
+  "tokens_in": 61324,
+  "tokens_out": 1867,
+  "tokens_cached": 48603,
+  "cost_usd": 0.074774,
+  "model": "gpt-5.6-sol",
+  "agent_iteration": 3,
+  "wall_seconds": 80.8,
+  "recovery_events": []
+}

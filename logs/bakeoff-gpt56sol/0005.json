@@ -1,0 +1,64 @@
+{
+  "iteration": 5,
+  "solution": "logs/bakeoff-gpt56sol/solutions/005_history_fm.py",
+  "hypothesis": "draft user behaviour sequences: add causal, smoothed positive-history affinities for each target's video, author, tab, and duration bucket to the FM, a lightweight target-aware history model motivated by DIN attention (https://arxiv.org/abs/1706.06978).",
+  "parent": "1",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:05:58+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601792,
+  "GAUC": 0.667601,
+  "nDCG@5": 0.535983,
+  "source_hash": "36c5aca63767",
+  "stdout_tail": "wrote 124909",
+  "predictions_hash": "e060030e9bf5",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000477,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668272,
+      "nDCG@5": 0.536372,
+      "primary": 0.602322
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667468,
+      "nDCG@5": 0.535845,
+      "primary": 0.601656
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667063,
+      "nDCG@5": 0.535732,
+      "primary": 0.601398
+    }
+  ],
+  "seconds": 81.4,
+  "verdict": "noise",
+  "delta": 0.000292,
+  "tokens_in": 59110,
+  "tokens_out": 1480,
+  "tokens_cached": 47355,
+  "cost_usd": 0.067865,
+  "model": "gpt-5.6-sol",
+  "agent_iteration": 4,
+  "wall_seconds": 104.5,
+  "recovery_events": []
+}

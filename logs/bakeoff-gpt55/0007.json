@@ -1,0 +1,64 @@
+{
+  "iteration": 7,
+  "solution": "logs/bakeoff-gpt55/solutions/007_bagged_bpr_bce.py",
+  "hypothesis": "improve 6: the 70/30 rank blend reached the target but still has +/-0.00046 from BPR sampling/initialisation. Average two independent BPR-3neg FMs within the same 70% BPR share plus 30% BCE to reduce variance and potentially lift top-5 ordering.",
+  "parent": "6",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:46:21+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603992,
+  "GAUC": 0.670724,
+  "nDCG@5": 0.537261,
+  "source_hash": "ea050e05c1f3",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "33e52bd9d3d7",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000313,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671238,
+      "nDCG@5": 0.537228,
+      "primary": 0.604233
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670327,
+      "nDCG@5": 0.536951,
+      "primary": 0.603639
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670606,
+      "nDCG@5": 0.537604,
+      "primary": 0.604105
+    }
+  ],
+  "seconds": 122.3,
+  "verdict": "KEPT",
+  "delta": 0.002492,
+  "tokens_in": 56583,
+  "tokens_out": 4969,
+  "tokens_cached": 43520,
+  "cost_usd": 0.104108,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 177.9,
+  "recovery_events": []
+}

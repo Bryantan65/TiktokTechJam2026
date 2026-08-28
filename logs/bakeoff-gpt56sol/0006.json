@@ -1,0 +1,64 @@
+{
+  "iteration": 6,
+  "solution": "logs/bakeoff-gpt56sol/solutions/006_user_history_fm.py",
+  "hypothesis": "improve 5: node 5 used only global target popularity and was not actually personalized; add hierarchically smoothed causal per-user affinities to video, author, tab, and duration bucket so history can change within-user ordering.",
+  "parent": "5",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:07:36+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602229,
+  "GAUC": 0.668112,
+  "nDCG@5": 0.536347,
+  "source_hash": "69b06183bcc8",
+  "stdout_tail": "wrote 124909",
+  "predictions_hash": "d52e0078ec4e",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000508,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668427,
+      "nDCG@5": 0.536796,
+      "primary": 0.602611
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668301,
+      "nDCG@5": 0.536545,
+      "primary": 0.602423
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667607,
+      "nDCG@5": 0.535699,
+      "primary": 0.601653
+    }
+  ],
+  "seconds": 92.3,
+  "verdict": "noise",
+  "delta": 0.000729,
+  "tokens_in": 35027,
+  "tokens_out": 1518,
+  "tokens_cached": 26774,
+  "cost_usd": 0.0492,
+  "model": "gpt-5.6-sol",
+  "agent_iteration": 5,
+  "wall_seconds": 109.8,
+  "recovery_events": []
+}
