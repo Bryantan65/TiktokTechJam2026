@@ -190,8 +190,19 @@ Handle it in your solution's main block, exactly as `001_torch_fm.py` does:
 Then `run_solution(..., split='dev')` scores you on the holdout. Such a row is
 marked `screen`, and it does NOT count toward convergence, cannot become the
 best solution, and its number is NOT comparable to the baseline or to any
-`valid` row - it is a different set of rows. Use it to compare candidates
-against each other, then take what survives to a real experiment.
+`valid` row - it is a different set of rows.
+
+**Use it to catch a disaster, not to pick a winner.** Measured against seven
+solutions spanning 0.5728 to 0.6049 on valid: dev agrees with valid almost
+perfectly across the whole range (Spearman 0.93), and barely at all among
+near-tied candidates (Spearman 0.60 on the four within 0.0013 of each other -
+its best was valid's second, its worst was valid's third). It compresses small
+differences and reorders them.
+
+So it is worth a screen when you are about to spend an experiment on something
+that might be badly wrong - a new mechanism, a feature join you are unsure of,
+anything with a leakage risk. It will not tell you which of two good variants
+is better, and using it that way will mislead you.
 
 `devdata.describe(splits)` prints the shape of both halves and the TYPE of every
 field. Worth one call the first time you write a join: the ids are strings, and
@@ -469,9 +480,10 @@ def _ledger_table() -> str:
                 'unmeasurable too, and costs a full experiment to learn that.'
                 % (run, top['valid_primary'], tsd),
                 'That does not mean the direction is wrong - it means valid '
-                'cannot resolve it. Either change mechanism, or screen the '
-                'variant on `dev` first, where being wrong is cheap and does '
-                'not spend an experiment.']
+                'cannot resolve it, and neither will `dev`, which is worse at '
+                'separating near-ties than valid is. More variants of this '
+                'node cannot be measured by anything you have. Change '
+                'mechanism.']
 
     st = ledger.convergence_status()
     if st['window_improvement'] is None:
