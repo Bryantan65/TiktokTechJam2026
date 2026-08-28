@@ -55,14 +55,27 @@ CACHED_COST_PER_M = float(os.environ.get('AGENT_CACHED_COST_PER_M',
 # accept tools natively (gpt-5.5 and earlier), which keeps reasoning on.
 REASONING_EFFORT = os.environ.get('AGENT_REASONING_EFFORT') or None
 
-# Backstops, not the intended terminating condition - a run should end on
-# converged(), which is the rule the task specification names. What these
-# actually guard against is a crash loop: converged() counts only experiments
-# that SCORED, so an agent whose solutions all fail never converges and would
-# otherwise run forever. MAX_EXPERIMENTS counts every ledger row, errors
-# included, so it bounds that case. Set high enough that triggering it means
-# something is genuinely wrong (80 experiments is ~$11 and ~2.3 hours).
-MAX_EXPERIMENTS = int(os.environ.get('AGENT_MAX_EXPERIMENTS', 80))
+# Two of these are now ORGANISER RULES, not our own backstops. The problem
+# statement of 2026-08-27 replaced "Compute budget: TBD" with:
+#
+#   "50 iterations per benchmark run (hard cap; the convergence rule
+#    eps = 0.002 / N = 3 normally triggers first), plus a 6 h wall-clock
+#    ceiling per run as a backstop."
+#
+# So MAX_EXPERIMENTS and MAX_WALL_SECONDS are compliance limits. record-run-3
+# ran 20:15 -> 02:44, which is 6 h 29 m and would have been non-compliant.
+#
+# They also still serve their original purpose: converged() counts only
+# experiments that SCORED, so an agent whose solutions all fail never converges
+# and would otherwise run forever. MAX_EXPERIMENTS counts every ledger row,
+# errors included, so it bounds that case.
+MAX_EXPERIMENTS = int(os.environ.get('AGENT_MAX_EXPERIMENTS', 50))
+MAX_WALL_SECONDS = float(os.environ.get('AGENT_MAX_WALL_SECONDS', 6 * 3600))
+
+# Ours, not theirs. Token spend is reported for Feasibility, not capped:
+# "graded in three coarse tiers (low / medium / high consumption)" and only
+# "among submissions whose hidden-test primary score exceeds the official
+# baseline". So this is a runaway guard, not a target to optimise against.
 MAX_COST_USD = float(os.environ.get('AGENT_MAX_COST_USD', 15.0))
 
 
@@ -373,13 +386,30 @@ def run_loop(supervised: bool = False, max_iter: int = 100,
         print('  [%s] %s' % (kind, rec['detail'][:200]))
         return rec
 
+    t_run_start = time.time()
+
     def _budget_check():
         """Reason to stop running experiments, or None. Checked before each."""
         done = ledger.totals()['iterations']
         if done >= MAX_EXPERIMENTS:
-            return ('experiment budget exhausted: %d of %d run. Stop proposing '
-                    'experiments and summarise what you found.'
+            return ('experiment budget exhausted: %d of %d run (organiser cap). '
+                    'Stop proposing experiments and summarise what you found.'
                     % (done, MAX_EXPERIMENTS))
+
+        # Stop with room for one more experiment rather than at the line. The
+        # ceiling applies to the RUN, so overshooting it by finishing an
+        # experiment that started at 5 h 55 m still breaches it. record-run-3's
+        # experiments averaged ~12 min and its slowest were far longer, so a
+        # fixed margin would be wrong - reserve the longest one seen so far.
+        elapsed = time.time() - t_run_start
+        longest = max([r.get('seconds') or 0 for r in ledger._load_all()]
+                      or [0]) + 120        # + a turn of LLM time
+        if elapsed + longest >= MAX_WALL_SECONDS:
+            return ('wall-clock budget reached: %.1f h of the %.1f h ceiling '
+                    'used, and the next experiment needs about %.0f min. Stop '
+                    'proposing experiments and summarise what you found.'
+                    % (elapsed / 3600, MAX_WALL_SECONDS / 3600, longest / 60))
+
         if tokens.total_cost() >= MAX_COST_USD:
             return ('cost budget exhausted: $%.2f of $%.2f spent. Stop '
                     'proposing experiments and summarise what you found.'
