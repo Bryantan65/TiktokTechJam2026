@@ -4,7 +4,7 @@ State, decisions, and what's next. **`CLAUDE.md` holds the task facts** — labe
 metrics, splits, baselines, dead ends. This file holds the *decisions* and the
 reasoning behind them, which is the part that's expensive to reconstruct.
 
-Last updated: 2026-08-27, after record run 2.
+Last updated: 2026-08-28, after record run 3.
 
 ---
 
@@ -21,27 +21,29 @@ Last updated: 2026-08-27, after record run 2.
 ✅ measurement: 3-seed scoring, spread shown to the agent
 ✅ convergence: fires correctly, floored at 8 experiments
 ✅ search policy: draft / improve / debug, refine before pivot
-✅ **record run 2 — converged past target, +0.0031**
 ✅ submission path built and validated against the official checker
+✅ **record run 3 (Zheng) — converged at +0.0040**
+✅ compute caps aligned to the organisers' 50-iteration / 6 h rules
 ⬜ **score on test — once. Never done. See Next.**
 ⬜ write the submission
 ```
 
-**Record run 2 is the result.** One uninterrupted process, no human
+**Record run 3 is the result.** One uninterrupted process, no human
 intervention, terminated on the organisers' convergence rule.
 
 ```
-submission candidate   logs/record-run-2/solutions/008_time_features_two_bpr_bce.py
-valid primary          0.604598 +/- 0.000497   (3-seed mean)
-delta vs baseline      +0.0031                  target was +0.0020
-stopped                converged, +0.000975 across the last 3
-cost                   $1.63, 1205 s compute, 9 iterations (8 scored)
+submission candidate   logs/record-run-3/solutions/027_deepfm_member.py
+valid primary          0.605493   GAUC 0.672469  nDCG@5 0.538518
+delta vs baseline      +0.0040                  target was +0.0020
+stopped                converged, -0.000055 across the last 3
+cost                   $3.65, 356 min compute, 30 iterations
 ```
 
-Full write-up in `logs/record-run-2/README.md`. The ledger is reset again to the
-control, so a further run starts clean.
+Node 24 (`024_time_watch_userbalanced.py`) ties it at 0.605492 — the two are
+indistinguishable. Either is defensible as the submission; #27 is the recorded
+best by six decimal places.
 
-Spend across every run to date: ~810k in / 66k out, ~$4.5.
+Spend across every run to date: ~3.1M in / 235k out, ~$8.2.
 
 ### What's built
 
@@ -58,7 +60,7 @@ Spend across every run to date: ~810k in / 66k out, ~$4.5.
 | `harness/seedsweep.py` | measure one solution across seeds; writes nothing to the ledger |
 | `harness/watch.py` | follow a long unattended run; one line per experiment and event |
 | `harness/make_submission.py` | solution -> validated submission CSV. **The only tool allowed to touch test.** |
-| `logs/shakedown-01/`, `-02/`, `void-run-1/` | archived runs; see each README |
+| `logs/<run>-N/` | every run auto-creates its own folder (Zheng, `ledger.init_run_dir`) |
 | `src/` | CWM paper code, ported and working. **Reference only** — see below. |
 
 ### Verified numbers
@@ -88,7 +90,8 @@ would leave the fixes looking like guesses.
 | `logs/shakedown-02/` | 12 experiments, single-seed | 8 faults; see its README |
 | `logs/void-run-1/` | 3 experiments, stopped deliberately | the convergence floor |
 | `logs/record-run-1/` | 8 experiments, converged | the search policy (depth-2 star) |
-| **`logs/record-run-2/`** | **9 experiments, converged at +0.0031** | **the result** |
+| `logs/record-run-2/` | 9 experiments, converged at +0.0031 | the search policy working |
+| **`logs/record-run-3/`** | **30 experiments, converged at +0.0040** | **the result** |
 
 **shakedown-02** is the one worth reading. Twelve experiments, all inside
 direction 1, ending in five consecutive tweaks of one loss weight across a
@@ -118,6 +121,23 @@ six first drafts off one node, nothing refined. That produced the draft / improv
            └─ 6 → 7 → 8 → 9
 ```
 
+**record-run-3** (Zheng, 2026-08-28) is the deepest search yet: 30 experiments,
+5 of the 7 directions, 10 self-directed web searches, and a genuine debug chain
+at `14 → 15 → 16 → 17` where a broken raw-CSV alignment crashed to 0.5829 and
+was diagnosed back to 0.6051 across three attempts.
+
+It is also the first run where **direction 4 (watch time) paid off**: nodes
+22-24 took it from +0.0034 to +0.0040 using play_time/duration as a *training
+confidence weight*. Checked for leakage and clean — `play_meta['train']` only;
+the valid and test arrays are computed and never used. Prediction uses IDs and
+`hourmin`, which is known at impression time.
+
+One thing to tidy before submission: the raw-CSV join key includes the label
+(`lookup[(date, user, video, tab, dur, y)]`). It is defensible — it disambiguates
+which duplicate impression a row is, using a property of a row you already hold —
+but the feature-construction path touches `y`, which reads badly under scrutiny.
+Joining on file order instead would remove the question.
+
 ### What is actually demonstrated
 
 **BPR blended with pointwise BCE, plus temporal context.** Plain BPR gives
@@ -135,10 +155,37 @@ data is 33% positive, so a user's positives compete against each other.
 record-run-1 found nothing from them on plain BPR; record-run-2 got +0.0007 at
 ~1.4σ on top of the ensemble. Suggestive, not established.
 
-**Sequences, multi-task and raw watch-time added nothing** (record-run-1, all
-correctly implemented and all inside their spreads). Raw watch time was actively
-harmful at -0.0375, because `long_view` is watch time *relative to duration* —
-ranking by raw play time favours long videos.
+**Raw watch time as a ranking target is actively harmful** (-0.0375,
+record-run-1), because `long_view` is watch time *relative to duration* — ranking
+by raw play time favours long videos. But watch time as a **training confidence
+weight** works (+0.0006, record-run-3 nodes 22-24). Same signal, opposite result,
+depending on whether it is the target or the weight.
+
+**Sequences and multi-task have never clearly paid.** record-run-1 found nothing
+from either; record-run-3's multi-task nodes (18, 20, 21) landed inside their
+spreads.
+
+### Where the gains came from, and where they stopped
+
+```
+#1  -> #2    +0.0015   BPR
+#2  -> #8    +0.0008   3-member ensemble
+#8  -> #10   +0.0008   more members
+#10 -> #17   +0.0006   time features
+#17 -> #24   +0.0004   watch-time confidence
+#24 -> #30   +0.0000   six experiments, nothing
+```
+
+Halving at every step, then flat. **Adding ensemble members is measurably
+exhausted** — six consecutive experiments at 0.6054-0.6055.
+
+Two structural facts bound what is left. `nDCG@5` is at **77.3% of its ceiling**
+(0.5385 of 0.6968) while GAUC is only 34.5% of the way from random to perfect —
+so GAUC is the half with room, and it is also the half every BPR variant already
+targets. And **60.2% of users have all their valid impressions in one tab**, so
+tab is constant within those users and cannot affect their ranking at all; that
+is why node 29's same-tab BPR gained nothing despite the 44-point rate spread
+across tabs.
 
 ---
 
@@ -651,6 +698,75 @@ running".
 
 ---
 
+## Compute limits — now organiser rules, not our backstops
+
+The problem statement of **2026-08-27** replaced `Compute budget: TBD` with a
+hard specification:
+
+> **50 iterations per benchmark run** (hard cap; the convergence rule
+> ε = 0.002 / N = 3 normally triggers first), plus a **6 h wall-clock ceiling**
+> per run as a backstop.
+
+Two of our three caps are therefore compliance limits now, not choices:
+
+| | value | whose rule |
+| --- | --- | --- |
+| `MAX_EXPERIMENTS` | **50** (was 80) | organisers |
+| `MAX_WALL_SECONDS` | **6 h** (new) | organisers |
+| `MAX_COST_USD` | **off** (0) | ours — disabled |
+
+**record-run-3 would have been non-compliant.** It ran 20:15 → 02:44 — 6 h 29 m
+— and nothing was watching the clock. It also used 30 of the 50 iterations, so
+only the wall-clock rule was breached.
+
+### The wall-clock stop reserves time rather than stopping at the line
+
+The ceiling applies to the **run**, so an experiment that starts at 5 h 55 m and
+takes 12 minutes still breaches it. `_budget_check()` therefore stops when
+`elapsed + longest_experiment_so_far + 2 min` would cross the ceiling, using the
+slowest experiment already logged rather than a fixed margin:
+
+```python
+longest = max(r['seconds'] for r in ledger._load_all()) + 120
+if elapsed + longest >= MAX_WALL_SECONDS: stop
+```
+
+A fixed margin would be wrong here. record-run-3's experiments averaged ~12 min
+because the agent kept adding ensemble members, and its slowest were far longer
+— the cost per experiment grows during a run, so the reserve has to grow with
+it.
+
+### Token spend is reported, not capped
+
+The same update also pinned how Feasibility is scored:
+
+> scored only among submissions whose hidden-test primary score **exceeds the
+> official baseline**, and graded in **three coarse tiers** (low / medium /
+> high consumption) rather than a continuous ranking.
+
+Two consequences. Cost only counts **if you beat the baseline** — so the primary
+metric comes first and there is no point trading score for cheapness. And
+because it is tiered, the difference between $1.63 and $3.65 is almost certainly
+invisible; both are "low" against a 6 h / 50-iteration allowance.
+
+The organisers say why: *"Without the quality gate the criterion would fight the
+Primary metric — an agent that stopped after three iterations would look
+cheapest and score worst."*
+
+**So the dollar cap is now OFF by default** (`AGENT_MAX_COST_USD=0`). It could
+only ever hurt: killing a compliant run part-way forfeits the score that *gates*
+the Feasibility criterion, in exchange for a saving nobody measures. The run is
+already bounded twice by the organisers' own limits — 50 experiments and 6 h —
+which at record-run-3's rate is about $6.
+
+Cost is still tracked and reported in full; only the cap is gone. Set
+`AGENT_MAX_COST_USD` to a positive number to re-enable it.
+
+**Do not optimise tokens further.** It buys nothing at the tier granularity and
+risks the score the criterion depends on.
+
+---
+
 ## Making a submission
 
 `kuairand-starter-kit/submit.py` ships with the kit and had never been run until
@@ -744,73 +860,44 @@ authoritative. Mitigation is mechanical: the agent's write access is
 
 ## Next
 
-### 1. Score on test — ONCE. Not yet done.
-
-**This is the outstanding task, and it is one-shot by discipline.**
+### 1. Score on test — ONCE. Still not done.
 
 ```
-python harness/make_submission.py 008_time_features_two_bpr_bce.py \
-    --split test --out submission.csv --seeds 1
+python harness/make_submission.py 027_deepfm_member.py     --split test --out submission.csv --seeds 1
 ```
 
-`008_time_features_two_bpr_bce.py` is the validation-best checkpoint at
-convergence, which is what the rules say is scored. **Not #9** — richer time
-buckets scored 0.0003 lower, inside the spread.
+Read *"The decision waiting for whoever submits"* above first and choose
+`--seeds 1` or `--seeds 3`.
 
-Before running it, read *"The decision waiting for whoever submits"* above and
-choose `--seeds 1` or `--seeds 3`. The command differs by one flag; the claim
-the submission makes differs a lot.
-
-What to expect, and what would be alarming:
-
-```
-valid          0.604598 +/- 0.000497   (+0.0031 over baseline)
-test baseline  0.5946                   official FM
-```
-
-Valid has run ~0.007 above test throughout, because test sits 10 days further
-from the training window. **So ~0.598 on test is the expected transfer, not a
-regression.** Compare the *delta* against the official FM's test 0.5946, never
-the raw valid number — mixing the two is the mistake `CLAUDE.md` warns about,
-and it makes +0.0018 look like +0.009.
-
-What would be a genuine problem: a delta far below +0.0031, which would mean
-the gains were valid-specific. MLE-bench lists validation overfitting as a known
-way these runs fail, and our best solution was selected across nine experiments
-on valid alone.
-
-Budget: test may be checked **two or three times for the whole competition**.
-One of those is this. Do not spend another on a variant unless something is
-actually wrong.
+What to expect: valid has run ~0.007 above test throughout, so **~0.598 on test
+is the expected transfer, not a regression.** Compare the *delta* against the
+official FM's test 0.5946, never the raw valid number. A delta far below +0.0040
+would mean the gains were valid-specific — worth knowing, since the best solution
+was selected across 30 experiments on valid alone.
 
 ### 2. Answer from the organisers
 
 `docs/email-convergence-question.md` is sent. Question 2 — whether refinement
-iterations count toward N — determines whether any further run should refine at
-all. Question 3's answer could require removing our 8-experiment floor, which
-would make runs end earlier than record-run-2 did.
+iterations count toward N — decides whether a further run should refine at all.
 
 ### 3. Write the submission
 
-Everything the deliverables need is already in the logs:
+Everything the deliverables need is in `logs/record-run-3/`.
 
-| deliverable | where |
-| --- | --- |
-| total tokens and compute | `ledger.totals()` over `logs/record-run-2/` |
-| error and recovery events | `logs/record-run-2/events.jsonl` |
-| per-iteration hypothesis, metrics | `logs/record-run-2/*.json` |
-| the search tree | the `parent` chain, drawn in `record-run-2/README.md` |
-| code diff per iteration | `logs/record-run-2/solutions/` |
+### If you want a higher score
 
-### Optional, in rough order of value
+**Not by hand.** This is an autonomy track: writing a solution ourselves puts a
+human result inside an agent run, and Innovation (20%) is scored on *what the
+agent identified as worth trying*. The legitimate lever is the agent's
+**capability** — search policy, measurement, harness bugs — never its knowledge.
 
-- **A second record run** (~$1.60, ~30 min). The search policy has been
-  exercised exactly once. record-run-2's tree is the shape we wanted, but one
-  run is one sample of the agent's behaviour, not evidence it reliably produces
-  that. A second run also stopped-while-improving, so it may simply go further.
-- **The bonus benchmarks.** KuaiRand-1k (11.7M rows) and 27k (322M) earn extra
-  points on top of the Pure score and cost nothing if skipped. Untouched. 1k is
-  the plausible one; 27k is almost certainly out of scope.
+The agent already finds methods on its own: ESMM, DIN, CWM and DeepFM all came
+from its own web searches in record-run-3, and it found CWM without any access
+to `src/`, which contains a working implementation.
+
+So the options are: run it again and let it search differently; improve how it
+searches without telling it what to find; or accept +0.0040. Realistic reach is
+0.607-0.608; **0.61 is unlikely** given the deceleration above.
 
 ---
 
