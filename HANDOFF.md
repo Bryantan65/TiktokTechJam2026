@@ -91,7 +91,7 @@ which is stronger evidence than the final number alone. Runtime: 50 s numpy,
 
 **Target: valid 0.6035** (baseline 0.6015 + the official ε of 0.002).
 
-### The seven runs
+### The runs
 
 Each archive is kept because it is the evidence behind a fix, and deleting them
 would leave the fixes looking like guesses.
@@ -109,6 +109,10 @@ would leave the fixes looking like guesses.
 | `logs/record-run-6/` | 34 experiments, converged at +0.0035 | the GBDT capability test; run 3 held |
 | `logs/record-run-7/` | 3 experiments, **crashed** | a UnicodeEncodeError on an arrow; fixed |
 | `logs/record-run-8/` | 31 experiments, converged at +0.0033 | the plateau detector; run 3 held |
+| `logs/record-run-9/` | 33 experiments, converged, best 0.605738 | Zheng's; the headline is seed-picked, see below |
+| `logs/record-run-10/` | 31 experiments, converged, best 0.604931 | the LightGBM/LambdaMART family; run 3 held |
+| `logs/record-run-11/` | 30 experiments, converged, best 0.604653 | semi-hard sampling and LambdaRank weighting; run 3 held |
+| `logs/record-run-13/` | 2 experiments, **killed deliberately** | no code change since run 12; not worth the compute |
 
 **shakedown-02** is the one worth reading. Twelve experiments, all inside
 direction 1, ending in five consecutive tweaks of one loss weight across a
@@ -1263,6 +1267,358 @@ reasoning:
 - Run 6 still does not fire, and that is correct. Its nine re-weightings sat
   0.0005-0.0008 *below* its best - genuinely distinguishable, just useless.
   That is a different failure and the batching guidance already addresses it.
+
+---
+
+## The task is data-limited, not method-limited
+
+The most useful measurement of the project, and it explains every other result
+in this file. Run on `record-run-3`'s winner, predicting the real `valid`, with
+every arm fitting on a slice of `train` only - no validation row is used for
+training anywhere in this experiment, and `test` is never loaded.
+
+```
+A    6 days, OLD     fit 04-09..04-14, stop 04-15..04-21    0.589287
+C    6 days, RECENT  fit 04-15..04-20, stop 04-21           0.591171
+B   12 days, RECENT  fit 04-09..04-20, stop 04-21           0.604831
+
+recency   C - A = +0.00188    same volume, six days newer      2.4 sigma
+volume    B - C = +0.01366    same end date, twice the data   17 sigma
+```
+
+**Doubling the training data is worth +0.0137. The agent's entire modelling
+gain across eleven runs is +0.0040.** Recency matters too but seven times less,
+which also means the 8-day gap between the end of `train` and the start of
+`test` is not what is holding the score down.
+
+### Why this explains everything else
+
+Three independent measurements now say the same thing from different angles:
+
+```
+median user has 31 training rows, k=16       1.9 observations per parameter
+changing k (8/16/24/32)                      spread inside seed noise
+weight decay 1e-6 -> 1e-3                    monotonically WORSE, -0.0038 at 1e-3
+```
+
+The `l2` result is the sharp one. If those thinly-estimated user vectors were
+memorising noise, shrinking them would help. Shrinking them hurts, monotonically.
+So **the model is under-fit, not over-fit** - what it has learned from two
+observations per dimension is real signal, thinly measured. It is starved, not
+confused.
+
+That is why seven independent searches across four mechanism families all landed
+within 0.0009 of each other, and why six hyperparameter configurations moved the
+score less than the random seed does. They were all competing over the last
+thousandth of a signal whose first fifteen thousandths are set by how much data
+the split provides.
+
+### Why we still trained on `train` alone
+
+Refitting the final model on train plus valid is ordinary competition practice
+and nothing in the rules forbids it. We did not do it, and the reasoning is
+worth recording so the choice does not look accidental.
+
+A TikTok ML engineer said in the official Q&A: *"try not to touch validation
+until it's time to test."* That is guidance from the organisers and it settles
+the question on its own. Two further reasons point the same way. Once `valid` is
+in training the only instrument left is `test`, so deciding "refit or not" would
+mean selecting on the split we are judged by. And every claim in this file rests
+on `valid` having stayed a clean instrument across eleven agent runs - that is
+why +0.0040 on valid carried over to +0.0039 on test, and it is the reason our
+numbers are worth reading at all.
+
+The size of what we passed on is small in any case. Data volume matters
+enormously in the range we measured, but its marginal value has largely
+collapsed by 13 days: 6->12 days is worth +0.0023/day, 12->13 days only
++0.0005/day. Valid adds 11% more rows at the flat end of that curve.
+
+## What was tested and found empty, 2026-08-29
+
+Each of these was a plausible idea with a mechanism behind it. All were measured
+rather than argued about, and all came back inside seed noise or worse.
+
+| tried | result |
+| --- | --- |
+| embedding dimension k = 8 / 16 / 24 / 32 | spread 0.00105, scattered; less than one seed sigma |
+| learning rate 0.0005 / 0.001 / 0.002 | both changes slightly worse |
+| weight decay 1e-5 / 1e-4 / 1e-3 | monotonically worse; -0.0038 at 1e-3 |
+| `video_features_statistic_pure.csv` (52 cols) | best column scores 0.5804 against item popularity's 0.5807 - identical |
+| `is_rand` exposure debiasing | 0 of 1,141,112 training rows have it set |
+| user-tag taste history | 78% coverage, GAUC 0.5216 - a coin flip within users |
+| transductive features from the impression list | eval-window exposure 0.4973, position 0.4833; blending them in hurts monotonically |
+| the 18-second label threshold | subsumed - 99.99% of valid videos appear in train, so `video_id` already encodes every static property |
+| seed rank-averaging on the winner | +0.00001. The earlier +0.0005 was measured on record-run-2's single BPR model; run 3's winner is already a 10-member ensemble and has done that variance reduction |
+| ApproxNDCG / NeuralNDCG | published as on-par with LambdaRank, which we measured at -0.0032. Three untried methods ruled out by one measurement we already had |
+| cold-start literature | addresses unseen ITEMS; ours are 99.99% seen. Wrong problem shape |
+
+### Optimisation quality and transfer, 2026-08-29 (later)
+
+The under-fit diagnosis has two halves. Capacity and priors were already ruled
+out (k flat, weight decay monotonically worse). These test the other half -
+whether the model is being trained hard enough - and whether a denser label can
+substitute for the rows we cannot have. Both come back empty, and between them
+they close the question.
+
+| tried | result |
+| --- | --- |
+| batch size 8192 -> 2048 | 0.605136, -0.00018 |
+| patience 4 -> 12, epoch cap 40 -> 100 | 0.605300, -0.00002 |
+| both batch and patience together | 0.605123, -0.00020 |
+| pretrain 3 epochs on `is_click`, fine-tune on `long_view` | -0.00062 |
+| pretrain 8 epochs on `is_click`, fine-tune on `long_view` | -0.01151 |
+
+**The model is under-fit but converged.** More updates, smaller updates and more
+patience all do nothing, so it is not stopping early and it is not starved of
+optimisation - it has already extracted what the data supports.
+
+#### Why no auxiliary label can help, in one number
+
+`is_click` fires on 46.3% of rows against `long_view`'s 33.7%, and yields 37%
+more BPR pairs per epoch. It is the densest auxiliary signal available. But BPR
+only learns from users who have both a positive and a negative:
+
+```
+long_view   pairable users  24290   pairs/epoch  382579
+is_click    pairable users  24406   pairs/epoch  524927
+```
+
+**116 extra users. 0.5%.** The additional supervision lands almost entirely on
+users the model already trains on. Every other engagement column is sparser than
+`is_click` and falls on the same users, so this rules out the family, not just
+the instance.
+
+The degradation is also monotonic in pretraining length, which is the mechanism
+showing itself: the click geometry is not a coarse version of the target that
+fine-tuning refines, it is a different optimum that fine-tuning has to walk back.
+Pretraining alone scores 0.584 - real signal, wrong target. This is a different
+result from the multi-task experiment, which optimised both jointly; sequential
+transfer was the untested variant and it is now tested.
+
+#### The users BPR never trains are not a weak spot
+
+`make_user_pairs` silently drops any user without both a positive and a negative,
+so unlike the pointwise baseline, those users' embeddings receive no gradient.
+That sounded like a real gap - it is not:
+
+```
+discriminative valid users whose embedding BPR never trains   508 of 12929 (3.9%)
+their share of GAUC weight                                    3.63%
+
+                        rows     GAUC     nDCG@5
+BPR-trained users     119266   0.6715     0.5438
+BPR-untrained users     5643   0.6919     0.4639
+same slice, item popularity only                 0.6432     0.4502
+```
+
+They score **higher** GAUC than the users BPR does train, and well above item
+popularity on their own slice. The item-side terms carry them, which is what the
+within-user-ranking argument predicts. Nothing to recover here.
+
+### The ensemble is saturated on both axes, 2026-08-29
+
+The winner blends 10 members, 7 of which are the same FM/BPR model at different
+seeds. The obvious hypothesis was that those 7 are near-duplicates and their
+slots are headroom - spend them on distinct objectives instead and the
+diversity term pays. **That hypothesis is wrong**, and the measurement is worth
+keeping precisely because it is counter-intuitive.
+
+```
+full 10-member ensemble            0.605344
+
+7 seed members only                0.605152
+3 structural members only          0.602609
+
+1 seed + all 3 structural          0.603737   -0.00161
+3 seed + all 3 structural          0.604684   -0.00066
+5 seed + all 3 structural          0.605356   +0.00001
+7 seed + all 3 structural          0.605344    baseline
+
+pairwise rank correlation
+  seed vs seed                     r = 0.9165
+  seed vs structural               r = 0.8519
+  structural vs structural         r = 0.7973
+```
+
+Seed members are **not** near-duplicates. At r = 0.9165 they are meaningfully
+decorrelated, and they carry the ensemble: the seven of them alone score 0.605152
+against the full blend's 0.605344, so all three structurally different members
+together contribute **+0.0002**. Removing seed members costs real score, and you
+need five of them before the curve flattens.
+
+So the diversity term is real but it comes from **seed variance, not
+architecture**, and it plateaus at five members. An eighth seed does nothing; a
+fourth objective is worth a fraction of a thousandth. Both axes are done.
+
+(This is a different axis from the earlier "+0.00001 from seed rank-averaging",
+which averaged whole ensembles across outer seeds. Both saturated, separately.)
+
+### What this means for the score
+
+The ensemble was the last untested mechanism. With data volume established as
+the binding constraint and capacity, regularisation, optimisation, auxiliary
+labels and now ensembling all measured flat, there is no known source of
+another +0.0005 that would survive the move to test.
+
+Valid can still be pushed higher by **selection** - run-to-run sd is 0.00034, so
+the maximum over enough runs drifts up on its own. We have the receipt on what
+that buys: a seed-picked run beat ours by +0.0002 on valid and +0.00034 on test.
+Selection fits the valid split's noise, not its signal.
+
+The one measurement that was genuinely higher is the cross-run blend at 0.6063,
+six independent runs' winners rank-averaged. That is not selection - independent
+runs really are decorrelated (r = 0.89-0.96 across runs against 0.98-0.99 within
+one) - but it consumes N times the compute budget, and whether it counts as one
+submission is exactly the open question in `docs/email-multirun-question.md`.
+
+### The tab decomposition, and same-tab negative sampling, 2026-08-29
+
+`long_view` rates run 4.2% on tab 0 to 48.9% on tab 4, and the organisers flagged
+conditioning on `tab` as an open and reasonable modelling decision. Splitting the
+winner's own valid predictions by whether a scored pair crosses a tab boundary:
+
+```
+                    share of scored pairs    model AUC
+same-tab  pairs           73.4%               0.6198
+cross-tab pairs           26.6%               0.8256
+
+51.3% of discriminative valid users span more than one tab
+```
+
+**The model is already near-solved on cross-tab ordering.** A single tab bias term
+wins those pairs, because the base rates are so far apart. The overall GAUC of
+0.672 is a blend of easy cross-tab pairs and the same-tab pairs it is much worse
+at - and same-tab is three quarters of everything the metric scores. This is the
+most useful structural fact we have about where the remaining error lives.
+
+That looked like shortcut learning: uniform within-user negative sampling hands
+the model ~27% easy pairs, so it can lower BPR loss through the tab bias without
+learning within-surface affinity. The fix would be to draw negatives from the
+same tab at rate p, making the tab term worthless.
+
+```
+p_same   primary              same-tab AUC   cross-tab AUC
+0.00     0.602635             0.6150         0.8245
+0.50     0.602517  -0.00012   0.6155         0.8251
+0.75     0.603214  +0.00058   0.6159         0.8227
+1.00     0.592396  -0.01024   0.6136         0.7699
+```
+
+`p=1.00` confirms the mechanism exists in the other direction: with no pair ever
+distinguishing tabs the bias goes untrained and cross-tab AUC collapses.
+
+But the shortcut theory is wrong. Same-tab AUC barely moves (0.6150 -> 0.6159)
+even when the model is forced onto those pairs, so same-tab discrimination is
+data-limited, not shortcut-limited - the same conclusion everything else reaches.
+
+#### The +0.00058 was one lucky seed
+
+Worth recording in full, because a single seed said the idea worked:
+
+```
+seed 0      p=0.00 0.602635   p=0.75 0.603217   diff +0.00058
+seed 1009   p=0.00 0.603244   p=0.75 0.602253   diff -0.00099
+seed 2027   p=0.00 0.603746   p=0.75 0.603187   diff -0.00056
+seed 3037   p=0.00 0.602873   p=0.75 0.601186   diff -0.00169
+seed 4051   p=0.00 0.603050   p=0.75 0.603042   diff -0.00001
+
+paired diff  mean -0.00053   sd 0.00087   t = -1.36 on 4 df
+```
+
+Seed 0 was the only positive of five. Reporting the first result would have
+published a gain that does not exist. Every number in this file that is quoted
+as an improvement should be read against this: single-seed differences below
+about 0.0008 are indistinguishable from nothing, and the only defence is
+replication.
+
+### Two model families converge to the same number
+
+The strongest single argument that the ceiling is real rather than a failure of
+imagination. Across runs 10 and 11 the agent ran **26 gradient-boosted tree
+experiments** - LightGBM, LambdaMART, target encoding - unprompted, from nothing
+but `lightgbm 4.x` in the installed package list.
+
+```
+LightGBM / LambdaMART, best     GAUC 0.6714   nDCG@5 0.5379   ~ 0.6046
+FM/BPR ensemble (submission)    GAUC 0.6723   nDCG@5 0.5384   ~ 0.6053
+```
+
+Neural embeddings and boosted trees share no assumptions and fail in different
+ways. They land **within 0.0007 of each other**. One family plateauing means the
+search got stuck; two unrelated families arriving at the same place means the
+signal in this data runs out around there.
+
+Pure LightGBM with target encoding was clearly worse (GAUC 0.6573). The good
+tree numbers are all blends where a tree model is one member among FM rankers.
+
+### The agent's other objective experiments
+
+Recorded for completeness - each was found by the agent without being named in
+the prompt, and each lost to plain within-user BPR.
+
+| tried | result |
+| --- | --- |
+| xendcg | on par, not better; appears in run 10's blends |
+| semi-hard / score-based hard negative mining | 0.6012-0.6033, below the incumbent |
+| multi-negative BPR (several negatives per positive) | roughly neutral |
+| explicit user-video / user-author / user-tab cross fields | 0.6005, weak |
+| listwise softmax over a user's impressions | competitive, not better |
+
+### Zheng's 0.6057 is seed-picked
+
+Worth recording precisely, because it was briefly treated as a target to beat.
+
+`logs/record-run-9/solutions/028_seed0_history_tiebreak.py` accepts a `seed`
+argument and then passes a literal `seed=0` to the model. The reported 0.6057 is
+therefore one seed, not a mean.
+
+```
+honest 3-seed value    0.605353 +/- 0.000393
+iterations 27-33 add   +0.00004
+
+test    ours 0.598508    his 0.598847    gap 0.00034
+```
+
+The valid gap of +0.0002 became +0.00034 on test. This is the same trap the
+same-tab sampling arm walked into on this side - a single seed said an idea
+worked, and replication said otherwise. It is not misconduct, it is what
+single-seed reporting does, and it is the reason every claim in this file that
+matters is quoted with a seed count.
+
+### Two structural facts worth keeping
+
+```
+valid impressions whose video appears in train    99.99%
+valid impressions whose (user, video) pair does    1.62%
+same (user, video) seen twice in valid - labels agree   94.7%
+```
+
+The label is highly predictable from who-and-what. The problem is that you
+almost never get to observe that pair before being asked about it. Content
+features are redundant because the item is always known; personalisation is
+unlearnable because the pairing almost never is.
+
+### The ceiling, honestly estimated
+
+Earlier versions of this file quoted a "perfect video knowledge" ceiling of
+0.6197 on valid. That number was memorisation: it fit each video's rate on the
+same rows it scored, roughly 21 per video. Cross-validated properly - fit on
+train plus 90% of valid, score the held-out 10% - it collapses:
+
+```
+                        self-fitted   cross-validated
+video rate                0.6146          0.5834
+(video, tab) rate         0.6351          0.5919
+(user, video) rate        0.8477          0.4988
+```
+
+The `(user, video)` collapse from 0.85 to 0.50 is the proof - that number was
+the label leaking through one-row cells.
+
+**Our submission beats perfect knowledge of any single feature by +0.014.** The
+realistic ceiling is ~0.607 on valid, ~0.600 on test: seven runs span
+0.6046-0.6055 with sd 0.00034, and blending six of them - the highest anything
+reached - gives 0.6063.
 
 ---
 
