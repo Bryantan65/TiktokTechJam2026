@@ -55,6 +55,15 @@ CACHED_COST_PER_M = float(os.environ.get('AGENT_CACHED_COST_PER_M',
 # accept tools natively (gpt-5.5 and earlier), which keeps reasoning on.
 REASONING_EFFORT = os.environ.get('AGENT_REASONING_EFFORT') or None
 
+# Any OpenAI-compatible endpoint. DeepSeek, Together, Groq and vLLM all speak
+# /v1/chat/completions, so pointing the client elsewhere is the whole port:
+#   AGENT_BASE_URL=https://api.deepseek.com  AGENT_API_KEY=sk-...
+# Unset means the OpenAI default and OPENAI_API_KEY, which is what every run so
+# far has used. Kept separate from OPENAI_API_KEY so both can sit in .env at
+# once and the bake-off can switch providers per model without editing files.
+BASE_URL = os.environ.get('AGENT_BASE_URL') or None
+API_KEY = os.environ.get('AGENT_API_KEY') or os.environ.get('OPENAI_API_KEY')
+
 # Two of these are now ORGANISER RULES, not our own backstops. The problem
 # statement of 2026-08-27 replaced "Compute budget: TBD" with:
 #
@@ -156,6 +165,40 @@ def _compact(messages, keep_iterations=HISTORY_ITERATIONS):
     if len(bounds) <= keep_iterations:
         return messages
     return messages[:1] + messages[bounds[-keep_iterations]:]
+
+
+def _make_stdout_safe():
+    """Never let printing the model's own words kill the run.
+
+    The agent writes arrows, box-drawing and em-dashes constantly. On Windows,
+    stdout defaults to cp1252 when redirected to a file, and printing U+2192
+    raises UnicodeEncodeError from inside the print itself - which is not
+    caught as an API error or a solution error, so it takes down the whole
+    loop. Observed in record-run-7: crashed at iteration 2 on a single arrow,
+    three experiments in.
+
+    `errors='replace'` always, so an unencodable character degrades to '?'
+    instead of raising. UTF-8 additionally when stdout is NOT a terminal, i.e.
+    redirected to a log: there the encoding is ours to choose and a readable
+    log beats a lossy one. A real console keeps its own encoding, so nothing
+    turns to mojibake on screen.
+
+    The spinner has its own narrower guard below; this covers every other
+    print, including ones nobody has written yet.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if stream is None:
+                continue
+            if stream.isatty():
+                stream.reconfigure(errors='replace')
+            else:
+                stream.reconfigure(encoding='utf-8', errors='replace')
+        except (AttributeError, ValueError, OSError):
+            pass        # a stream that cannot be reconfigured is left alone
+
+
+_make_stdout_safe()
 
 
 def _console_supports_unicode():
@@ -374,7 +417,8 @@ def run_loop(supervised: bool = False, max_iter: int = 100,
     run_dir = _setup_run_dir(run_name, run_id)
     print(f'=== Run folder: {os.path.relpath(run_dir, ROOT)}/ ===')
 
-    client = OpenAI()          # .env is loaded at import, above
+    # .env is loaded at import, above. base_url is None for OpenAI itself.
+    client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
     tokens = TokenTracker()
 
     messages = [{'role': 'system', 'content': system_prompt()}]

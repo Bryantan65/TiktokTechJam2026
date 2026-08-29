@@ -1,0 +1,64 @@
+{
+  "iteration": 8,
+  "solution": "logs/bakeoff-gpt55/solutions/008_linear_cross_bagged.py",
+  "hypothesis": "improve 7: add explicit linear-only (user,author), (user,video), and (user,tab) crosses to the current bagged rank ensemble, so repeated within-user affinities can be memorised exactly rather than only through low-rank FM factors.",
+  "parent": "7",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:50:28+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604079,
+  "GAUC": 0.670745,
+  "nDCG@5": 0.537412,
+  "source_hash": "98ef1fc7fe97",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "a7a12c39bac1",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000546,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671513,
+      "nDCG@5": 0.537364,
+      "primary": 0.604439
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670005,
+      "nDCG@5": 0.536896,
+      "primary": 0.603451
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670716,
+      "nDCG@5": 0.537975,
+      "primary": 0.604346
+    }
+  ],
+  "seconds": 269.5,
+  "verdict": "KEPT",
+  "delta": 0.002579,
+  "tokens_in": 70737,
+  "tokens_out": 9363,
+  "tokens_cached": 53760,
+  "cost_usd": 0.162953,
+  "model": "gpt-5.5",
+  "agent_iteration": 7,
+  "wall_seconds": 393.6,
+  "recovery_events": []
+}

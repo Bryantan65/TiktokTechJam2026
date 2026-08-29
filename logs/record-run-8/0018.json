@@ -1,0 +1,64 @@
+{
+  "iteration": 18,
+  "solution": "logs/record-run-8/solutions/018_watchtime_bpr_blend.py",
+  "hypothesis": "draft watch-time modelling: use raw play_time_ms as a censored-engagement signal by training a same-user pairwise FM on binary label plus capped watch ratio, then blend its rank at 30% with the current residual ensemble. CWM/survival motivation: https://en.wikipedia.org/wiki/Survival_analysis",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:45:14+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603902,
+  "GAUC": 0.670517,
+  "nDCG@5": 0.537286,
+  "source_hash": "2f1151db5a6c",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], watch_weight=0.3, fm_models=5\nwatch-time raw alignment hits=0/1,141,112\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "0bf5f3a231dc",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000319,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670343,
+      "nDCG@5": 0.537323,
+      "primary": 0.603833
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671088,
+      "nDCG@5": 0.53741,
+      "primary": 0.604249
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670119,
+      "nDCG@5": 0.537126,
+      "primary": 0.603623
+    }
+  ],
+  "seconds": 162.8,
+  "verdict": "KEPT",
+  "delta": 0.002402,
+  "tokens_in": 80050,
+  "tokens_out": 9821,
+  "tokens_cached": 59904,
+  "cost_usd": 0.178527,
+  "model": "gpt-5.5",
+  "agent_iteration": 17,
+  "wall_seconds": 282.5,
+  "recovery_events": []
+}

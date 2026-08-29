@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data import load                     # noqa: E402  official, unmodified
 from evaluate import evaluate             # noqa: E402  official, unmodified
 import ledger                             # noqa: E402
+import devdata                            # noqa: E402  train-only holdout
 
 DATA_DIR = os.path.join(ROOT, 'rec_datasets', 'KuaiRand-Pure', 'data')
 TIMEOUT = 900          # 15 min; a correct run takes ~30s, so this is a hang
@@ -52,23 +53,42 @@ _SPLIT_CACHE = {}
 # single-seed scoring (faster, and what the organisers' epsilon assumes).
 N_SEEDS = int(os.environ.get('HARNESS_SEEDS', 3))
 
-# Adaptive seeding: score seed 0 first, and only spend the remaining seeds if
-# the result could plausibly become the new best. Two thirds of experiments
-# never improve on the incumbent, and measuring a dud to three-seed precision
-# buys nothing - record-run-6 spent 121 of its 180 compute minutes on
-# experiments that did not move the best. A screened row is still logged, still
-# scored, and still visible to the agent; it is just measured once.
+# Adaptive seeding: score seed 0 first, and spend the remaining seeds only if
+# the result could plausibly become the new best. The idea was that two thirds
+# of experiments never improve on the incumbent, so measuring a dud to
+# three-seed precision is waste - record-run-6 spent 121 of its 180 compute
+# minutes on experiments that did not move the best.
+#
+# DEFAULT OFF, because it was measured and it is SLOWER. A/B on the control
+# solution: 49.1s with all three seeds concurrent, 69.6s phased. Phasing
+# serialises what was already parallel, and this workload is memory-bandwidth
+# bound so the freed cores buy nothing back - one seed on six threads takes
+# about as long as three seeds on two threads each. The saving on a dud is
+# 34s against 33s, i.e. none, while the cost on a contender is ~40%.
+#
+# Kept behind a flag rather than deleted: it becomes correct the moment seeds
+# stop being run concurrently, or if experiment-level concurrency is ever
+# raised so that freed cores go to another experiment instead of idling.
+# HARNESS_ADAPTIVE_SEEDS=1 enables it.
 #
 # The margin is the official epsilon. A solution landing more than epsilon
 # below the incumbent cannot become best on a re-measurement: seed spread on
 # this data is ~0.0008, so 0.002 is about 2.5 sigma.
-ADAPTIVE_SEEDS = os.environ.get('HARNESS_ADAPTIVE_SEEDS', '1') != '0'
+ADAPTIVE_SEEDS = os.environ.get('HARNESS_ADAPTIVE_SEEDS', '0') != '0'
 SCREEN_MARGIN = float(os.environ.get('HARNESS_SCREEN_MARGIN', 0.002))
 
 
 def _splits(data_dir):
+    """Official splits, plus 'dev' - the train-only holdout.
+
+    'dev' is the last few days of TRAIN, never valid and never test. It exists
+    so the agent can screen an idea without spending a public-validation
+    experiment on it; see harness/devdata.py.
+    """
     if data_dir not in _SPLIT_CACHE:
-        _SPLIT_CACHE[data_dir] = load(data_dir)
+        d = dict(load(data_dir))
+        d['dev'] = devdata.load(data_dir)['valid']
+        _SPLIT_CACHE[data_dir] = d
     return _SPLIT_CACHE[data_dir]
 
 
@@ -98,7 +118,13 @@ def _seed_env(n_parallel):
     speedup: measured 2.10x for 3 seeds on 12 cores.
     """
     env = dict(os.environ)
-    env['PYTHONPATH'] = KIT + os.pathsep + env.get('PYTHONPATH', '')
+    # harness/ as well as the kit, so a solution can `from devdata import load`
+    # for a train-only screening run. Pin the holdout cut explicitly: the
+    # harness scores against its own copy of the holdout, and if the solution
+    # derived a different cut the rows would not line up.
+    env['PYTHONPATH'] = (os.path.join(ROOT, 'harness') + os.pathsep + KIT
+                         + os.pathsep + env.get('PYTHONPATH', ''))
+    env['HARNESS_DEV_HOLDOUT_DAYS'] = str(devdata.HOLDOUT_DAYS)
     per = max(1, (os.cpu_count() or 4) // max(1, n_parallel))
     for var in ('OMP_NUM_THREADS', 'MKL_NUM_THREADS', 'OPENBLAS_NUM_THREADS',
                 'NUMEXPR_NUM_THREADS'):
@@ -206,9 +232,9 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
         'nDCG@5': None,
     }
 
-    if split != 'valid':
-        rec['error'] = ("refusing to score on %r; the agent develops on valid "
-                        "only" % split)
+    if split not in ('valid', 'dev'):
+        rec['error'] = ("refusing to score on %r; the agent develops on valid, "
+                        "or screens on dev (a train-only holdout)" % split)
         ledger.write(rec)
         return rec
 
@@ -391,7 +417,8 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
                 iteration=rec['iteration'], recovered_from=int(parent))
 
     rec['seconds'] = round(time.time() - t0, 1)
-    rec['verdict'] = ledger.verdict(rec['valid_primary'], rec['status'])
+    rec['verdict'] = ledger.verdict(rec['valid_primary'], rec['status'],
+                                    rec.get('split', 'valid'))
     rec['delta'] = (round(rec['valid_primary'] - ledger.BASELINE_VALID, 6)
                     if rec['valid_primary'] is not None else None)
     ledger.write(rec)

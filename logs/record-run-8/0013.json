@@ -1,0 +1,64 @@
+{
+  "iteration": 13,
+  "solution": "logs/record-run-8/solutions/013_rank5_ensemble_bpr_bce_fm.py",
+  "hypothesis": "improve 12: train five BPR+BCE members and average within-user percentile ranks instead of raw logits, matching GAUC/nDCG's rank-only objective and reducing member score-scale noise. I also checked watch-time/CWM background before deciding this last high-probability refinement was safer; search citation: https://arxiv.org/search/?query=censored+watch+time+recommendation&searchtype=all",
+  "parent": "12",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:29:02+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604659,
+  "GAUC": 0.671419,
+  "nDCG@5": 0.537898,
+  "source_hash": "88c4628015da",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], rank ensemble=5\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "2a844f480ef2",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000291,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671818,
+      "nDCG@5": 0.538103,
+      "primary": 0.604961
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671493,
+      "nDCG@5": 0.537776,
+      "primary": 0.604634
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670945,
+      "nDCG@5": 0.537816,
+      "primary": 0.604381
+    }
+  ],
+  "seconds": 109.9,
+  "verdict": "KEPT",
+  "delta": 0.003159,
+  "tokens_in": 47381,
+  "tokens_out": 4312,
+  "tokens_cached": 37376,
+  "cost_usd": 0.08682,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 168.2,
+  "recovery_events": []
+}

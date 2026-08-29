@@ -1,0 +1,64 @@
+{
+  "iteration": 9,
+  "solution": "logs/record-run-8/solutions/009_crossfield_bpr_bce_fm.py",
+  "hypothesis": "improve 3: add explicit user-video/user-author/user-tab cross fields to the best BPR+BCE FM so repeated items and user-specific author/tab preferences can be learned directly rather than only through rank-16 interactions.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:16:57+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.600478,
+  "GAUC": 0.665711,
+  "nDCG@5": 0.535245,
+  "source_hash": "cb5ec9c6433d",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'] + user-video/user-author/user-tab crosses\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "a04e7d207f67",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000482,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.666157,
+      "nDCG@5": 0.535052,
+      "primary": 0.600605
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.665972,
+      "nDCG@5": 0.535796,
+      "primary": 0.600884
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.665005,
+      "nDCG@5": 0.534888,
+      "primary": 0.599946
+    }
+  ],
+  "seconds": 312.6,
+  "verdict": "noise",
+  "delta": -0.001022,
+  "tokens_in": 50151,
+  "tokens_out": 3923,
+  "tokens_cached": 38400,
+  "cost_usd": 0.087807,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 359.6,
+  "recovery_events": []
+}

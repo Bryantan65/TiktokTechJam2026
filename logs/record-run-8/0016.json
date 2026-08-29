@@ -1,0 +1,64 @@
+{
+  "iteration": 16,
+  "solution": "logs/record-run-8/solutions/016_rank5_power2_ensemble_bpr_bce_fm.py",
+  "hypothesis": "improve 13: BPR optimizes AUC while nDCG@5 cares most about the very top; keep the five BPR+BCE members unchanged but square each within-user percentile rank before averaging to emphasize consensus top items. Citation: https://arxiv.org/abs/1205.2618",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:37:16+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604644,
+  "GAUC": 0.671453,
+  "nDCG@5": 0.537836,
+  "source_hash": "b90817e18ba0",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], rank ensemble=5, power=2.0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "510b8409eeed",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000328,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672009,
+      "nDCG@5": 0.537974,
+      "primary": 0.604991
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67136,
+      "nDCG@5": 0.537845,
+      "primary": 0.604603
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670989,
+      "nDCG@5": 0.53769,
+      "primary": 0.604339
+    }
+  ],
+  "seconds": 112.7,
+  "verdict": "KEPT",
+  "delta": 0.003144,
+  "tokens_in": 120834,
+  "tokens_out": 5839,
+  "tokens_cached": 99712,
+  "cost_usd": 0.161051,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 190.1,
+  "recovery_events": []
+}

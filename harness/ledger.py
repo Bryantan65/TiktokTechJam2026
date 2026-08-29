@@ -335,13 +335,15 @@ def _load_all():
     return out
 
 
-def verdict(primary, status):
+def verdict(primary, status, split='valid'):
     if status == 'no-op':
         return 'no-op'          # not a result; the change never reached the model
     if status == 'duplicate':
         return 'duplicate'
     if status != 'ok' or primary is None:
         return 'failed'
+    if split != 'valid':
+        return 'screen'     # train-only holdout; not comparable to the baseline
     delta = primary - BASELINE_VALID
     if delta >= EPSILON:
         return 'KEPT'
@@ -358,9 +360,14 @@ def _scored():
     reached the model), so they are not evidence that the search has run out of
     ideas either.
     """
+    # 'dev' rows are screening runs against a train-only holdout. Their number
+    # is not on the same scale as valid and is not the quantity the run is
+    # judged on, so they neither count toward convergence nor end a run. They
+    # still cost wall clock, which is the honest price of a screen.
     return [r for r in _load_all()
             if r.get('status') == 'ok'
             and r.get('verdict') != 'no-op'
+            and r.get('split', 'valid') == 'valid'
             and r.get('valid_primary') is not None]
 
 
@@ -418,7 +425,8 @@ def write(record):
     # Set here rather than at each call site so an early return cannot leave a
     # record without a verdict.
     record.setdefault('verdict',
-                      verdict(record.get('valid_primary'), record.get('status')))
+                      verdict(record.get('valid_primary'), record.get('status'),
+                              record.get('split', 'valid')))
     os.makedirs(LOG_DIR, exist_ok=True)
     path = os.path.join(LOG_DIR, '%04d.json' % record['iteration'])
     _write_json_atomic(path, record)
@@ -533,6 +541,8 @@ def best():
             continue
         if rec.get('status') != 'ok' or rec.get('valid_primary') is None:
             continue
+        if rec.get('split', 'valid') != 'valid':
+            continue        # a dev screen never becomes the incumbent
         if top is None or rec['valid_primary'] > top['valid_primary']:
             top = rec
     return top

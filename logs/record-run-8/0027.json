@@ -1,0 +1,64 @@
+{
+  "iteration": 27,
+  "solution": "logs/record-run-8/solutions/027_lgb_user_pref_9fm.py",
+  "hypothesis": "improve 24: the best node is still variance-limited by the FM rank ensemble; increase the core BPR+BCE FM ensemble from five to nine members while keeping the same personalized LambdaRank residual, a direct variance-reduction test despite the extra cost.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:20:31+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604749,
+  "GAUC": 0.671541,
+  "nDCG@5": 0.537957,
+  "source_hash": "bde7bf140d2a",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], lgb_user_pref_9fm n_models=9 fm_weight=0.5\nraw time rows=1,436,609; date_col=date; hour_col=hourmin\ntime alignment train: 1,141,112/1,141,112\ntime alignment valid: 124,909/124,909\ntime alignment test: 170,588/170,588\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "4af6d14e676b",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000157,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671692,
+      "nDCG@5": 0.53806,
+      "primary": 0.604876
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67176,
+      "nDCG@5": 0.537837,
+      "primary": 0.604799
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671172,
+      "nDCG@5": 0.537975,
+      "primary": 0.604573
+    }
+  ],
+  "seconds": 242.4,
+  "verdict": "KEPT",
+  "delta": 0.003249,
+  "tokens_in": 76170,
+  "tokens_out": 5567,
+  "tokens_cached": 53120,
+  "cost_usd": 0.139855,
+  "model": "gpt-5.5",
+  "agent_iteration": 26,
+  "wall_seconds": 292.6,
+  "recovery_events": []
+}

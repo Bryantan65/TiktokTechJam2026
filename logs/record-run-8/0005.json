@@ -1,0 +1,64 @@
+{
+  "iteration": 5,
+  "solution": "logs/record-run-8/solutions/005_mtl_aux_bpr_fm.py",
+  "hypothesis": "draft multi-task: add auxiliary click/like/follow/comment/forward heads sharing the FM embeddings with the BPR+BCE primary head, following the MTL regularization idea for related recommender feedback tasks (https://dl.acm.org/doi/10.1145/3219819.3220007).",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:09:35+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602886,
+  "GAUC": 0.669114,
+  "nDCG@5": 0.536659,
+  "source_hash": "8b11b99b650b",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nauxiliary CSV alignment misses: 1,436,609\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "a7cafa58b964",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000158,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669527,
+      "nDCG@5": 0.53658,
+      "primary": 0.603054
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668791,
+      "nDCG@5": 0.536689,
+      "primary": 0.60274
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669023,
+      "nDCG@5": 0.536707,
+      "primary": 0.602865
+    }
+  ],
+  "seconds": 66.3,
+  "verdict": "noise",
+  "delta": 0.001386,
+  "tokens_in": 50855,
+  "tokens_out": 5743,
+  "tokens_cached": 37376,
+  "cost_usd": 0.109815,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 142.6,
+  "recovery_events": []
+}

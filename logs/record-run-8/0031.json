@@ -1,0 +1,64 @@
+{
+  "iteration": 31,
+  "solution": "logs/record-run-8/solutions/031_lgb_allloo_history.py",
+  "hypothesis": "debug 24: node 24 may overfit train labels because global video/author/tab target encodings were not leave-one-out; apply leave-one-out to all aggregate rates so the residual ranker trains on leakage-free history features.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:38:48+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604685,
+  "GAUC": 0.671414,
+  "nDCG@5": 0.537956,
+  "source_hash": "93ceb106ce89",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], lgb_allloo_history fm_weight=0.5\nraw time rows=1,436,609; date_col=date; hour_col=hourmin\ntime alignment train: 1,141,112/1,141,112\ntime alignment valid: 124,909/124,909\ntime alignment test: 170,588/170,588\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e5559bb2409e",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000344,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671851,
+      "nDCG@5": 0.538153,
+      "primary": 0.605002
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67156,
+      "nDCG@5": 0.537908,
+      "primary": 0.604734
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67083,
+      "nDCG@5": 0.537808,
+      "primary": 0.604319
+    }
+  ],
+  "seconds": 172.1,
+  "verdict": "KEPT",
+  "delta": 0.003185,
+  "tokens_in": 79033,
+  "tokens_out": 5316,
+  "tokens_cached": 55168,
+  "cost_usd": 0.140406,
+  "model": "gpt-5.5",
+  "agent_iteration": 30,
+  "wall_seconds": 221.2,
+  "recovery_events": []
+}

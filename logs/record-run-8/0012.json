@@ -1,0 +1,64 @@
+{
+  "iteration": 12,
+  "solution": "logs/record-run-8/solutions/012_ensemble_bpr_bce_fm.py",
+  "hypothesis": "improve 3: average three independently seeded copies of the current best BPR+BCE FM logits so the successful pairwise mechanism gets lower sampling/initialization variance rather than adding an unreadable weak low-weight mechanism.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:26:47+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604245,
+  "GAUC": 0.670799,
+  "nDCG@5": 0.537692,
+  "source_hash": "93825a16dedd",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], ensemble=3\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "bfc3680303fe",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000186,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671097,
+      "nDCG@5": 0.537759,
+      "primary": 0.604428
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670541,
+      "nDCG@5": 0.537574,
+      "primary": 0.604057
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67076,
+      "nDCG@5": 0.537743,
+      "primary": 0.604251
+    }
+  ],
+  "seconds": 75.6,
+  "verdict": "KEPT",
+  "delta": 0.002745,
+  "tokens_in": 50847,
+  "tokens_out": 3479,
+  "tokens_cached": 36736,
+  "cost_usd": 0.088436,
+  "model": "gpt-5.5",
+  "agent_iteration": 11,
+  "wall_seconds": 119.8,
+  "recovery_events": []
+}

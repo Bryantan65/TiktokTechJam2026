@@ -87,11 +87,19 @@ def write_solution(filename: str, code: str) -> str:
 
 
 def run_experiment(solution: str, hypothesis: str = '',
-                   parent: str | None = None) -> str:
+                   parent: str | None = None, split: str = 'valid') -> str:
+    # 'dev' is the train-only holdout (harness/devdata.py); 'valid' is the real
+    # thing. Anything else is refused here as well as in the harness - the model
+    # cannot ask to be scored on test, and belt-and-braces is cheap for the one
+    # guarantee the whole result rests on.
+    if split not in ('valid', 'dev'):
+        return json.dumps({'status': 'error',
+                           'error': "split must be 'valid' or 'dev', got %r" % split})
     sys.path.insert(0, os.path.join(ROOT, 'harness'))
     from run import run_experiment as _run  # noqa: E402
     full = os.path.join(SOLUTIONS_DIR, solution)
-    result = _run(full, hypothesis=hypothesis, parent=parent, by='agent')
+    result = _run(full, hypothesis=hypothesis, parent=parent, by='agent',
+                  split=split)
     return json.dumps(result, indent=2)
 
 
@@ -182,6 +190,19 @@ TOOL_SCHEMAS = [
                         'type': 'string',
                         'description': "Filename, e.g. '002_bpr_loss.py'",
                     },
+                    'split': {
+                        'type': 'string',
+                        'enum': ['valid', 'dev'],
+                        'description': (
+                            "'valid' (default) is the real experiment: it "
+                            'counts toward convergence and can become the best '
+                            'solution. "dev" screens against a train-only '
+                            'holdout instead - cheaper to be wrong on, does not '
+                            'count toward convergence, and its number is not '
+                            'comparable to valid. Your solution must handle '
+                            "--split dev; see 001_torch_fm.py."
+                        ),
+                    },
                     'hypothesis': {
                         'type': 'string',
                         'description': (
@@ -239,5 +260,6 @@ TOOL_DISPATCH = {
     'read_solution': lambda **kw: read_solution(kw['path']),
     'write_solution': lambda **kw: write_solution(kw['filename'], kw['code']),
     'run_experiment': lambda **kw: run_experiment(
-        kw['solution'], kw.get('hypothesis', ''), kw.get('parent')),
+        kw['solution'], kw.get('hypothesis', ''), kw.get('parent'),
+        kw.get('split', 'valid')),
 }

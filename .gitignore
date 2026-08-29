@@ -39,3 +39,5 @@ models/*.pt
 
 
 bash.exe.stackdump
+# Per-member prediction cache written by solutions; regenerable, never committed.
+pred_cache/

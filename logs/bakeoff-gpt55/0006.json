@@ -1,0 +1,64 @@
+{
+  "iteration": 6,
+  "solution": "logs/bakeoff-gpt55/solutions/006_bce_bpr_rank_ensemble.py",
+  "hypothesis": "improve 3: random BPR is best but may discard BCE's complementary pointwise signal; test a readable >=30% addition, not a tiny ensemble member. Blend 70% BPR-3neg with 30% BCE after per-user percentile-rank normalization to remove logit scale mismatch.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:44:28+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603499,
+  "GAUC": 0.669979,
+  "nDCG@5": 0.537019,
+  "source_hash": "c1ea97cf0020",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "881d839cf71b",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000458,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670773,
+      "nDCG@5": 0.53724,
+      "primary": 0.604006
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.66967,
+      "nDCG@5": 0.536562,
+      "primary": 0.603116
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669493,
+      "nDCG@5": 0.537255,
+      "primary": 0.603374
+    }
+  ],
+  "seconds": 58.1,
+  "verdict": "noise",
+  "delta": 0.001999,
+  "tokens_in": 50130,
+  "tokens_out": 5459,
+  "tokens_cached": 35712,
+  "cost_usd": 0.108491,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 120.7,
+  "recovery_events": []
+}

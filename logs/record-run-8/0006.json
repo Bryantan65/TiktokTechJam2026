@@ -1,0 +1,64 @@
+{
+  "iteration": 6,
+  "solution": "logs/record-run-8/solutions/006_mtl_aux_keyfix.py",
+  "hypothesis": "debug 5: auxiliary alignment missed almost every row because it keyed on video-feature fields; align raw feedback by log fields (date,user_id,video_id,tab) with FIFO duplicate order so the multi-task signal actually reaches training.",
+  "parent": "5",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:11:21+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602931,
+  "GAUC": 0.669243,
+  "nDCG@5": 0.53662,
+  "source_hash": "e2e4ddc24a4b",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nauxiliary CSV alignment perfect; used=1,436,609; csv_rows=1,436,609\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "65744fcb32d2",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000215,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669771,
+      "nDCG@5": 0.536587,
+      "primary": 0.603179
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668909,
+      "nDCG@5": 0.536714,
+      "primary": 0.602812
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669049,
+      "nDCG@5": 0.536558,
+      "primary": 0.602803
+    }
+  ],
+  "seconds": 65.0,
+  "verdict": "noise",
+  "delta": 0.001431,
+  "tokens_in": 46620,
+  "tokens_out": 4161,
+  "tokens_cached": 33664,
+  "cost_usd": 0.090832,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 104.8,
+  "recovery_events": []
+}

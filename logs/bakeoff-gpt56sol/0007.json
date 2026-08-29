@@ -1,0 +1,64 @@
+{
+  "iteration": 7,
+  "solution": "logs/bakeoff-gpt56sol/solutions/007_user_history_recency.py",
+  "hypothesis": "improve 6: persistent lifetime affinities dilute changing user interests; exponentially decay each per-user target-category history by calendar-day gap so recent positive behavior has more influence on within-user ranking.",
+  "parent": "6",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:09:39+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60233,
+  "GAUC": 0.668277,
+  "nDCG@5": 0.536383,
+  "source_hash": "bb9c8f02c003",
+  "stdout_tail": "wrote 124909",
+  "predictions_hash": "e3db489e3739",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000328,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668584,
+      "nDCG@5": 0.536727,
+      "primary": 0.602655
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668421,
+      "nDCG@5": 0.536252,
+      "primary": 0.602336
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667827,
+      "nDCG@5": 0.536171,
+      "primary": 0.601999
+    }
+  ],
+  "seconds": 97.9,
+  "verdict": "noise",
+  "delta": 0.00083,
+  "tokens_in": 57229,
+  "tokens_out": 1625,
+  "tokens_cached": 48971,
+  "cost_usd": 0.06138,
+  "model": "gpt-5.6-sol",
+  "agent_iteration": 8,
+  "wall_seconds": 122.1,
+  "recovery_events": []
+}

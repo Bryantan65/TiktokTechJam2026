@@ -1,0 +1,22 @@
+{
+  "iteration": 4,
+  "solution": "logs/bakeoff-deepseekv4pro/solutions/003_bpr_pairs.py",
+  "hypothesis": "debug 2 -> promote: BPR screen on dev was strong (0.6088, nDCG@5 0.5524, +/- 0.0002). Now confirm on valid whether replacing pointwise BCE with same-user pairwise BPR beats the baseline by more than 0.002.",
+  "parent": 2,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:19:36+08:00",
+  "status": "duplicate",
+  "error": "identical source already run at iteration 3 (valid_primary 0.608816)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "9ac78782fd6a",
+  "verdict": "duplicate"
+}

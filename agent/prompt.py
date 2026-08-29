@@ -240,6 +240,88 @@ So:
   not as a prediction target. Weighting pairs by how long the user watched \
   tells the model which positives are most informative.
 
+## Do not retrain members you already have
+An ensemble solution retrains every member from scratch each time, even when
+the only thing that changed is a blend weight. record-run-8 spent 37 of its 67
+compute minutes that way, and record-run-6 spent 67 of 180.
+
+Cache per-member predictions in `pred_cache/`:
+
+    os.makedirs('pred_cache', exist_ok=True)
+    path = 'pred_cache/%s_member_seed%d.npy' % (member_name, seed)
+    if os.path.isfile(path):
+        preds = np.load(path)
+    else:
+        preds = train_member(...)
+        np.save(path, preds)
+
+Two rules. **Every solution must still run correctly with the cache empty** -
+a fresh machine, or an archived run, must reproduce the same number from
+scratch. And cache only members whose code has not changed: if you alter a
+member's loss, features or hyperparameters, its cached predictions are stale,
+so use a new name or delete the file.
+
+With this, "try five blend weights" costs seconds instead of retraining twenty
+models, which changes what is worth testing at all.
+
+## When you do not know which part is doing the work
+A solution with several parts - an ensemble of members, a base model plus a
+correction, a loss with three terms - hides which part earns the score. Refining
+it blind means guessing, and a guess costs a full experiment to disprove.
+
+Find out instead: in ONE script, score the full solution and then score it again
+with each part removed or zeroed, and print all of them. N+1 evaluations, one
+experiment, no retraining of the parts you are not testing if you can avoid it.
+A part whose removal costs nothing is not carrying anything, however good the
+idea behind it sounded - drop it and spend the slot elsewhere. A part whose
+removal hurts a lot is the one worth refining.
+
+This is the difference between a search and a sequence of hopeful edits, and it
+is cheap: the information arrives in the stdout of an experiment you were going
+to run anyway.
+
+## Screening an idea without spending an experiment
+You develop against `valid`, and `valid` also picks the early-stopping epoch
+inside every experiment. That is two rounds of selection on one set of labels,
+and it gets more pressure the longer the search runs.
+
+There is a train-only holdout you can screen against instead. It cuts the TRAIN
+window by date - earlier days to fit on, the last few to score on - so it never
+touches valid or test:
+
+    from devdata import load as load_dev     # instead of `from data import load`
+    splits = load_dev(a.data_dir)            # {'train': ..., 'valid': ...}
+
+Handle it in your solution's main block, exactly as `001_torch_fm.py` does:
+
+    if a.split == 'dev':
+        from devdata import load as load_dev
+        splits = load_dev(a.data_dir); target = 'valid'
+    else:
+        splits = load(a.data_dir); target = a.split
+
+Then `run_solution(..., split='dev')` scores you on the holdout. Such a row is
+marked `screen`, and it does NOT count toward convergence, cannot become the
+best solution, and its number is NOT comparable to the baseline or to any
+`valid` row - it is a different set of rows.
+
+**Use it to catch a disaster, not to pick a winner.** Measured against seven
+solutions spanning 0.5728 to 0.6049 on valid: dev agrees with valid almost
+perfectly across the whole range (Spearman 0.93), and barely at all among
+near-tied candidates (Spearman 0.60 on the four within 0.0013 of each other -
+its best was valid's second, its worst was valid's third). It compresses small
+differences and reorders them.
+
+So it is worth a screen when you are about to spend an experiment on something
+that might be badly wrong - a new mechanism, a feature join you are unsure of,
+anything with a leakage risk. It will not tell you which of two good variants
+is better, and using it that way will mislead you.
+
+`devdata.describe(splits)` prints the shape of both halves and the TYPE of every
+field. Worth one call the first time you write a join: the ids are strings, and
+mixing them with ints read from a CSV produces lookups that miss on every row
+without raising - the feature simply reads as absent everywhere.
+
 ## What is installed
 Your solutions are standalone scripts, so anything importable is available:
 
@@ -450,6 +532,73 @@ def _ledger_table() -> str:
                 'been refined. That is a list of first drafts, not a search. '
                 'Your next action should be an **improve** or a **debug** of a '
                 'node that showed something.' % (len(widest[1]), widest[0])]
+
+    # Is the current branch measured out? The agent can see every +/- in the
+    # table, and the table already warns that two results closer than their
+    # spread have not been told apart - but it has to infer a plateau by
+    # eyeballing a dozen rows, and across two runs it did not.
+    #
+    # record-run-8 spent its last 12 experiments, 55% of its compute, on
+    # variants whose ENTIRE range was 0.79x one error bar. record-run-6 did the
+    # same with 9 ensemble re-weightings for +0.00003. Different mechanism,
+    # identical pathology: lock onto the best node, emit variations, measure
+    # nothing. Fixing one shape of it (the ensemble batching note above) just
+    # moved the behaviour somewhere else, so this counts the plateau itself
+    # rather than any particular cause of it.
+    #
+    # Purely a statement about the agent's own numbers. It says the branch is
+    # unmeasurable, not that it is wrong, and does not say what to try instead.
+    scored = [r for r in recs
+              if r.get('status') == 'ok'
+              and r.get('split', 'valid') == 'valid'
+              and r.get('valid_primary') is not None]
+    if len(scored) >= 6:
+        # A row whose spread is unknown - a screened single seed, or a solution
+        # that ignored --seed - has an unknown spread, NOT a zero one. Treating
+        # it as zero makes it impossible to call indistinguishable, which is
+        # how record-run-6's nine re-weightings escaped detection entirely.
+        # Substitute the typical measured spread instead.
+        known = sorted(r['primary_std'] for r in scored
+                       if r.get('primary_std'))
+        typical = known[len(known) // 2] if known else 0.0
+
+        def spread(r):
+            # None (screened, or deterministic under the current harness) and
+            # exactly 0.0 (older records, written before deterministic runs
+            # were detected) both mean the same thing: no measurement. A truly
+            # zero spread is not a thing a stochastic model has.
+            return r.get('primary_std') or typical
+
+        top = max(scored, key=lambda r: r['valid_primary'])
+        tsd = spread(top)
+        run = 0
+        for r in reversed(scored):
+            # Indistinguishable from the incumbent: the gap is inside the two
+            # spreads added together.
+            if abs(r['valid_primary'] - top['valid_primary']) <= (spread(r) + tsd):
+                run += 1
+            else:
+                break
+        # Threshold tuned against all five archived runs. At 4 or 5 it fires on
+        # record-run-3 at iteration 12-13, which still had +0.00097 to give -
+        # a false alarm on the best run we have. At 6 it catches record-run-8
+        # at iteration 25 with six experiments still to spend, and on every
+        # other run it either never fires or fires with <=1 experiment left,
+        # where it cannot do harm.
+        if run >= 6:
+            lines += [
+                '',
+                '**This branch is measured out.** Your last %d scored '
+                'experiments all sit within their error bars of the best '
+                '(%.6f +/- %.6f). None of them has been distinguished from it, '
+                'or from each other. Another variant of the same node will be '
+                'unmeasurable too, and costs a full experiment to learn that.'
+                % (run, top['valid_primary'], tsd),
+                'That does not mean the direction is wrong - it means valid '
+                'cannot resolve it, and neither will `dev`, which is worse at '
+                'separating near-ties than valid is. More variants of this '
+                'node cannot be measured by anything you have. Change '
+                'mechanism.']
 
     st = ledger.convergence_status()
     if st['window_improvement'] is None:

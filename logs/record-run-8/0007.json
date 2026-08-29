@@ -1,0 +1,64 @@
+{
+  "iteration": 7,
+  "solution": "logs/record-run-8/solutions/007_time_hour_bpr_bce_fm.py",
+  "hypothesis": "draft time features: append hour/hour-bucket/tab-hour features from raw log hourmin, following standard time-of-day context bucketing for recommenders (https://www.tensorflow.org/recommenders/examples/context_features); this tests whether within-user preferences drift by time of day on top of node 3.",
+  "parent": "3",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:13:49+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60271,
+  "GAUC": 0.668605,
+  "nDCG@5": 0.536814,
+  "source_hash": "410420dcab17",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['hour','hour6','tab_hour6']\nhour feature: have_hour=True used=1,436,609 miss=0 csv_rows=1,436,609\nadded time fields: hour=24, hour6=6, tab_hour6=89; dim 40260->40379\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8cfcd9c3548e",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000416,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669011,
+      "nDCG@5": 0.537096,
+      "primary": 0.603054
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667979,
+      "nDCG@5": 0.536517,
+      "primary": 0.602248
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668826,
+      "nDCG@5": 0.536828,
+      "primary": 0.602827
+    }
+  ],
+  "seconds": 47.6,
+  "verdict": "noise",
+  "delta": 0.00121,
+  "tokens_in": 105307,
+  "tokens_out": 6012,
+  "tokens_cached": 86400,
+  "cost_usd": 0.150588,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 131.4,
+  "recovery_events": []
+}

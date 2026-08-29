@@ -118,8 +118,10 @@ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
-    ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test'],
-                    help='which split to write predictions for')
+    ap.add_argument('--split', default='valid',
+                    choices=['train', 'valid', 'test', 'dev'],
+                    help='which split to write predictions for. "dev" is a '
+                         'train-only holdout for screening; see the block below')
     ap.add_argument('--out', default=None,
                     help='write predictions here as .npy, one score per row')
     ap.add_argument('--k', type=int, default=16)
@@ -131,13 +133,23 @@ if __name__ == '__main__':
 
     torch.manual_seed(a.seed)
     print(f"loading {a.data_dir} ...")
-    splits = load(a.data_dir)
+    if a.split == 'dev':
+        # Screening run: fit on the earlier training days, predict the later
+        # ones. Same row format, so nothing downstream changes - but no test
+        # data exists in this view at all, and the holdout stands in for
+        # 'valid'. Costs no public-validation experiment.
+        from devdata import load as load_dev
+        splits = load_dev(a.data_dir)
+        target = 'valid'
+    else:
+        splits = load(a.data_dir)
+        target = a.split
     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
 
     model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
                      device=a.device, verbose=a.out is None)
 
-    X, y, users = enc[a.split]
+    X, y, users = enc[target]
     scores = model.predict(X, device=a.device)
 
     if a.out:

@@ -1,0 +1,64 @@
+{
+  "iteration": 19,
+  "solution": "logs/record-run-8/solutions/019_watchtime_order_debug.py",
+  "hypothesis": "debug 18: the watch-time join had zero hits because log_standard lacks or differs on author/duration keys; align play_time_ms by the documented preserved raw row order filtered to train dates instead.",
+  "parent": "18",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:49:07+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601779,
+  "GAUC": 0.667249,
+  "nDCG@5": 0.536308,
+  "source_hash": "fc9cbddbc579",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket'], watch_weight=0.3, fm_models=5\nwatch-time order alignment hits=1,141,112/1,141,112; raw_selected=1,141,112; raw_total=1,436,609; date_col=date; play_col=play_time_ms\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "14591f512f22",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000455,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667478,
+      "nDCG@5": 0.536165,
+      "primary": 0.601822
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667749,
+      "nDCG@5": 0.536672,
+      "primary": 0.60221
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.66652,
+      "nDCG@5": 0.536087,
+      "primary": 0.601304
+    }
+  ],
+  "seconds": 161.8,
+  "verdict": "noise",
+  "delta": 0.000279,
+  "tokens_in": 70667,
+  "tokens_out": 7538,
+  "tokens_cached": 52736,
+  "cost_usd": 0.146575,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 231.2,
+  "recovery_events": []
+}
