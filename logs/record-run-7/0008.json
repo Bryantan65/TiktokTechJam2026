@@ -1,0 +1,57 @@
+{
+  "iteration": 8,
+  "solution": "logs/record-run-7/solutions/008_bpr_history_features.py",
+  "hypothesis": "draft 2: add a DIN-inspired behaviour summary as FM fields\u2014prior user-video/user-author positive and negative buckets\u2014so the BPR ranker can condition on recent user history without a full sequence model (DIN reference: https://arxiv.org/abs/1706.06978).",
+  "parent": "6",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:44:20+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604591,
+  "GAUC": 0.67144,
+  "nDCG@5": 0.537742,
+  "source_hash": "8824491f5401",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "a47a0561d302",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000605,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67182,
+      "nDCG@5": 0.537781,
+      "primary": 0.6048
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672168,
+      "nDCG@5": 0.537959,
+      "primary": 0.605064
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670332,
+      "nDCG@5": 0.537486,
+      "primary": 0.603909
+    }
+  ],
+  "seconds": 307.2,
+  "verdict": "KEPT",
+  "delta": 0.003091,
+  "tokens_in": 125680,
+  "tokens_out": 6957,
+  "tokens_cached": 104448,
+  "cost_usd": 0.174874,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 399.1,
+  "recovery_events": []
+}

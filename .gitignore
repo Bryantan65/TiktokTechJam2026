@@ -9,6 +9,9 @@ checkpoints/
 *.pt
 *.pth
 
+# Prediction cache — per-member predictions saved by ensemble solutions
+pred_cache/
+
 # Python
 __pycache__/
 *.py[cod]

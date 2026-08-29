@@ -1,0 +1,57 @@
+{
+  "iteration": 12,
+  "solution": "logs/record-run-7/solutions/012_lgbm_lambdarank_blend.py",
+  "hypothesis": "draft 10: LambdaMART/LambdaRank directly optimizes listwise ranking objectives and nDCG (https://www.microsoft.com/en-us/research/publication/from-ranknet-to-lambdarank-to-lambdamart-an-overview/); train a LightGBM ranker grouped by user on content/history categorical features and blend it at 40% with cached node-10 FM ranks.",
+  "parent": "10",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:03:49+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603998,
+  "GAUC": 0.670631,
+  "nDCG@5": 0.537364,
+  "source_hash": "0122c2dcc664",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+content+LGBM_LambdaRank\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "264e6d1a7f35",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000212,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670935,
+      "nDCG@5": 0.537466,
+      "primary": 0.604201
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670567,
+      "nDCG@5": 0.537462,
+      "primary": 0.604015
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670391,
+      "nDCG@5": 0.537165,
+      "primary": 0.603778
+    }
+  ],
+  "seconds": 185.6,
+  "verdict": "KEPT",
+  "delta": 0.002498,
+  "tokens_in": 122678,
+  "tokens_out": 7897,
+  "tokens_cached": 99712,
+  "cost_usd": 0.186241,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 281.3,
+  "recovery_events": []
+}

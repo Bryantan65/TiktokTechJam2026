@@ -1,0 +1,57 @@
+{
+  "iteration": 20,
+  "solution": "logs/record-run-7/solutions/020_debug_ips_single_bce.py",
+  "hypothesis": "debug 19: node 19 timed out because it trained a full IPS ensemble; test the same IPS exposure correction cheaply with one clipped IPS-weighted BCE time/content member blended at 30%, so a scored result can diagnose the direction.",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:20:40+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60446,
+  "GAUC": 0.671293,
+  "nDCG@5": 0.537626,
+  "source_hash": "8c2621b1bd78",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history+content+time_date+single_ips\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "59c63b535496",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00033,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67139,
+      "nDCG@5": 0.537462,
+      "primary": 0.604426
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671639,
+      "nDCG@5": 0.537971,
+      "primary": 0.604805
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67085,
+      "nDCG@5": 0.537446,
+      "primary": 0.604148
+    }
+  ],
+  "seconds": 281.7,
+  "verdict": "KEPT",
+  "delta": 0.00296,
+  "tokens_in": 130397,
+  "tokens_out": 7050,
+  "tokens_cached": 103168,
+  "cost_usd": 0.190157,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 350.8,
+  "recovery_events": []
+}

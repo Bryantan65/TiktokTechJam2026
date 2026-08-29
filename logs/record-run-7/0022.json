@@ -1,0 +1,57 @@
+{
+  "iteration": 22,
+  "solution": "logs/record-run-7/solutions/022_seed_bag_node15.py",
+  "hypothesis": "improve 15: node 15 is best and its member predictions for official seeds are cached; average the three unchanged node-15 outer-seed ensembles to reduce variance without changing the learned members.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:31:04+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605093,
+  "GAUC": 0.672274,
+  "nDCG@5": 0.537913,
+  "source_hash": "6872db277117",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history+content+time_date+seedbag\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "818361a70d68",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672274,
+      "nDCG@5": 0.537913,
+      "primary": 0.605093
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672274,
+      "nDCG@5": 0.537913,
+      "primary": 0.605093
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672274,
+      "nDCG@5": 0.537913,
+      "primary": 0.605093
+    }
+  ],
+  "seconds": 570.5,
+  "verdict": "KEPT",
+  "delta": 0.003593,
+  "tokens_in": 122901,
+  "tokens_out": 7256,
+  "tokens_cached": 70784,
+  "cost_usd": 0.238244,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 641.5,
+  "recovery_events": []
+}

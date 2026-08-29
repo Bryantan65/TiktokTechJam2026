@@ -1,0 +1,57 @@
+{
+  "iteration": 10,
+  "solution": "logs/record-run-7/solutions/010_video_content_blend.py",
+  "hypothesis": "draft 9: FMs are designed to exploit sparse side information through feature interactions (https://www.csie.ntu.edu.tw/~b97053/paper/Rendle2010FM.pdf); append KuaiRand video music/tag/type/upload/size fields to the history FM and blend it at 40% with cached base/history rankers.",
+  "parent": "9",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:52:17+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605061,
+  "GAUC": 0.672271,
+  "nDCG@5": 0.537852,
+  "source_hash": "2fe5afa7d1b7",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history+video_content\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "1ac17e6689aa",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000413,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67282,
+      "nDCG@5": 0.53793,
+      "primary": 0.605375
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672499,
+      "nDCG@5": 0.537932,
+      "primary": 0.605215
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671493,
+      "nDCG@5": 0.537694,
+      "primary": 0.604594
+    }
+  ],
+  "seconds": 477.4,
+  "verdict": "KEPT",
+  "delta": 0.003561,
+  "tokens_in": 77663,
+  "tokens_out": 6779,
+  "tokens_cached": 60544,
+  "cost_usd": 0.140859,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 555.9,
+  "recovery_events": []
+}

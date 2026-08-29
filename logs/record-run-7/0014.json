@@ -1,0 +1,57 @@
+{
+  "iteration": 14,
+  "solution": "logs/record-run-7/solutions/014_mtl_bpr_time_blend.py",
+  "hypothesis": "draft 3: multi-task recommenders share representations across engagement objectives (https://dl.acm.org/doi/10.1145/3219819.3220007); train one content+history+time FM with primary BPR plus auxiliary click/like/follow/comment/forward BCE and blend it at a readable 30% with node 13.",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:19:07+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604959,
+  "GAUC": 0.672258,
+  "nDCG@5": 0.53766,
+  "source_hash": "99efe511cce7",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history+content+time+mtl\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e1beb67d0a0c",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000301,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672894,
+      "nDCG@5": 0.537693,
+      "primary": 0.605294
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671909,
+      "nDCG@5": 0.537516,
+      "primary": 0.604712
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67197,
+      "nDCG@5": 0.537771,
+      "primary": 0.604871
+    }
+  ],
+  "seconds": 445.2,
+  "verdict": "KEPT",
+  "delta": 0.003459,
+  "tokens_in": 94057,
+  "tokens_out": 9283,
+  "tokens_cached": 72832,
+  "cost_usd": 0.182309,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 547.5,
+  "recovery_events": []
+}

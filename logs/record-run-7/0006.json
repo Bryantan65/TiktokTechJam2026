@@ -1,0 +1,57 @@
+{
+  "iteration": 6,
+  "solution": "logs/record-run-7/solutions/006_bpr_bag_bce_rankblend.py",
+  "hypothesis": "improve 2: BPR is the only branch with positive signal, so make that signal less noisy by bagging three BPR FMs and blend in a readable 30% within-user rank-normalized BCE FM for users with weak pairwise coverage.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:36:41+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604516,
+  "GAUC": 0.671342,
+  "nDCG@5": 0.537689,
+  "source_hash": "b53c1759c061",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "19c7fff383a3",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000387,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672135,
+      "nDCG@5": 0.537788,
+      "primary": 0.604962
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670914,
+      "nDCG@5": 0.537698,
+      "primary": 0.604306
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670977,
+      "nDCG@5": 0.537582,
+      "primary": 0.604279
+    }
+  ],
+  "seconds": 225.5,
+  "verdict": "KEPT",
+  "delta": 0.003016,
+  "tokens_in": 77959,
+  "tokens_out": 5486,
+  "tokens_cached": 62592,
+  "cost_usd": 0.124574,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 292.0,
+  "recovery_events": []
+}

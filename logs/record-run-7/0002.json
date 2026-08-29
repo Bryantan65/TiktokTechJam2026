@@ -1,0 +1,57 @@
+{
+  "iteration": 2,
+  "solution": "logs/record-run-7/solutions/002_bpr_fm.py",
+  "hypothesis": "draft 1: replace pointwise BCE with same-user BPR pairwise loss so positives are directly trained above negatives for the ranking metric, following Rendle et al. BPR (https://arxiv.org/abs/1205.2618).",
+  "parent": "1",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:26:28+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603157,
+  "GAUC": 0.66974,
+  "nDCG@5": 0.536575,
+  "source_hash": "19bd5bebf4c6",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "5061635e72f9",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00036,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670738,
+      "nDCG@5": 0.536399,
+      "primary": 0.603569
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669073,
+      "nDCG@5": 0.53673,
+      "primary": 0.602901
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669409,
+      "nDCG@5": 0.536595,
+      "primary": 0.603002
+    }
+  ],
+  "seconds": 94.9,
+  "verdict": "noise",
+  "delta": 0.001657,
+  "tokens_in": 32884,
+  "tokens_out": 3225,
+  "tokens_cached": 21376,
+  "cost_usd": 0.071708,
+  "model": "gpt-5.5",
+  "agent_iteration": 1,
+  "wall_seconds": 145.4,
+  "recovery_events": []
+}

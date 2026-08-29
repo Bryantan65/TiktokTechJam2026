@@ -1,0 +1,57 @@
+{
+  "iteration": 29,
+  "solution": "logs/record-run-7/solutions/029_enhanced_history_global_prior.py",
+  "hypothesis": "improve 28: the 5% history prior gave a real but tiny gain; strengthen the deterministic tie-breaker with train-only global video/author/tab-duration CTR backoffs plus repeat exposure at 6% weight.",
+  "parent": "28",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:33:37+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605699,
+  "GAUC": 0.673049,
+  "nDCG@5": 0.538349,
+  "source_hash": "0769a8be2af4",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=fixed_seed0_node24_plus_enhanced_prior\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "5fbc11ffae6c",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.673049,
+      "nDCG@5": 0.538349,
+      "primary": 0.605699
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.673049,
+      "nDCG@5": 0.538349,
+      "primary": 0.605699
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.673049,
+      "nDCG@5": 0.538349,
+      "primary": 0.605699
+    }
+  ],
+  "seconds": 326.8,
+  "verdict": "KEPT",
+  "delta": 0.004199,
+  "tokens_in": 96853,
+  "tokens_out": 5956,
+  "tokens_cached": 79616,
+  "cost_usd": 0.14246,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 411.0,
+  "recovery_events": []
+}

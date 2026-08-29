@@ -1,0 +1,57 @@
+{
+  "iteration": 17,
+  "solution": "logs/record-run-7/solutions/017_lgbm_time_blend.py",
+  "hypothesis": "improve 12: the first LambdaMART draft was weak, but listwise tree rankers should capture nonlinear feature thresholds missed by FM; train LightGBM LambdaRank on the best history+content+time/date fields and blend at a readable 30%.",
+  "parent": "12",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:49:43+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604436,
+  "GAUC": 0.67145,
+  "nDCG@5": 0.537421,
+  "source_hash": "4e82dee00ffa",
+  "stdout_tail": "[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\nloading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history+content+time_date+lgbm\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "4bb454df38ff",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000315,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671953,
+      "nDCG@5": 0.537432,
+      "primary": 0.604693
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671236,
+      "nDCG@5": 0.537823,
+      "primary": 0.60453
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671161,
+      "nDCG@5": 0.537009,
+      "primary": 0.604085
+    }
+  ],
+  "seconds": 457.1,
+  "verdict": "KEPT",
+  "delta": 0.002936,
+  "tokens_in": 114552,
+  "tokens_out": 7821,
+  "tokens_cached": 90240,
+  "cost_usd": 0.18411,
+  "model": "gpt-5.5",
+  "agent_iteration": 3,
+  "wall_seconds": 539.3,
+  "recovery_events": []
+}

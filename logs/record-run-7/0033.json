@@ -1,0 +1,57 @@
+{
+  "iteration": 33,
+  "solution": "logs/record-run-7/solutions/033_combine_ctr_watch_priors.py",
+  "hypothesis": "improve 31: node 31's global CTR prior and node 30's watch-time prior each gave small real gains over node 28; combine them at their previously useful weights to test whether the deterministic close-call corrections are complementary.",
+  "parent": "31",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:57:58+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605716,
+  "GAUC": 0.673061,
+  "nDCG@5": 0.538371,
+  "source_hash": "e442141435b2",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=node28_plus_ctr_and_watch_priors\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "9ce6f75aefa3",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.673061,
+      "nDCG@5": 0.538371,
+      "primary": 0.605716
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.673061,
+      "nDCG@5": 0.538371,
+      "primary": 0.605716
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.673061,
+      "nDCG@5": 0.538371,
+      "primary": 0.605716
+    }
+  ],
+  "seconds": 326.2,
+  "verdict": "KEPT",
+  "delta": 0.004216,
+  "tokens_in": 97235,
+  "tokens_out": 2150,
+  "tokens_cached": 78976,
+  "cost_usd": 0.106635,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 360.8,
+  "recovery_events": []
+}

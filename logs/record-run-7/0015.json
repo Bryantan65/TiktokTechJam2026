@@ -1,0 +1,57 @@
+{
+  "iteration": 15,
+  "solution": "logs/record-run-7/solutions/015_time_date_blend.py",
+  "hypothesis": "improve 13: node 13 used hour/weekday but not absolute date; add day/week/date and tab-time crosses to capture train-valid exposure drift, with the changed time member at 50% so the signal is readable.",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:30:55+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605188,
+  "GAUC": 0.672237,
+  "nDCG@5": 0.538139,
+  "source_hash": "b2f42ccef0e5",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history+content+time_date\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "87def88d96dd",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000103,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672402,
+      "nDCG@5": 0.538156,
+      "primary": 0.605279
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672384,
+      "nDCG@5": 0.538032,
+      "primary": 0.605208
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671925,
+      "nDCG@5": 0.538228,
+      "primary": 0.605076
+    }
+  ],
+  "seconds": 700.2,
+  "verdict": "KEPT",
+  "delta": 0.003688,
+  "tokens_in": 71400,
+  "tokens_out": 6566,
+  "tokens_cached": 47232,
+  "cost_usd": 0.149696,
+  "model": "gpt-5.5",
+  "agent_iteration": 1,
+  "wall_seconds": 771.5,
+  "recovery_events": []
+}
