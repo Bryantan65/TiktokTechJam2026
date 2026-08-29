@@ -42,7 +42,27 @@ epoch 3   GAUC 0.6738   nDCG@5 0.5942   primary 0.6340
 epoch 4   GAUC 0.6716   nDCG@5 0.5751   primary 0.6234
 ```
 
-**Validation baseline: GAUC 0.6749 / nDCG@5 0.6153 / primary 0.6451.**
+Early stop fired at epoch 6, best kept from epoch 2.
+
+```
+KuaiRand-1k, kit FM, seed 0
+  valid   GAUC 0.6749   nDCG@5 0.6153   primary 0.6451
+  test    GAUC 0.6730   nDCG@5 0.6049   primary 0.6390    <- the scored reference
+```
+
+**The test row is the one the scoring formula needs** - deltas are computed on
+the hidden test set, not on validation. Alongside Pure's published numbers:
+
+```
+                    GAUC      nDCG@5    primary
+Pure  test         0.6610     0.5282    0.5946   (organiser-published)
+1k    test         0.6730     0.6049    0.6390   (measured here)
+
+Pure  valid        0.6674     0.5357    0.6016   (organiser-published)
+1k    valid        0.6749     0.6153    0.6451   (measured here)
+```
+
+A 1k agent result is scored as `mean(GAUC - 0.6730, nDCG@5 - 0.6049)`.
 
 It peaks at epoch 2 and overfits from there, much earlier than Pure (epoch 7–11).
 Expected: 1k has 4.4x Pure's training rows concentrated in 1/27th of the users, so
