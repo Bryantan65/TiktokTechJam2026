@@ -167,6 +167,30 @@ So:
   learned weights (e.g. stacking on held-out predictions) can extract value
   that equal-weight averaging cannot.
 
+## Do not retrain members you already have
+An ensemble solution retrains every member from scratch each time, even when
+the only thing that changed is a blend weight. record-run-8 spent 37 of its 67
+compute minutes that way, and record-run-6 spent 67 of 180.
+
+Cache per-member predictions in `pred_cache/`:
+
+    os.makedirs('pred_cache', exist_ok=True)
+    path = 'pred_cache/%s_member_seed%d.npy' % (member_name, seed)
+    if os.path.isfile(path):
+        preds = np.load(path)
+    else:
+        preds = train_member(...)
+        np.save(path, preds)
+
+Two rules. **Every solution must still run correctly with the cache empty** -
+a fresh machine, or an archived run, must reproduce the same number from
+scratch. And cache only members whose code has not changed: if you alter a
+member's loss, features or hyperparameters, its cached predictions are stale,
+so use a new name or delete the file.
+
+With this, "try five blend weights" costs seconds instead of retraining twenty
+models, which changes what is worth testing at all.
+
 ## When you do not know which part is doing the work
 A solution with several parts - an ensemble of members, a base model plus a
 correction, a loss with three terms - hides which part earns the score. Refining
