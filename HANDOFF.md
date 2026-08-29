@@ -1359,6 +1359,7 @@ they close the question.
 | --- | --- |
 | batch size 8192 -> 2048 | 0.605136, -0.00018 |
 | patience 4 -> 12, epoch cap 40 -> 100 | 0.605300, -0.00002 |
+| both batch and patience together | 0.605123, -0.00020 |
 | pretrain 3 epochs on `is_click`, fine-tune on `long_view` | -0.00062 |
 | pretrain 8 epochs on `is_click`, fine-tune on `long_view` | -0.01151 |
 
