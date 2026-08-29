@@ -29,25 +29,6 @@ Every solution must be a standalone Python script:
 It writes one float per row as a .npy file, then exits 0.
 Solutions emit PREDICTIONS ONLY — never compute metrics. The harness scores.
 
-## Prediction caching — avoid retraining members you already have
-Ensemble solutions retrain every member from scratch every time, even when \
-the only change is blend weights. That wastes minutes per experiment.
-
-Use `pred_cache/` to save and load per-member predictions:
-- Create it if needed: `os.makedirs('pred_cache', exist_ok=True)`
-- After training a member model, save its predictions: \
-`np.save('pred_cache/NNN_member_seed{seed}.npy', preds)`
-- Before training, check if the cache exists: \
-`if os.path.isfile(cache_path): preds = np.load(cache_path)`
-- If the cache is missing (fresh machine, first run), train from scratch. \
-**Every solution must still work standalone without any cached files.**
-- Only cache predictions for members whose code has NOT changed. If you \
-modify a member's training (loss, features, hyperparams), delete or ignore \
-its cache and retrain.
-
-This means a "try 5 different blend weights" experiment takes seconds instead \
-of retraining 24 models. Use caching aggressively for combination experiments.
-
 ## Starting point
 solutions/001_torch_fm.py — PyTorch FM with pointwise BCEWithLogitsLoss.
 Valid primary: 0.6014 (3-seed mean; this model is unusually stable, +/- 0.0002). Peaks at epoch 7-11, overfits after.
@@ -77,11 +58,7 @@ against. If you build your own row list, build it the same way.
 Directions 3 (multi-task) and 6 (time features) both need columns outside the
 tuple, so both start with reading the CSV. Budget an iteration for that.
 
-Direction 9 (video content features) uses `video_features_basic_pure.csv`, which \
-has item-level columns: music_id, tag, video_type, upload_type, server_width, \
-server_height, music_type. Read it with `csv.DictReader`.
-
-## 11 known directions (ranked by likely payoff)
+## 7 known directions (ranked by likely payoff)
 1. **Change the loss** — pointwise logloss -> pairwise (BPR) or listwise \
 (softmax over user impressions). Aligns objective with ranking metrics. \
 MOST LIKELY TO WORK.
@@ -94,51 +71,6 @@ play_time_ms as auxiliary tasks.
 capacity is not the bottleneck.
 6. **Time features** — hourmin, date, train-vs-test drift.
 7. **Unbiased validation** — log_random as extra validation (never train on it).
-8. **Debiased training** — logged data is biased by the exposure policy: \
-popular items appear in far more training pairs than they should. Use \
-log_random (randomised exposure) to estimate propensity scores, then \
-IPS-weight the training loss to correct for exposure bias. Different from \
-direction 7: this corrects the training objective, not just validation.
-9. **Video content features** — video_features_basic_pure.csv has columns \
-not in the data tuple: music_id, tag, video_type, upload_type. These are \
-item-content features that let the model generalise across videos sharing \
-the same music or tags, instead of treating each video_id as opaque.
-10. **Group-wise ranking loss** — instead of a listwise softmax that assumes \
-one relevant item per user, group items and rank within groups. Creates a \
-curriculum from easy negatives to hard negatives. A different formulation \
-from direction 1's listwise softmax.
-11. **Counterfactual learning to rank** — the task is re-ranking logged \
-impressions already selected by a policy. The training data is missing \
-items the user never saw. Counterfactual methods correct for this selection \
-bias in the ranking objective itself.
-12. **Differentiable GAUC loss** — GAUC is literally half the primary metric. \
-Instead of optimising a proxy (BPR, BCE) and hoping GAUC follows, directly \
-optimise per-user AUC as a differentiable pairwise loss grouped by user. \
-Search for recent papers on differentiable AUC optimisation.
-13. **Curriculum negative sampling** — BPR with uniform random negatives is \
-noisy. Sampling negatives that are close to the decision boundary (hard \
-negatives) or using a curriculum (easy first, hard later) focuses learning \
-on the exact ranking boundaries where nDCG@5 is decided. Also try \
-popularity-biased sampling — sample negatives proportional to item \
-popularity to reduce exposure bias.
-14. **Stacking ensemble** — every ensemble so far uses fixed weights. Train \
-a lightweight meta-learner (logistic regression, small GBDT) on held-out \
-predictions from the base models. This learns which model to trust for \
-which users, instead of trusting all equally.
-
-## Lessons from prior runs — do not repeat these mistakes
-- **Listwise softmax fails on this data.** 7 implementations across 6 runs \
-all scored -0.002 to -0.005. The dataset is 33% positive, so softmax's \
-one-relevant-item assumption is wrong. Do NOT try listwise softmax again.
-- **Watch-time as a prediction TARGET is catastrophic** (-0.0375). But \
-watch-time as a training WEIGHT works (+0.0006). The difference matters.
-- **DIN/sequence attention adds nothing measurable** on this data — users \
-have too few repeat interactions (median 29 unique videos).
-- **Hard negatives need a curriculum.** Jumping straight to hard negatives \
-destabilises training (-0.0034, -0.0164). Start easy, transition to hard.
-- **Standalone LambdaRank/LightGBM loses** (-0.0032). Only useful as an \
-ensemble member, not a replacement for FM.
-
 ## The run ends if you stop making progress — read this
 The run stops automatically when the best valid primary has not improved by
 more than 0.002 across the last 3 scored experiments. That is the organisers'
@@ -344,8 +276,7 @@ within-user ranking.
 - long_view rate varies by tab: 4.1% (tab 0) to 48.3% (tab 4).
 - tab 1 is 73.7% of rows at 37.9% positive rate.
 - A correct run takes ~2 minutes (3 seeds x ~40 s). Iterations are cheap.
-- log_random_4_22_to_5_08_pure.csv must NOT be trained on — but it CAN be \
-used to estimate propensity scores (how likely each item was to be shown) \
+- log_random_4_22_to_5_08_pure.csv must NOT be trained on.
 for debiasing the training loss (direction 8).
 
 ## Workflow
