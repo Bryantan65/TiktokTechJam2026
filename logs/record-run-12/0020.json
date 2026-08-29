@@ -1,0 +1,64 @@
+{
+  "iteration": 20,
+  "solution": "logs/record-run-12/solutions/021_content_time_prior.py",
+  "hypothesis": "draft 6: add raw CSV hourmin/date time context as a train-only smoothed prior blended at 20% with the node-17 content rank ensemble; cyclical/time-window features are a standard way to capture temporal preference drift (search note: hourmin feature engineering, cyclical/time windows). This is a readable new mechanism but reuses unchanged content caches.",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:30:12+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604485,
+  "GAUC": 0.671493,
+  "nDCG@5": 0.537478,
+  "source_hash": "8e54ab4e1441",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['music_id', 'tag', 'video_type', 'upload_type', 'server_width', 'server_height', 'music_type']+raw_time_prior\nloaded video content rows 7583\ncontent cardinalities {'music_id': 7173, 'tag': 111, 'video_type': 4, 'upload_type': 15, 'server_width': 155, 'server_height': 121, 'music_type': 6} new_dim 47845\nloading cached content_bpr_anchor_v1 seed 0 predictions pred_cache\\018_content_bpr_anchor_v1_seed0_n124909.npy\nloading cached content_bce_v1 seed 0 predictions pred_cache\\018_content_bce_v1_seed0_n124909.npy\nloading cached content_bpr_anchor_v1 seed 1 predictions pred_cache\\018_content_bpr_anchor_v1_seed1_n124909.npy\nloading cached content_bce_v1 seed 1 predictions pred_cache\\018_content_bce_v1_seed1_n124909.npy\nloading cached content_bpr_anchor_v1 seed 2 predictions pred_cache\\018_content_bpr_anchor_v1_seed2_n124909.npy\nloading cached content_bce_v1 seed 2 predictions pred_cache\\018_content_bce_v1_seed2_n124909.npy\nloaded raw hour rows 1436609 unique keys 1406151\ntime join missing 1436609 of 1436609\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "428e6904b485",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671493,
+      "nDCG@5": 0.537478,
+      "primary": 0.604485
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671493,
+      "nDCG@5": 0.537478,
+      "primary": 0.604485
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671493,
+      "nDCG@5": 0.537478,
+      "primary": 0.604485
+    }
+  ],
+  "seconds": 69.8,
+  "verdict": "KEPT",
+  "delta": 0.002985,
+  "tokens_in": 139044,
+  "tokens_out": 9641,
+  "tokens_cached": 113408,
+  "cost_usd": 0.217204,
+  "model": "gpt-5.5",
+  "agent_iteration": 9,
+  "wall_seconds": 172.0,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 5,
+  "solution": "logs/record-run-12/solutions/005_debug_watch_weight_aligned.py",
+  "hypothesis": "debug 4: iteration 004 was a no-op, so the watch-time join probably fell back to unit weights; align raw log rows by official file/date order and print the weight summary to prove non-unit weights reach the saved model. This is a dev screen to catch alignment bugs before spending valid.",
+  "parent": "4",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T13:30:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605885,
+  "GAUC": 0.661186,
+  "nDCG@5": 0.550583,
+  "source_hash": "e36683fce13f",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1011214, 'valid': 129898} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nraw row-order candidates match length 1,011,214; first-check exact 0/2000\nwatch weights summary mean=0.9480 std=0.2909 min=0.625 max=1.689\n  epoch  1 | weighted bpr loss 0.7201 | valid primary 0.5986 | 19.4s\n  epoch  2 | weighted bpr loss 0.6364 | valid primary 0.6052 | 19.9s\n  epoch  3 | weighted bpr loss 0.6123 | valid primary 0.6059 | 20.5s\n  epoch  4 | weighted bpr loss 0.5996 | valid primary 0.6059 | 20.7s\n  epoch  5 | weighted bpr loss 0.5876 | valid primary 0.6052 | 20.2s\n  epoch  6 | weighted bpr loss 0.5754 | valid primary 0.6035 | 20.5s\n  epoch  7 | weighted bpr loss 0.5627 | valid primary 0.6022 | 21.0s\n  epoch  8 | weighted bpr loss 0.5477 | valid primary 0.6014 | 20.5s\n  epoch  9 | weighted bpr loss 0.5328 | valid primary 0.5993 | 17.3s\nwrote 129,898 predictions for split=dev",
+  "predictions_hash": "e458ad063ef1",
+  "users": 22111,
+  "rows": 129898,
+  "primary_std": 5.2e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.660979,
+      "nDCG@5": 0.550671,
+      "primary": 0.605825
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.661265,
+      "nDCG@5": 0.55055,
+      "primary": 0.605908
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.661315,
+      "nDCG@5": 0.550527,
+      "primary": 0.605921
+    }
+  ],
+  "seconds": 217.5,
+  "verdict": "screen",
+  "delta": 0.004385,
+  "tokens_in": 41973,
+  "tokens_out": 4820,
+  "tokens_cached": 33344,
+  "cost_usd": 0.086446,
+  "model": "gpt-5.5",
+  "agent_iteration": 3,
+  "wall_seconds": 605.1,
+  "recovery_events": []
+}

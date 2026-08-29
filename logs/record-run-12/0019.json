@@ -1,0 +1,64 @@
+{
+  "iteration": 19,
+  "solution": "logs/record-run-12/solutions/020_content_rrf.py",
+  "hypothesis": "improve 17: keep the content-feature member models fixed and change only fusion from percentile ranks to reciprocal-rank fusion, which should emphasize top positions that nDCG@5 cares about while still preserving GAUC ordering. This is a cheap fusion test using unchanged node-17 caches.",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:27:59+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604337,
+  "GAUC": 0.671046,
+  "nDCG@5": 0.537627,
+  "source_hash": "6a5e0da537e4",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['music_id', 'tag', 'video_type', 'upload_type', 'server_width', 'server_height', 'music_type']\nloaded video content rows 7583\ncontent cardinalities {'music_id': 7173, 'tag': 111, 'video_type': 4, 'upload_type': 15, 'server_width': 155, 'server_height': 121, 'music_type': 6} new_dim 47845\nloading cached content_bpr_anchor_v1 seed 0 predictions pred_cache\\018_content_bpr_anchor_v1_seed0_n124909.npy\nloading cached content_bce_v1 seed 0 predictions pred_cache\\018_content_bce_v1_seed0_n124909.npy\nloading cached content_bpr_anchor_v1 seed 1 predictions pred_cache\\018_content_bpr_anchor_v1_seed1_n124909.npy\nloading cached content_bce_v1 seed 1 predictions pred_cache\\018_content_bce_v1_seed1_n124909.npy\nloading cached content_bpr_anchor_v1 seed 2 predictions pred_cache\\018_content_bpr_anchor_v1_seed2_n124909.npy\nloading cached content_bce_v1 seed 2 predictions pred_cache\\018_content_bce_v1_seed2_n124909.npy\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "34bad8967acf",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671046,
+      "nDCG@5": 0.537627,
+      "primary": 0.604337
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671046,
+      "nDCG@5": 0.537627,
+      "primary": 0.604337
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671046,
+      "nDCG@5": 0.537627,
+      "primary": 0.604337
+    }
+  ],
+  "seconds": 31.1,
+  "verdict": "KEPT",
+  "delta": 0.002837,
+  "tokens_in": 92308,
+  "tokens_out": 5374,
+  "tokens_cached": 71168,
+  "cost_usd": 0.142174,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 82.3,
+  "recovery_events": []
+}

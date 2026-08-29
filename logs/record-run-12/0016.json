@@ -1,0 +1,64 @@
+{
+  "iteration": 16,
+  "solution": "logs/record-run-12/solutions/017_aux_multitask_fast_rank_ens.py",
+  "hypothesis": "debug 15: node 15 timed out from training three auxiliary BPR members per harness seed, so keep the multi-task mechanism but make it measurable: one pointwise auxiliary-FM member is blended at 30% with the cached node-11 incumbent. This diagnoses whether auxiliary feedback adds ranking diversity before spending on heavier MTL.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:08:07+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603544,
+  "GAUC": 0.670119,
+  "nDCG@5": 0.536968,
+  "source_hash": "a14e71f277b2",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloading cached pred_cache\\007_bpr_anchor_v1_seed0_n124909.npy\nloading cached pred_cache\\007_bce_v1_seed0_n124909.npy\nloading cached pred_cache\\007_bpr_anchor_v1_seed1_n124909.npy\nloading cached pred_cache\\007_bce_v1_seed1_n124909.npy\nloading cached pred_cache\\007_bpr_anchor_v1_seed2_n124909.npy\nloading cached pred_cache\\007_bce_v1_seed2_n124909.npy\ntraining 017_aux_bce_v1 seed 2\naux dim 5 rates [0.4634000062942505, 0.018699999898672104, 0.0010000000474974513, 0.0026000000070780516, 0.0010000000474974513]\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "ae53768bd5b2",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000145,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670343,
+      "nDCG@5": 0.537076,
+      "primary": 0.60371
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670034,
+      "nDCG@5": 0.536924,
+      "primary": 0.603479
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.66998,
+      "nDCG@5": 0.536903,
+      "primary": 0.603442
+    }
+  ],
+  "seconds": 126.0,
+  "verdict": "KEPT",
+  "delta": 0.002044,
+  "tokens_in": 184398,
+  "tokens_out": 6456,
+  "tokens_cached": 155840,
+  "cost_usd": 0.213876,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 1161.2,
+  "recovery_events": []
+}

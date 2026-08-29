@@ -1,0 +1,64 @@
+{
+  "iteration": 24,
+  "solution": "logs/record-run-12/solutions/025_deepfm_bag_gate.py",
+  "hypothesis": "improve 23: DeepFM raised GAUC but hurt nDCG, so bag its three cached seeds and gate its blend weight higher only for videos with sparse train evidence where content/high-order sharing should help most.",
+  "parent": "23",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:44:40+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605083,
+  "GAUC": 0.672208,
+  "nDCG@5": 0.537959,
+  "source_hash": "d74a1f47f73b",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['music_id', 'tag', 'video_type', 'upload_type', 'server_width', 'server_height', 'music_type']\nloaded video content rows 7583\ncontent cardinalities {'music_id': 7173, 'tag': 111, 'video_type': 4, 'upload_type': 15, 'server_width': 155, 'server_height': 121, 'music_type': 6} new_dim 47845\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed0_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed0_n124909.npy\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed1_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed1_n124909.npy\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed2_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed2_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed0_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed1_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed2_n124909.npy\ndeep weight mean/min/max 0.20855755602542014 0.2001371365880417 0.45\nwrote 124,909 predictions",
+  "predictions_hash": "c0184a656140",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672208,
+      "nDCG@5": 0.537959,
+      "primary": 0.605083
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672208,
+      "nDCG@5": 0.537959,
+      "primary": 0.605083
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672208,
+      "nDCG@5": 0.537959,
+      "primary": 0.605083
+    }
+  ],
+  "seconds": 29.6,
+  "verdict": "KEPT",
+  "delta": 0.003583,
+  "tokens_in": 55938,
+  "tokens_out": 6717,
+  "tokens_cached": 40832,
+  "cost_usd": 0.125351,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 90.4,
+  "recovery_events": []
+}

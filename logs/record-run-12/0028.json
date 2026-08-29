@@ -1,0 +1,64 @@
+{
+  "iteration": 28,
+  "solution": "logs/record-run-12/solutions/029_recency_behavior_prior.py",
+  "hypothesis": "improve 26: keep node 26's effective 12% history-prior weight, but split one third of it to a 7-day half-life recency-weighted prior so recent user preferences can affect ranking without changing the strong base ensemble.",
+  "parent": "26",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:52:33+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60513,
+  "GAUC": 0.672351,
+  "nDCG@5": 0.53791,
+  "source_hash": "71facb112c3f",
+  "stdout_tail": "behavior map ua keys 1070326\nbehavior map utag keys 355242\nbehavior map umusic keys 1064176\nbehavior map utab keys 63579\nbehavior map udur keys 423756\nbehavior prior mean/std/coverage/strength 0.3453534805774771 0.0986902147715316 0.9710669367299394 0.4949977740409931\nbehavior map recency_uv keys 1092750\nbehavior map recency_ua keys 1070326\nbehavior map recency_utag keys 355242\nbehavior map recency_umusic keys 1064176\nbehavior map recency_utab keys 63579\nbehavior map recency_udur keys 423756\nrecency behavior prior mean/std/coverage/strength 0.34144073628974453 0.0740255788485935 0.9710669367299394 0.3293462710181766\nnode24 deep weight mean/min/max 0.20855755602542014 0.2001371365880417 0.45 behavior blends std=0.08 recency=0.04\nwrote 124,909 predictions",
+  "predictions_hash": "beebba46751b",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672351,
+      "nDCG@5": 0.53791,
+      "primary": 0.60513
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672351,
+      "nDCG@5": 0.53791,
+      "primary": 0.60513
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672351,
+      "nDCG@5": 0.53791,
+      "primary": 0.60513
+    }
+  ],
+  "seconds": 54.7,
+  "verdict": "KEPT",
+  "delta": 0.00363,
+  "tokens_in": 88900,
+  "tokens_out": 7646,
+  "tokens_cached": 68096,
+  "cost_usd": 0.162518,
+  "model": "gpt-5.5",
+  "agent_iteration": 17,
+  "wall_seconds": 120.4,
+  "recovery_events": []
+}

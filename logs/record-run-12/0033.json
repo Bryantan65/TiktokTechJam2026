@@ -1,0 +1,64 @@
+{
+  "iteration": 33,
+  "solution": "logs/record-run-12/solutions/034_lambda_ndcg_bpr_fix.py",
+  "hypothesis": "debug 32: the LambdaRank member crashed from a discount-array off-by-one, so fix rank clipping/discount length and rerun the same 30% top-5 pair-weighted BPR test without changing the mechanism.",
+  "parent": "32",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T15:13:35+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604826,
+  "GAUC": 0.67199,
+  "nDCG@5": 0.537661,
+  "source_hash": "98aeac91fbae",
+  "stdout_tail": "lambda seed 0 epoch 2 loss 0.7135 primary 0.57791\nlambda seed 0 epoch 3 loss 0.7131 primary 0.56966\nlambda seed 0 epoch 4 loss 0.7078 primary 0.56379\ntraining lambda_ndcg_bpr_fix_v1 seed 1\nlambda seed 1 epoch 1 loss 0.6742 primary 0.58173\nlambda seed 1 epoch 2 loss 0.7107 primary 0.56845\nlambda seed 1 epoch 3 loss 0.6976 primary 0.57309\nlambda seed 1 epoch 4 loss 0.7224 primary 0.56520\ntraining lambda_ndcg_bpr_fix_v1 seed 2\nlambda seed 2 epoch 1 loss 0.6654 primary 0.58038\nlambda seed 2 epoch 2 loss 0.7161 primary 0.57402\nlambda seed 2 epoch 3 loss 0.7061 primary 0.57198\nlambda seed 2 epoch 4 loss 0.7235 primary 0.56445\nnode24 deep weight mean/min/max 0.20855755602542014 0.2001371365880417 0.45 behavior 0.12 lambda blend 0.30\nwrote 124,909 predictions",
+  "predictions_hash": "1621ebadd230",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67199,
+      "nDCG@5": 0.537661,
+      "primary": 0.604826
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67199,
+      "nDCG@5": 0.537661,
+      "primary": 0.604826
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67199,
+      "nDCG@5": 0.537661,
+      "primary": 0.604826
+    }
+  ],
+  "seconds": 137.3,
+  "verdict": "KEPT",
+  "delta": 0.003326,
+  "tokens_in": 99665,
+  "tokens_out": 6364,
+  "tokens_cached": 69504,
+  "cost_usd": 0.173794,
+  "model": "gpt-5.5",
+  "agent_iteration": 22,
+  "wall_seconds": 180.8,
+  "recovery_events": []
+}

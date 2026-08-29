@@ -1,0 +1,32 @@
+{
+  "iteration": 15,
+  "solution": "logs/record-run-12/solutions/016_aux_multitask_rank_ens.py",
+  "hypothesis": "draft 3: add a multi-task auxiliary-feedback member (shared FM factors with separate BCE heads for click/like/follow/comment/forward) to the best rank ensemble at a readable 30% rank weight; MTL recommender references include MMoE/ESMM style shared representation learning (https://dl.acm.org/doi/10.1145/3219819.3220007). This changes mechanism rather than another blend tweak.",
+  "parent": "11",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T13:52:14+08:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "8e93a2ccbcf4",
+  "seeds_completed": 0,
+  "seconds": 902.6,
+  "verdict": "failed",
+  "tokens_in": 184398,
+  "tokens_out": 6456,
+  "tokens_cached": 155840,
+  "cost_usd": 0.213876,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 1161.2,
+  "recovery_events": []
+}

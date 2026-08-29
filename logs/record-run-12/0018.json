@@ -1,0 +1,64 @@
+{
+  "iteration": 18,
+  "solution": "logs/record-run-12/solutions/019_content_plus_id_rank.py",
+  "hypothesis": "improve 17: content side features gave the first clear jump, but they may smooth away useful opaque video-id signal; blend node-17 content rank fusion with the cached node-11 ID-only rank fusion at a readable 70/30 content/ID weight. This tests complementarity of the new mechanism while reusing unchanged member caches.",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:26:35+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604787,
+  "GAUC": 0.671772,
+  "nDCG@5": 0.537802,
+  "source_hash": "8133d0a69595",
+  "stdout_tail": "loaded video content rows 7583\ncontent cardinalities {'music_id': 7173, 'tag': 111, 'video_type': 4, 'upload_type': 15, 'server_width': 155, 'server_height': 121, 'music_type': 6} new_dim 47845\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed0_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed0_n124909.npy\nloading cached pred_cache\\007_bpr_anchor_v1_seed0_n124909.npy\nloading cached pred_cache\\007_bce_v1_seed0_n124909.npy\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed1_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed1_n124909.npy\nloading cached pred_cache\\007_bpr_anchor_v1_seed1_n124909.npy\nloading cached pred_cache\\007_bce_v1_seed1_n124909.npy\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed2_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed2_n124909.npy\nloading cached pred_cache\\007_bpr_anchor_v1_seed2_n124909.npy\nloading cached pred_cache\\007_bce_v1_seed2_n124909.npy\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "16579ff5f073",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671772,
+      "nDCG@5": 0.537802,
+      "primary": 0.604787
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671772,
+      "nDCG@5": 0.537802,
+      "primary": 0.604787
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671772,
+      "nDCG@5": 0.537802,
+      "primary": 0.604787
+    }
+  ],
+  "seconds": 32.7,
+  "verdict": "KEPT",
+  "delta": 0.003287,
+  "tokens_in": 96361,
+  "tokens_out": 6236,
+  "tokens_cached": 77952,
+  "cost_usd": 0.147359,
+  "model": "gpt-5.5",
+  "agent_iteration": 7,
+  "wall_seconds": 93.8,
+  "recovery_events": []
+}
