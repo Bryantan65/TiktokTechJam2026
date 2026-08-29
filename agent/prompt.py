@@ -29,6 +29,18 @@ Every solution must be a standalone Python script:
 It writes one float per row as a .npy file, then exits 0.
 Solutions emit PREDICTIONS ONLY — never compute metrics. The harness scores.
 
+## Prediction caching — avoid retraining members you already have
+Ensemble solutions retrain every member from scratch every time, even when the only change is blend weights. That wastes minutes per experiment.
+
+Use `pred_cache/` to save and load per-member predictions:
+- Create it if needed: `os.makedirs('pred_cache', exist_ok=True)`
+- After training a member model, save its predictions: `np.save('pred_cache/NNN_member_seed{seed}.npy', preds)`
+- Before training, check if the cache exists: `if os.path.isfile(cache_path): preds = np.load(cache_path)`
+- If the cache is missing (fresh machine, first run), train from scratch. **Every solution must still work standalone without any cached files.**
+- Only cache predictions for members whose code has NOT changed. If you modify a member's training (loss, features, hyperparams), delete or ignore its cache and retrain.
+
+This means a "try 5 different blend weights" experiment takes seconds instead of retraining 24 models. Use caching aggressively for combination experiments.
+
 ## Starting point
 solutions/001_torch_fm.py — PyTorch FM with pointwise BCEWithLogitsLoss.
 Valid primary: 0.6014 (3-seed mean; this model is unusually stable, +/- 0.0002). Peaks at epoch 7-11, overfits after.
