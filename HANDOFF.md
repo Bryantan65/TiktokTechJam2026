@@ -112,7 +112,6 @@ would leave the fixes looking like guesses.
 | `logs/record-run-9/` | 33 experiments, converged, best 0.605738 | Zheng's; the headline is seed-picked, see below |
 | `logs/record-run-10/` | 31 experiments, converged, best 0.604931 | the LightGBM/LambdaMART family; run 3 held |
 | `logs/record-run-11/` | 30 experiments, converged, best 0.604653 | semi-hard sampling and LambdaRank weighting; run 3 held |
-| `logs/record-run-13/` | 2 experiments, **killed deliberately** | no code change since run 12; not worth the compute |
 
 **shakedown-02** is the one worth reading. Twelve experiments, all inside
 direction 1, ending in five consecutive tweaks of one loss weight across a
