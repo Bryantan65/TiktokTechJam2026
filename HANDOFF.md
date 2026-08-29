@@ -112,15 +112,7 @@ would leave the fixes looking like guesses.
 | `logs/record-run-9/` | 33 experiments, converged, best 0.605738 | Zheng's; the headline is seed-picked, see below |
 | `logs/record-run-10/` | 31 experiments, converged, best 0.604931 | the LightGBM/LambdaMART family; run 3 held |
 | `logs/record-run-11/` | 30 experiments, converged, best 0.604653 | semi-hard sampling and LambdaRank weighting; run 3 held |
-| `logs/record-run-12/` | 34 experiments, converged, best 0.605216 | Zheng's, on the cleaned prompt; run 3 held |
-
-**Reading a ledger programmatically: filter on `verdict`.** Run 12's highest
-`primary` across its JSON records is 0.605885 at experiment 5, which is *not* a
-valid score - its verdict is `screen`, meaning it ran against the train-only dev
-holdout. Its own follow-up on valid scored 0.6007. Taking the max over all
-records without checking `verdict` overstates that run by +0.0007 and invents a
-new best that never existed. Runs 9, 10 and 11 happen to be unaffected because
-their top records are `KEPT`.
+| `logs/record-run-13/` | 2 experiments, **killed deliberately** | no code change since run 12; not worth the compute |
 
 **shakedown-02** is the one worth reading. Twelve experiments, all inside
 direction 1, ending in five consecutive tweaks of one loss weight across a

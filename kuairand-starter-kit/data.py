@@ -1,4 +1,4 @@
-"""KuaiRand-Pure 数据加载 + 官方划分 + 特征编码。只依赖标准库和 numpy。"""
+"""KuaiRand data loading + official splits + feature encoding. Supports Pure and 1K."""
 import csv, os, collections
 import numpy as np
 
@@ -6,18 +6,25 @@ LABEL = 'long_view'
 SPLITS = {'train': (20220408, 20220421),
           'valid': (20220422, 20220428),
           'test':  (20220429, 20220508)}
-# 5 个特征域。想加特征就往这里加 —— 这是学生最该动的地方之一。
 FIELDS = ['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']
 
+def _detect_variant(data_dir: str) -> str:
+    """Detect whether data_dir contains Pure or 1K files."""
+    if os.path.isfile(os.path.join(data_dir, 'video_features_basic_1k.csv')):
+        return '1k'
+    return 'pure'
+
 def load(data_dir):
-    """读日志 + 视频侧特征，返回按划分切好的 dict。"""
+    """Load logs + video features, return splits dict. Works for both Pure and 1K."""
+    variant = _detect_variant(data_dir)
     vid2author = {}
-    with open(os.path.join(data_dir, 'video_features_basic_pure.csv')) as fh:
+    with open(os.path.join(data_dir, f'video_features_basic_{variant}.csv')) as fh:
         for r in csv.DictReader(fh):
             vid2author[r['video_id']] = r['author_id']
 
     rows = []
-    for f in ('log_standard_4_08_to_4_21_pure.csv', 'log_standard_4_22_to_5_08_pure.csv'):
+    for f in (f'log_standard_4_08_to_4_21_{variant}.csv',
+              f'log_standard_4_22_to_5_08_{variant}.csv'):
         with open(os.path.join(data_dir, f)) as fh:
             for r in csv.DictReader(fh):
                 rows.append((int(r['date']), r['user_id'], r['video_id'],
