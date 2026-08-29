@@ -1,0 +1,64 @@
+{
+  "iteration": 14,
+  "solution": "logs/record-run-11/solutions/014_history_features.py",
+  "hypothesis": "draft 2: add DIN-inspired user behaviour history as candidate-specific prior-interaction fields (same author/video/tab positive and negative buckets) on top of the current best, following the history-attention motivation from https://arxiv.org/abs/1706.06978.",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:34:25+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603756,
+  "GAUC": 0.670412,
+  "nDCG@5": 0.537101,
+  "source_hash": "e56859f85e68",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+weekday+hour+daypart+hist6 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']+play_time_ms\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); history_nonzero_rows=1,349,374; dim 40260->40324\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "6a99e0c54150",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000213,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67091,
+      "nDCG@5": 0.536823,
+      "primary": 0.603866
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670364,
+      "nDCG@5": 0.53742,
+      "primary": 0.603892
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669962,
+      "nDCG@5": 0.53706,
+      "primary": 0.603511
+    }
+  ],
+  "seconds": 127.3,
+  "verdict": "KEPT",
+  "delta": 0.002256,
+  "tokens_in": 95291,
+  "tokens_out": 9705,
+  "tokens_cached": 71808,
+  "cost_usd": 0.191662,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 227.5,
+  "recovery_events": []
+}

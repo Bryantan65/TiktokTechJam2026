@@ -1,0 +1,64 @@
+{
+  "iteration": 20,
+  "solution": "logs/record-run-10/solutions/020_append_targetenc_lgbm.py",
+  "hypothesis": "debug 18: the huge drop likely came from replacing raw categorical LambdaRank features with leaky/overstrong target encodings; keep node 19 unchanged and only append leave-one-out smoothed item/context priors so LightGBM can ignore them if unhelpful.",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:43:20+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.595056,
+  "GAUC": 0.657273,
+  "nDCG@5": 0.532838,
+  "source_hash": "6bec4af9d73a",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], 3way with appended LGBM target enc\nloaded raw hourmin rows=1,436,609; matched=1,436,609; missing=0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e962e4e9dff3",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.001983,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.658921,
+      "nDCG@5": 0.534208,
+      "primary": 0.596564
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.659071,
+      "nDCG@5": 0.532514,
+      "primary": 0.595793
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.653827,
+      "nDCG@5": 0.531792,
+      "primary": 0.59281
+    }
+  ],
+  "seconds": 107.0,
+  "verdict": "worse",
+  "delta": -0.006444,
+  "tokens_in": 95466,
+  "tokens_out": 8771,
+  "tokens_cached": 73856,
+  "cost_usd": 0.178663,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 197.9,
+  "recovery_events": []
+}

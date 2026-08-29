@@ -1,0 +1,64 @@
+{
+  "iteration": 27,
+  "solution": "logs/record-run-10/solutions/027_date_feature_dual_rank.py",
+  "hypothesis": "improve 24: the useful hour features may be missing absolute train-valid drift, so keep node 24's four-model rank blend and add only raw date as a categorical time feature.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T04:13:14+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604203,
+  "GAUC": 0.670675,
+  "nDCG@5": 0.53773,
+  "source_hash": "a4eb6be78421",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4', 'date_cat'], add date_cat to node24 4way blend\nloaded raw hourmin rows=1,436,609; matched=1,436,609; missing=0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "08744bf2789d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000342,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67067,
+      "nDCG@5": 0.537874,
+      "primary": 0.604272
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670171,
+      "nDCG@5": 0.53749,
+      "primary": 0.603831
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671184,
+      "nDCG@5": 0.537825,
+      "primary": 0.604505
+    }
+  ],
+  "seconds": 193.9,
+  "verdict": "KEPT",
+  "delta": 0.002703,
+  "tokens_in": 68701,
+  "tokens_out": 6513,
+  "tokens_cached": 51712,
+  "cost_usd": 0.133459,
+  "model": "gpt-5.5",
+  "agent_iteration": 26,
+  "wall_seconds": 259.2,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 9,
+  "solution": "logs/record-run-10/solutions/009_hour_time_blend.py",
+  "hypothesis": "improve 8: weekday alone was too weak, so read raw CSV hourmin and add hour-of-day/4-hour bucket while preserving data.load row order; if temporal context matters this should affect within-user rankings more than DOW alone.",
+  "parent": "8",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:04:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60366,
+  "GAUC": 0.670401,
+  "nDCG@5": 0.53692,
+  "source_hash": "e93db75cbe27",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4']\nloaded raw hourmin for 1,436,609 rows across 1,406,151 keys\nmatched raw hourmin for 1,436,609 tuple rows; missing 0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8b4d7f864108",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000345,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669879,
+      "nDCG@5": 0.536669,
+      "primary": 0.603274
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670691,
+      "nDCG@5": 0.536851,
+      "primary": 0.603771
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670634,
+      "nDCG@5": 0.537239,
+      "primary": 0.603936
+    }
+  ],
+  "seconds": 94.8,
+  "verdict": "KEPT",
+  "delta": 0.00216,
+  "tokens_in": 54757,
+  "tokens_out": 6522,
+  "tokens_cached": 41472,
+  "cost_usd": 0.119168,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 164.3,
+  "recovery_events": []
+}

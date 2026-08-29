@@ -1,0 +1,64 @@
+{
+  "iteration": 14,
+  "solution": "logs/record-run-10/solutions/014_cwm_watch_blend.py",
+  "hypothesis": "draft 4: replace the BCE member with a censored log-normal watch-time FM trained from raw play_time_ms, treating near-complete views as right-censored at duration; this follows the CWM/survival framing for watch-time recommendation (https://www.kdd.org/kdd2016/subtopic/view/deep-neural-networks-for-youtube-recommendations).",
+  "parent": "9",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:23:18+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601598,
+  "GAUC": 0.667588,
+  "nDCG@5": 0.535607,
+  "source_hash": "03d6791e30d5",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], cwm_lognormal\nloaded raw hour/play for 1,436,609 rows across 1,406,151 keys\nmatched raw hour/play for 1,436,609 tuple rows; missing 0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "0beaa0746d11",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000722,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.666316,
+      "nDCG@5": 0.535243,
+      "primary": 0.600779
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668363,
+      "nDCG@5": 0.535386,
+      "primary": 0.601875
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668086,
+      "nDCG@5": 0.536193,
+      "primary": 0.60214
+    }
+  ],
+  "seconds": 113.1,
+  "verdict": "noise",
+  "delta": 9.8e-05,
+  "tokens_in": 177407,
+  "tokens_out": 7490,
+  "tokens_cached": 146816,
+  "cost_usd": 0.224785,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 199.8,
+  "recovery_events": []
+}

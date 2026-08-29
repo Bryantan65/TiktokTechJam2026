@@ -1,0 +1,64 @@
+{
+  "iteration": 21,
+  "solution": "logs/record-run-10/solutions/021_history_ltr_blend.py",
+  "hypothesis": "improve 19: add non-leaky user behaviour summary features to the LambdaRank member only: prior per-user counts/rates for candidate video/author/context from earlier train rows, then freeze them for valid/test. This targets direction 2 sequence/history signal without another opaque low-weight neural member.",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:46:17+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604477,
+  "GAUC": 0.67134,
+  "nDCG@5": 0.537614,
+  "source_hash": "a1f2b85ad0e3",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], 3way bpr/ltr-history/bce\nloaded raw hourmin rows=1,436,609; matched=1,436,609; missing=0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "1389844d7c43",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000321,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671067,
+      "nDCG@5": 0.537225,
+      "primary": 0.604146
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671264,
+      "nDCG@5": 0.537734,
+      "primary": 0.604499
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671688,
+      "nDCG@5": 0.537884,
+      "primary": 0.604786
+    }
+  ],
+  "seconds": 155.6,
+  "verdict": "KEPT",
+  "delta": 0.002977,
+  "tokens_in": 65599,
+  "tokens_out": 7066,
+  "tokens_cached": 45952,
+  "cost_usd": 0.142754,
+  "model": "gpt-5.5",
+  "agent_iteration": 20,
+  "wall_seconds": 226.0,
+  "recovery_events": []
+}

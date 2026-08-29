@@ -1,0 +1,64 @@
+{
+  "iteration": 12,
+  "solution": "logs/record-run-11/solutions/012_multitask_aux.py",
+  "hypothesis": "draft 3: add shared auxiliary engagement heads for click/like/follow/comment/forward on top of node 10, following multi-task recommender practice such as MMoE/ESMM ideas for auxiliary user actions (https://dl.acm.org/doi/10.1145/3219819.3220007).",
+  "parent": "10",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:28:45+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604041,
+  "GAUC": 0.6707,
+  "nDCG@5": 0.537381,
+  "source_hash": "3fa17790d167",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+weekday+hour+daypart aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300; fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+weekday+hour+daypart; aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "cad030ca2d62",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00015,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671348,
+      "nDCG@5": 0.53707,
+      "primary": 0.604209
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670522,
+      "nDCG@5": 0.537463,
+      "primary": 0.603993
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67023,
+      "nDCG@5": 0.53761,
+      "primary": 0.60392
+    }
+  ],
+  "seconds": 93.7,
+  "verdict": "KEPT",
+  "delta": 0.002541,
+  "tokens_in": 85355,
+  "tokens_out": 6497,
+  "tokens_cached": 66688,
+  "cost_usd": 0.144982,
+  "model": "gpt-5.5",
+  "agent_iteration": 11,
+  "wall_seconds": 160.7,
+  "recovery_events": []
+}

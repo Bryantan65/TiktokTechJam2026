@@ -1,0 +1,64 @@
+{
+  "iteration": 26,
+  "solution": "logs/record-run-10/solutions/026_tree_heavy_blend.py",
+  "hypothesis": "improve 24: dual rankers add complementary signal, so shift weight from the weaker BCE slot to both tree rankers (BPR/XENDCG/LambdaRank/BCE 0.35/0.25/0.25/0.15) rather than adding more models.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T04:09:01+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604557,
+  "GAUC": 0.671176,
+  "nDCG@5": 0.537938,
+  "source_hash": "caaf425c08f1",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], 4way tree-heavy bpr/xendcg/lambdarank/bce\nloaded raw hourmin rows=1,436,609; matched=1,436,609; missing=0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8ef8e4f3a075",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000275,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671107,
+      "nDCG@5": 0.538184,
+      "primary": 0.604646
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671618,
+      "nDCG@5": 0.537935,
+      "primary": 0.604776
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670803,
+      "nDCG@5": 0.537694,
+      "primary": 0.604249
+    }
+  ],
+  "seconds": 189.0,
+  "verdict": "KEPT",
+  "delta": 0.003057,
+  "tokens_in": 80713,
+  "tokens_out": 6705,
+  "tokens_cached": 55168,
+  "cost_usd": 0.158497,
+  "model": "gpt-5.5",
+  "agent_iteration": 25,
+  "wall_seconds": 252.7,
+  "recovery_events": []
+}

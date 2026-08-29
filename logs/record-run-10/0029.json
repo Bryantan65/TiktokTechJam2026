@@ -1,0 +1,64 @@
+{
+  "iteration": 29,
+  "solution": "logs/record-run-10/solutions/029_holdout_stacked_blend.py",
+  "hypothesis": "improve 24: replace hand blend with a readable learned combiner trained only on a temporal train-holdout; use base-model per-user ranks/z-scores and blend the combiner 50/50 with node 24's anchor to reduce overfit.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T04:21:35+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603654,
+  "GAUC": 0.670587,
+  "nDCG@5": 0.536722,
+  "source_hash": "ed59cc49f581",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], temporal stacked node24 combiner\nstack split: early=1,100,240, holdout=40,872, hold_dates=[20220420, 20220421]\nloaded raw hourmin rows=1,436,609; matched=1,141,112; missing=0\nloaded raw hourmin rows=1,436,609; matched=1,436,609; missing=0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "4e497e4310b2",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000288,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670383,
+      "nDCG@5": 0.536509,
+      "primary": 0.603446
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671192,
+      "nDCG@5": 0.536773,
+      "primary": 0.603983
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670185,
+      "nDCG@5": 0.536883,
+      "primary": 0.603534
+    }
+  ],
+  "seconds": 334.7,
+  "verdict": "KEPT",
+  "delta": 0.002154,
+  "tokens_in": 129099,
+  "tokens_out": 6992,
+  "tokens_cached": 101120,
+  "cost_usd": 0.190427,
+  "model": "gpt-5.5",
+  "agent_iteration": 28,
+  "wall_seconds": 402.5,
+  "recovery_events": []
+}

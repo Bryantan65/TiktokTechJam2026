@@ -1,0 +1,64 @@
+{
+  "iteration": 17,
+  "solution": "logs/record-run-10/solutions/017_lambdarank_top5_blend.py",
+  "hypothesis": "improve 15: LambdaRank is the best new mechanism; keep the BPR member and 60/40 rank blend fixed, but set LightGBM lambdarank_truncation_level=5 and modestly increase tree capacity so the tree member optimizes the actual nDCG@5 cutoff rather than a broader ranking.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:32:22+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603015,
+  "GAUC": 0.669195,
+  "nDCG@5": 0.536835,
+  "source_hash": "7d2c87001749",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], lambdarank_top5\nloaded raw hourmin for 1,436,609 rows across 1,406,151 keys\nmatched raw hourmin for 1,436,609 tuple rows; missing 0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "5c7905c564ff",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000513,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668636,
+      "nDCG@5": 0.536815,
+      "primary": 0.602725
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669242,
+      "nDCG@5": 0.536183,
+      "primary": 0.602713
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669708,
+      "nDCG@5": 0.537506,
+      "primary": 0.603607
+    }
+  ],
+  "seconds": 145.2,
+  "verdict": "noise",
+  "delta": 0.001515,
+  "tokens_in": 116397,
+  "tokens_out": 5476,
+  "tokens_cached": 92928,
+  "cost_usd": 0.159896,
+  "model": "gpt-5.5",
+  "agent_iteration": 16,
+  "wall_seconds": 198.8,
+  "recovery_events": []
+}

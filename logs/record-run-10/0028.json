@@ -1,0 +1,64 @@
+{
+  "iteration": 28,
+  "solution": "logs/record-run-10/solutions/028_topheavy_rank_blend.py",
+  "hypothesis": "improve 24: node 24's equal-spaced per-user rank blend optimizes broad ordering; square each member's percentile rank before blending to emphasize top-of-list agreement for nDCG@5 without retraining different models.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T04:17:19+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604813,
+  "GAUC": 0.671448,
+  "nDCG@5": 0.538177,
+  "source_hash": "30de19ae26ad",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], node24 top-heavy rank blend gamma=2\nloaded raw hourmin rows=1,436,609; matched=1,436,609; missing=0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "662af99634e3",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000655,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67088,
+      "nDCG@5": 0.538141,
+      "primary": 0.604511
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672495,
+      "nDCG@5": 0.538633,
+      "primary": 0.605564
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67097,
+      "nDCG@5": 0.537756,
+      "primary": 0.604363
+    }
+  ],
+  "seconds": 188.2,
+  "verdict": "KEPT",
+  "delta": 0.003313,
+  "tokens_in": 53475,
+  "tokens_out": 5563,
+  "tokens_cached": 36736,
+  "cost_usd": 0.115846,
+  "model": "gpt-5.5",
+  "agent_iteration": 27,
+  "wall_seconds": 238.9,
+  "recovery_events": []
+}

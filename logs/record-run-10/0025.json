@@ -1,0 +1,64 @@
+{
+  "iteration": 25,
+  "solution": "logs/record-run-10/solutions/025_bagged_tree_slots.py",
+  "hypothesis": "improve 24: the dual-tree blend improved, so average two independently seeded LightGBM models inside each tree slot to reduce variance while keeping the readable 40/20/20/20 mechanism weights unchanged.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T04:03:03+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604596,
+  "GAUC": 0.671317,
+  "nDCG@5": 0.537876,
+  "source_hash": "8fa7834fafec",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], 4way bpr/bag-xendcg/bag-lambda/bce\nloaded raw hourmin rows=1,436,609; matched=1,436,609; missing=0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "0d10251dc424",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00044,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670998,
+      "nDCG@5": 0.537809,
+      "primary": 0.604403
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672179,
+      "nDCG@5": 0.538022,
+      "primary": 0.6051
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670773,
+      "nDCG@5": 0.537797,
+      "primary": 0.604285
+    }
+  ],
+  "seconds": 293.3,
+  "verdict": "KEPT",
+  "delta": 0.003096,
+  "tokens_in": 182142,
+  "tokens_out": 8994,
+  "tokens_cached": 146176,
+  "cost_usd": 0.252943,
+  "model": "gpt-5.5",
+  "agent_iteration": 24,
+  "wall_seconds": 390.0,
+  "recovery_events": []
+}

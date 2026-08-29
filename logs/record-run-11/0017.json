@@ -1,0 +1,64 @@
+{
+  "iteration": 17,
+  "solution": "logs/record-run-11/solutions/017_deepfm_scaled_residual.py",
+  "hypothesis": "improve 16: DeepFM helped but is noisy; make the MLP a learned small residual initialized near the FM scorer so it can add nonlinear signal without disrupting the strong ranking backbone.",
+  "parent": "16",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:43:38+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604334,
+  "GAUC": 0.671083,
+  "nDCG@5": 0.537585,
+  "source_hash": "11577aca67f0",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+weekday+hour+daypart aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']+play_time_ms scaled residual DeepFM\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "6afe9846afdb",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000273,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671063,
+      "nDCG@5": 0.537037,
+      "primary": 0.60405
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670877,
+      "nDCG@5": 0.537836,
+      "primary": 0.604356
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671309,
+      "nDCG@5": 0.537881,
+      "primary": 0.604595
+    }
+  ],
+  "seconds": 140.8,
+  "verdict": "KEPT",
+  "delta": 0.002834,
+  "tokens_in": 54786,
+  "tokens_out": 5856,
+  "tokens_cached": 37760,
+  "cost_usd": 0.120005,
+  "model": "gpt-5.5",
+  "agent_iteration": 16,
+  "wall_seconds": 183.8,
+  "recovery_events": []
+}

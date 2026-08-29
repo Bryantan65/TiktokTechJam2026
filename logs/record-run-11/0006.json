@@ -1,0 +1,64 @@
+{
+  "iteration": 6,
+  "solution": "logs/record-run-11/solutions/006_hybrid_global_bce.py",
+  "hypothesis": "improve 5: node 5's BCE anchor was computed on balanced pair rows, so it may not preserve real label-rate information; sample the auxiliary BCE minibatch from all train rows while keeping BPR pairs for ranking.",
+  "parent": "5",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:17:52+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602447,
+  "GAUC": 0.668734,
+  "nDCG@5": 0.53616,
+  "source_hash": "a42c4c2085b8",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "6120d10a59a5",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.001049,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668881,
+      "nDCG@5": 0.536198,
+      "primary": 0.602539
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670184,
+      "nDCG@5": 0.536708,
+      "primary": 0.603446
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667136,
+      "nDCG@5": 0.535573,
+      "primary": 0.601355
+    }
+  ],
+  "seconds": 44.6,
+  "verdict": "noise",
+  "delta": 0.000947,
+  "tokens_in": 48253,
+  "tokens_out": 3505,
+  "tokens_cached": 34688,
+  "cost_usd": 0.086306,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 77.8,
+  "recovery_events": []
+}

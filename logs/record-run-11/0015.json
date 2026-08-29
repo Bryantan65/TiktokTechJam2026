@@ -1,0 +1,64 @@
+{
+  "iteration": 15,
+  "solution": "logs/record-run-11/solutions/015_eb_history_blend.py",
+  "hypothesis": "improve 14: the history buckets were too coarse and trained as noisy FM fields; replace them with a smoothed empirical-Bayes target-encoding correction from train-only user/item/history stats, motivated by target encoding smoothing (https://contrib.scikit-learn.org/category_encoders/targetencoder.html).",
+  "parent": "14",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:38:16+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603469,
+  "GAUC": 0.66975,
+  "nDCG@5": 0.537187,
+  "source_hash": "2f8781bf22ff",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+weekday+hour+daypart aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']+play_time_ms + EB\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300; fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+weekday+hour+daypart\nEB stats: {'v': 7538, 'a': 6482, 'at': 22610, 'ut': 63579, 'ud': 1074249, 'ua': 1070326, 'uv': 1092750} global 0.33662\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "873f8b526110",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000314,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670069,
+      "nDCG@5": 0.537261,
+      "primary": 0.603665
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669983,
+      "nDCG@5": 0.537287,
+      "primary": 0.603635
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669198,
+      "nDCG@5": 0.537014,
+      "primary": 0.603106
+    }
+  ],
+  "seconds": 110.4,
+  "verdict": "noise",
+  "delta": 0.001969,
+  "tokens_in": 126022,
+  "tokens_out": 10076,
+  "tokens_cached": 97408,
+  "cost_usd": 0.220999,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 214.2,
+  "recovery_events": []
+}

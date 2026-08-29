@@ -1,0 +1,64 @@
+{
+  "iteration": 25,
+  "solution": "logs/record-run-11/solutions/025_node20_seed_ensemble.py",
+  "hypothesis": "improve 20: the last unresolved source of movement is seed variance (+/-0.000688); train three full node-20 models and average per-user standardized scores so independent ranking disagreements get equal weight rather than another weak add-on member.",
+  "parent": "20",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T08:13:07+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604585,
+  "GAUC": 0.671263,
+  "nDCG@5": 0.537907,
+  "source_hash": "11e76ad4a6ef",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} node20 x3 seed ensemble, per-user z average\nensemble member 1/3 seed=211\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nLambdaResidual: raw_std=0.98395 base_std=1.33343 scale=0.47431\nensemble member 2/3 seed=237\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nLambdaResidual: raw_std=1.00019 base_std=1.38798 scale=0.48570\nensemble member 3/3 seed=273\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nLambdaResidual: raw_std=0.99088 base_std=1.33914 scale=0.47301\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "1cf3290008f5",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000183,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671139,
+      "nDCG@5": 0.538067,
+      "primary": 0.604603
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67105,
+      "nDCG@5": 0.537739,
+      "primary": 0.604394
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.6716,
+      "nDCG@5": 0.537916,
+      "primary": 0.604758
+    }
+  ],
+  "seconds": 429.6,
+  "verdict": "KEPT",
+  "delta": 0.003085,
+  "tokens_in": 91298,
+  "tokens_out": 4136,
+  "tokens_cached": 70144,
+  "cost_usd": 0.129317,
+  "model": "gpt-5.5",
+  "agent_iteration": 24,
+  "wall_seconds": 484.5,
+  "recovery_events": []
+}

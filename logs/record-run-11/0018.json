@@ -1,0 +1,64 @@
+{
+  "iteration": 18,
+  "solution": "logs/record-run-11/solutions/018_cwm_watchtime.py",
+  "hypothesis": "draft 4: use a censored log-normal watch-time auxiliary head and add its survival margin over duration to the ranker, following the CWM idea that completed views are right-censored rather than exact play times (search: https://www.kdd.org/kdd2020/accepted-papers/view/counterfactual-reasoning-for-censored-time-to-event-data-in-the-wild).",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:47:18+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604374,
+  "GAUC": 0.671184,
+  "nDCG@5": 0.537563,
+  "source_hash": "316f094bfa78",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time aux+CWM\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "ab401e43dbbd",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000471,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670586,
+      "nDCG@5": 0.537222,
+      "primary": 0.603904
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671236,
+      "nDCG@5": 0.537506,
+      "primary": 0.604371
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67173,
+      "nDCG@5": 0.537962,
+      "primary": 0.604846
+    }
+  ],
+  "seconds": 124.6,
+  "verdict": "KEPT",
+  "delta": 0.002874,
+  "tokens_in": 83778,
+  "tokens_out": 7494,
+  "tokens_cached": 61952,
+  "cost_usd": 0.160481,
+  "model": "gpt-5.5",
+  "agent_iteration": 17,
+  "wall_seconds": 203.8,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 20,
+  "solution": "logs/record-run-11/solutions/020_lambdamart_residual.py",
+  "hypothesis": "improve 19: the logistic calibrator only changes coarse offsets; train a LightGBM LambdaRank residual on frozen neural scores plus context/item fields so the post-hoc stage directly optimizes top-5 ranking rather than calibration.",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:54:04+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604565,
+  "GAUC": 0.671368,
+  "nDCG@5": 0.537763,
+  "source_hash": "b1519d26d798",
+  "stdout_tail": "[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\nloading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time aux+CWM+LambdaMART-residual\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nLambdaResidual: raw_std=1.01768 base_std=1.40315 scale=0.48257\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "aa1908329b95",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000688,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670674,
+      "nDCG@5": 0.536966,
+      "primary": 0.60382
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671399,
+      "nDCG@5": 0.538003,
+      "primary": 0.604701
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67203,
+      "nDCG@5": 0.53832,
+      "primary": 0.605175
+    }
+  ],
+  "seconds": 153.6,
+  "verdict": "KEPT",
+  "delta": 0.003065,
+  "tokens_in": 57997,
+  "tokens_out": 8173,
+  "tokens_cached": 39808,
+  "cost_usd": 0.147107,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 226.2,
+  "recovery_events": []
+}

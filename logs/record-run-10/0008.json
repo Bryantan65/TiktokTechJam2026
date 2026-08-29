@@ -1,0 +1,64 @@
+{
+  "iteration": 8,
+  "solution": "logs/record-run-10/solutions/008_time_dow_blend.py",
+  "hypothesis": "draft 6: add a shared day-of-week categorical time feature to the current best BCE+BPR rank blend; time-aware recommender features can capture periodic behavior without raw-date leakage (https://dl.acm.org/doi/10.1145/1864708.1864727).",
+  "parent": "7",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:02:00+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603464,
+  "GAUC": 0.670141,
+  "nDCG@5": 0.536788,
+  "source_hash": "60659766cfdc",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "178953f14221",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000728,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669411,
+      "nDCG@5": 0.536493,
+      "primary": 0.602952
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670039,
+      "nDCG@5": 0.536247,
+      "primary": 0.603143
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670972,
+      "nDCG@5": 0.537624,
+      "primary": 0.604298
+    }
+  ],
+  "seconds": 74.7,
+  "verdict": "noise",
+  "delta": 0.001964,
+  "tokens_in": 49690,
+  "tokens_out": 5442,
+  "tokens_cached": 38400,
+  "cost_usd": 0.101845,
+  "model": "gpt-5.5",
+  "agent_iteration": 7,
+  "wall_seconds": 136.4,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 24,
+  "solution": "logs/record-run-11/solutions/024_recency_weighted.py",
+  "hypothesis": "improve 10: time features helped but all dates are still treated equally; test a stronger temporal-drift mechanism by exponentially upweighting recent train days in the BCE/BPR losses while keeping the node-20 architecture and residual unchanged.",
+  "parent": "10",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T08:09:42+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601931,
+  "GAUC": 0.667404,
+  "nDCG@5": 0.536457,
+  "source_hash": "fbc73a8540e5",
+  "stdout_tail": "[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\nloading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time aux+CWM+LambdaMART-residual+recency-weight\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nLambdaResidual: raw_std=0.96613 base_std=1.36091 scale=0.49302\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "1f4cd2a00446",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000686,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.666587,
+      "nDCG@5": 0.535821,
+      "primary": 0.601204
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668263,
+      "nDCG@5": 0.536869,
+      "primary": 0.602566
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667362,
+      "nDCG@5": 0.536682,
+      "primary": 0.602022
+    }
+  ],
+  "seconds": 151.0,
+  "verdict": "noise",
+  "delta": 0.000431,
+  "tokens_in": 75038,
+  "tokens_out": 6584,
+  "tokens_cached": 55808,
+  "cost_usd": 0.141819,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 225.0,
+  "recovery_events": []
+}

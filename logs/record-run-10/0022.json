@@ -1,0 +1,64 @@
+{
+  "iteration": 22,
+  "solution": "logs/record-run-10/solutions/022_xendcg_3way_blend.py",
+  "hypothesis": "improve 19: keep node 19 fixed except swap the tree member from LambdaRank to LightGBM rank_xendcg, whose XE_NDCG objective is designed as a smoother listwise approximation to NDCG@k and may lift the nDCG half directly.",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:50:25+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604586,
+  "GAUC": 0.671423,
+  "nDCG@5": 0.53775,
+  "source_hash": "d27e9be73076",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], 3way bpr/xendcg/bce\nloaded raw hourmin rows=1,436,609; matched=1,436,609; missing=0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "3357d5728db5",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000459,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670717,
+      "nDCG@5": 0.537493,
+      "primary": 0.604105
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672184,
+      "nDCG@5": 0.537852,
+      "primary": 0.605018
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671367,
+      "nDCG@5": 0.537905,
+      "primary": 0.604636
+    }
+  ],
+  "seconds": 150.3,
+  "verdict": "KEPT",
+  "delta": 0.003086,
+  "tokens_in": 161060,
+  "tokens_out": 10608,
+  "tokens_cached": 130432,
+  "cost_usd": 0.247866,
+  "model": "gpt-5.5",
+  "agent_iteration": 21,
+  "wall_seconds": 242.3,
+  "recovery_events": []
+}

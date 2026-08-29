@@ -1,0 +1,64 @@
+{
+  "iteration": 23,
+  "solution": "logs/record-run-10/solutions/023_graded_watch_xendcg.py",
+  "hypothesis": "improve 22: train the XENDCG tree member on graded relevance from play_time_ms/duration quartiles for positive train rows, while early-stopping and scoring against the binary valid metric; LightGBM ranking supports graded label_gain (https://lightgbm.readthedocs.io/en/latest/Parameters.html#label_gain), and watch depth may separate the top positives for nDCG@5.",
+  "parent": "22",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:54:27+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602565,
+  "GAUC": 0.669101,
+  "nDCG@5": 0.536029,
+  "source_hash": "837176cf442f",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], 3way bpr/graded-xendcg/bce\nloaded raw rows=1,436,609; matched=1,436,609; missing=0; play_nonzero_train=982,654\nwatch-grade thresholds ratio q60=1.011 q85=1.158 positives_with_play=384,121\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e055c6eedc92",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000236,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668777,
+      "nDCG@5": 0.536115,
+      "primary": 0.602446
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669142,
+      "nDCG@5": 0.535684,
+      "primary": 0.602413
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669384,
+      "nDCG@5": 0.536289,
+      "primary": 0.602837
+    }
+  ],
+  "seconds": 169.2,
+  "verdict": "noise",
+  "delta": 0.001065,
+  "tokens_in": 120137,
+  "tokens_out": 8172,
+  "tokens_cached": 90624,
+  "cost_usd": 0.200815,
+  "model": "gpt-5.5",
+  "agent_iteration": 22,
+  "wall_seconds": 261.1,
+  "recovery_events": []
+}

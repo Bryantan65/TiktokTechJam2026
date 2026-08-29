@@ -1,0 +1,64 @@
+{
+  "iteration": 26,
+  "solution": "logs/record-run-11/solutions/026_weekday_lambdamart.py",
+  "hypothesis": "improve 20: node 20's LambdaMART residual uses hour/daypart but omits weekday/date even though node 10 showed time context helps; add weekday, weekday\u00d7hour, weekday\u00d7tab and relative-day features to the residual ranker at full residual weight.",
+  "parent": "20",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T08:21:15+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604461,
+  "GAUC": 0.671152,
+  "nDCG@5": 0.53777,
+  "source_hash": "0663e71cbe5b",
+  "stdout_tail": "[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\n[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\nloading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time aux+CWM+weekday-LambdaMART\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nLambdaResidual: raw_std=1.01568 base_std=1.40329 scale=0.48357\nWeekdayLambdaResidual: raw_std=1.03080 base_std=1.40329 scale=0.47648 day0=738254\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "b114552e8841",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000396,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670604,
+      "nDCG@5": 0.537421,
+      "primary": 0.604012
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671269,
+      "nDCG@5": 0.537947,
+      "primary": 0.604608
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671584,
+      "nDCG@5": 0.537942,
+      "primary": 0.604763
+    }
+  ],
+  "seconds": 193.1,
+  "verdict": "KEPT",
+  "delta": 0.002961,
+  "tokens_in": 94197,
+  "tokens_out": 5129,
+  "tokens_cached": 70144,
+  "cost_usd": 0.146494,
+  "model": "gpt-5.5",
+  "agent_iteration": 25,
+  "wall_seconds": 250.3,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 16,
+  "solution": "logs/record-run-11/solutions/016_deepfm_aux_play.py",
+  "hypothesis": "draft 5: change mechanism from pure FM capacity to DeepFM, adding a small MLP over field embeddings while keeping node 13's ranking/time/multitask training; DeepFM paper: https://www.ijcai.org/proceedings/2017/0239.pdf.",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:40:58+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604299,
+  "GAUC": 0.670998,
+  "nDCG@5": 0.537599,
+  "source_hash": "47397ba7882c",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+weekday+hour+daypart aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']+play_time_ms DeepFM\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "7dddc713424d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000361,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67065,
+      "nDCG@5": 0.537155,
+      "primary": 0.603903
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671509,
+      "nDCG@5": 0.537709,
+      "primary": 0.604609
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670834,
+      "nDCG@5": 0.537933,
+      "primary": 0.604384
+    }
+  ],
+  "seconds": 116.8,
+  "verdict": "KEPT",
+  "delta": 0.002799,
+  "tokens_in": 94422,
+  "tokens_out": 6073,
+  "tokens_cached": 70144,
+  "cost_usd": 0.156497,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 168.7,
+  "recovery_events": []
+}

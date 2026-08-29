@@ -1,0 +1,64 @@
+{
+  "iteration": 10,
+  "solution": "logs/record-run-11/solutions/010_time_context.py",
+  "hypothesis": "draft 6: add contextual weekday/hour/daypart embeddings from the raw log hourmin column on top of the current best semi-hard ranker, because time-aware CF can capture context-dependent preferences; reference: https://dl.acm.org/doi/10.1145/1454008.1454048",
+  "parent": "9",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:24:25+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603918,
+  "GAUC": 0.670476,
+  "nDCG@5": 0.537361,
+  "source_hash": "91b2341b32e6",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+weekday+hour+daypart\nraw hour rows loaded: 1,436,609 keys=1,406,151\nhour matched 1,436,609/1,436,609 (100.000%); dim 40260->40300; fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+weekday+hour+daypart\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "bf84cf423589",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000268,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671284,
+      "nDCG@5": 0.537171,
+      "primary": 0.604227
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67017,
+      "nDCG@5": 0.537336,
+      "primary": 0.603753
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669974,
+      "nDCG@5": 0.537575,
+      "primary": 0.603775
+    }
+  ],
+  "seconds": 72.5,
+  "verdict": "KEPT",
+  "delta": 0.002418,
+  "tokens_in": 76540,
+  "tokens_out": 7820,
+  "tokens_cached": 60544,
+  "cost_usd": 0.148462,
+  "model": "gpt-5.5",
+  "agent_iteration": 9,
+  "wall_seconds": 161.1,
+  "recovery_events": []
+}

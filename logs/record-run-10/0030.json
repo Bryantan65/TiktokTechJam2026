@@ -1,0 +1,64 @@
+{
+  "iteration": 30,
+  "solution": "logs/record-run-10/solutions/030_mild_topheavy_rank_blend.py",
+  "hypothesis": "improve 24: node 28's rank^2 transform raised nDCG but lost robustness, so try a milder rank^1.5 top-heavy transform to retain GAUC while nudging top-5 ordering.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T04:28:29+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604812,
+  "GAUC": 0.67153,
+  "nDCG@5": 0.538095,
+  "source_hash": "0fa370169c23",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], node24 mild top-heavy rank blend gamma=1.5\nloaded raw hourmin rows=1,436,609; matched=1,436,609; missing=0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "bfd807825d1e",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000491,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671115,
+      "nDCG@5": 0.538166,
+      "primary": 0.604641
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672382,
+      "nDCG@5": 0.53835,
+      "primary": 0.605366
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671092,
+      "nDCG@5": 0.537768,
+      "primary": 0.60443
+    }
+  ],
+  "seconds": 190.4,
+  "verdict": "KEPT",
+  "delta": 0.003312,
+  "tokens_in": 146868,
+  "tokens_out": 7837,
+  "tokens_cached": 114816,
+  "cost_usd": 0.215908,
+  "model": "gpt-5.5",
+  "agent_iteration": 29,
+  "wall_seconds": 269.1,
+  "recovery_events": []
+}

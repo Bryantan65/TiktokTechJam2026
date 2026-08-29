@@ -1,0 +1,64 @@
+{
+  "iteration": 21,
+  "solution": "logs/record-run-11/solutions/021_usernorm_lgb_residual.py",
+  "hypothesis": "improve 20: LambdaMART helped nDCG but its global residual scale is noisy; center and scale the tree residual within each user before blending so the combiner matches the within-user ranking metrics and reduces between-user variance.",
+  "parent": "20",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:57:14+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604396,
+  "GAUC": 0.671167,
+  "nDCG@5": 0.537625,
+  "source_hash": "40f167f2b7db",
+  "stdout_tail": "[LightGBM] [Warning] Met categorical feature which contains sparse values. Consider renumbering to consecutive integers started from zero\nloading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+time aux+CWM+usernorm-LambdaMART-residual\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nUserNormLambdaResidual: raw_std=1.01587 base_std=1.40315 weight=0.350\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "d7ea7939d229",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000475,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670574,
+      "nDCG@5": 0.537122,
+      "primary": 0.603848
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671544,
+      "nDCG@5": 0.537812,
+      "primary": 0.604678
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671383,
+      "nDCG@5": 0.537941,
+      "primary": 0.604662
+    }
+  ],
+  "seconds": 154.5,
+  "verdict": "KEPT",
+  "delta": 0.002896,
+  "tokens_in": 49779,
+  "tokens_out": 3234,
+  "tokens_cached": 35712,
+  "cost_usd": 0.085363,
+  "model": "gpt-5.5",
+  "agent_iteration": 20,
+  "wall_seconds": 191.2,
+  "recovery_events": []
+}

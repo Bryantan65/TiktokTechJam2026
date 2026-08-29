@@ -1,0 +1,64 @@
+{
+  "iteration": 4,
+  "solution": "logs/record-run-11/solutions/004_listwise_fm.py",
+  "hypothesis": "improve 2: BPR helped but more sampled pairs did not; switch to a same-user listwise softmax loss so every candidate in a user's impression list competes directly, closer to nDCG/GAUC ranking.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:14:44+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.599252,
+  "GAUC": 0.663785,
+  "nDCG@5": 0.534719,
+  "source_hash": "66f3b0edb27f",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "128f44e109eb",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000569,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.664057,
+      "nDCG@5": 0.534672,
+      "primary": 0.599364
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.662839,
+      "nDCG@5": 0.534431,
+      "primary": 0.598635
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.66446,
+      "nDCG@5": 0.535054,
+      "primary": 0.599757
+    }
+  ],
+  "seconds": 68.4,
+  "verdict": "worse",
+  "delta": -0.002248,
+  "tokens_in": 37445,
+  "tokens_out": 3016,
+  "tokens_cached": 27520,
+  "cost_usd": 0.068733,
+  "model": "gpt-5.5",
+  "agent_iteration": 3,
+  "wall_seconds": 96.5,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 18,
+  "solution": "logs/record-run-10/solutions/018_ltr_target_stats.py",
+  "hypothesis": "improve 15: LambdaRank helped but only used raw categorical ids; add smoothed train-only leave-one-out target/count statistics for video, author, context, and user-context interactions so the tree can exploit historical propensity while preserving the BPR member and 60/40 blend.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:35:56+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.572812,
+  "GAUC": 0.625116,
+  "nDCG@5": 0.520506,
+  "source_hash": "dc229ab76d70",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4']+target_stats, lambdarank\nloaded raw hourmin for 1,436,609 rows across 1,406,151 keys\nmatched raw hourmin for 1,436,609 tuple rows; missing 0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e6efac648546",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000538,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.62456,
+      "nDCG@5": 0.520543,
+      "primary": 0.572552
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.625022,
+      "nDCG@5": 0.519884,
+      "primary": 0.572453
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.625767,
+      "nDCG@5": 0.521092,
+      "primary": 0.57343
+    }
+  ],
+  "seconds": 129.9,
+  "verdict": "worse",
+  "delta": -0.028688,
+  "tokens_in": 74237,
+  "tokens_out": 7199,
+  "tokens_cached": 50048,
+  "cost_usd": 0.157487,
+  "model": "gpt-5.5",
+  "agent_iteration": 17,
+  "wall_seconds": 200.1,
+  "recovery_events": []
+}

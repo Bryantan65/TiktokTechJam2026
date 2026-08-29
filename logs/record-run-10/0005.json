@@ -1,0 +1,64 @@
+{
+  "iteration": 5,
+  "solution": "logs/record-run-10/solutions/005_bpr_hardneg_fm.py",
+  "hypothesis": "improve 2: node 2's random BPR has signal, so focus BPR on top-k mistakes with online same-user hard-negative sampling after warmup; hard negatives are a standard ranking/recommender tactic (cf. LambdaRank/learning-to-rank motivation: https://www.microsoft.com/en-us/research/publication/from-ranknet-to-lambdarank-to-lambdamart-an-overview/).",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:55:34+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602305,
+  "GAUC": 0.668285,
+  "nDCG@5": 0.536325,
+  "source_hash": "0ed4e1f5039a",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "75973c3b2f67",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000471,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668006,
+      "nDCG@5": 0.536406,
+      "primary": 0.602206
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667645,
+      "nDCG@5": 0.536137,
+      "primary": 0.601891
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669203,
+      "nDCG@5": 0.536432,
+      "primary": 0.602818
+    }
+  ],
+  "seconds": 62.6,
+  "verdict": "noise",
+  "delta": 0.000805,
+  "tokens_in": 70962,
+  "tokens_out": 5684,
+  "tokens_cached": 56448,
+  "cost_usd": 0.121349,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 143.8,
+  "recovery_events": []
+}

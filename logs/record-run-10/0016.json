@@ -1,0 +1,64 @@
+{
+  "iteration": 16,
+  "solution": "logs/record-run-10/solutions/016_ltr_bpr_feature.py",
+  "hypothesis": "improve 15: LambdaRank helped as an independent member; append the trained BPR score as a numeric feature so LambdaRank can learn tree residual corrections around the strong FM ranker, then give LambdaRank a readable 45% blend weight.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:29:57+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603195,
+  "GAUC": 0.669681,
+  "nDCG@5": 0.536708,
+  "source_hash": "5aeb3bae7319",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'] + bpr_score, lambdarank\nloaded raw hourmin for 1,436,609 rows across 1,406,151 keys\nmatched raw hourmin for 1,436,609 tuple rows; missing 0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "0c2ef866b42d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000463,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669072,
+      "nDCG@5": 0.536538,
+      "primary": 0.602805
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.66957,
+      "nDCG@5": 0.536574,
+      "primary": 0.603072
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670402,
+      "nDCG@5": 0.537012,
+      "primary": 0.603707
+    }
+  ],
+  "seconds": 90.0,
+  "verdict": "noise",
+  "delta": 0.001695,
+  "tokens_in": 50997,
+  "tokens_out": 6299,
+  "tokens_cached": 35712,
+  "cost_usd": 0.119058,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 149.7,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 30,
+  "solution": "logs/record-run-11/solutions/030_recency_hist_ensemble.py",
+  "hypothesis": "improve 27: the best ensemble's carrying extra part is the history residual; refine it by adding chronological prior exposure/rate and days-since-seen features for user-video/user-author/video/author before the same 60/40 blend, rather than another low-weight member.",
+  "parent": "27",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T08:58:56+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604494,
+  "GAUC": 0.671156,
+  "nDCG@5": 0.537833,
+  "source_hash": "0d6364c46e04",
+  "stdout_tail": "raw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nLambdaResidual: raw_std=0.98414 base_std=1.33333 scale=0.47419\nRecencyHistLambdaResidual: raw_std=4.61959 base_std=1.33333 scale=0.12988 global=0.3366\nensemble member 2/3 seed=237\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nLambdaResidual: raw_std=1.00707 base_std=1.38770 scale=0.48228\nRecencyHistLambdaResidual: raw_std=4.67467 base_std=1.38770 scale=0.13358 global=0.3366\nensemble member 3/3 seed=273\nraw rows loaded: 1,436,609 keys=1,406,151 aux=['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward'] play=True\nraw matched 1,436,609/1,436,609 (100.000%); dim 40260->40300\nLambdaResidual: raw_std=0.99341 base_std=1.33907 scale=0.47178\nRecencyHistLambdaResidual: raw_std=4.67765 base_std=1.33907 scale=0.12882 global=0.3366\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "cbcdda47e176",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000147,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671158,
+      "nDCG@5": 0.537989,
+      "primary": 0.604573
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671035,
+      "nDCG@5": 0.537614,
+      "primary": 0.604325
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671275,
+      "nDCG@5": 0.537895,
+      "primary": 0.604585
+    }
+  ],
+  "seconds": 648.2,
+  "verdict": "KEPT",
+  "delta": 0.002994,
+  "tokens_in": 90552,
+  "tokens_out": 5894,
+  "tokens_cached": 71168,
+  "cost_usd": 0.142984,
+  "model": "gpt-5.5",
+  "agent_iteration": 29,
+  "wall_seconds": 711.8,
+  "recovery_events": []
+}

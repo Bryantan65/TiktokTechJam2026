@@ -1,0 +1,64 @@
+{
+  "iteration": 24,
+  "solution": "logs/record-run-10/solutions/024_dual_ranker_4way.py",
+  "hypothesis": "improve 22: combine the two strongest tree objectives, rank_xendcg and lambdarank, as separate readable 20% members with BPR/BCE, because nodes 19 and 22 have similar scores but may make different listwise errors.",
+  "parent": "22",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:58:17+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604931,
+  "GAUC": 0.671735,
+  "nDCG@5": 0.538126,
+  "source_hash": "92767b7acf8d",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], 4way bpr/xendcg/lambdarank/bce\nloaded raw hourmin rows=1,436,609; matched=1,436,609; missing=0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "34c01d7d35d8",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000367,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671167,
+      "nDCG@5": 0.538197,
+      "primary": 0.604682
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672495,
+      "nDCG@5": 0.538208,
+      "primary": 0.605352
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671542,
+      "nDCG@5": 0.537974,
+      "primary": 0.604758
+    }
+  ],
+  "seconds": 189.7,
+  "verdict": "KEPT",
+  "delta": 0.003431,
+  "tokens_in": 131989,
+  "tokens_out": 6146,
+  "tokens_cached": 105216,
+  "cost_usd": 0.181001,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 250.5,
+  "recovery_events": []
+}

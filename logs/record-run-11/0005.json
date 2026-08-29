@@ -1,0 +1,64 @@
+{
+  "iteration": 5,
+  "solution": "logs/record-run-11/solutions/005_hybrid_bpr_bce.py",
+  "hypothesis": "improve 2: pure BPR is still the best node; add a small BCE term during BPR epochs to retain pointwise label-rate information while keeping same-user pairwise ranking dominant.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:16:39+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602976,
+  "GAUC": 0.669462,
+  "nDCG@5": 0.53649,
+  "source_hash": "9227b80249cf",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "c3ee000d4cdd",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000322,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669902,
+      "nDCG@5": 0.536573,
+      "primary": 0.603238
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669542,
+      "nDCG@5": 0.536605,
+      "primary": 0.603073
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668943,
+      "nDCG@5": 0.536291,
+      "primary": 0.602617
+    }
+  ],
+  "seconds": 40.0,
+  "verdict": "noise",
+  "delta": 0.001476,
+  "tokens_in": 78129,
+  "tokens_out": 3862,
+  "tokens_cached": 64256,
+  "cost_usd": 0.10543,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 85.1,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 11,
+  "solution": "logs/record-run-10/solutions/011_time_cross_blend.py",
+  "hypothesis": "improve 9: hour features helped slightly, so add only low-cardinality context crosses tab\u00d7hour and weekday\u00d7hour while leaving the BPR/BCE training and 60/40 rank blend unchanged.",
+  "parent": "9",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:10:20+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603055,
+  "GAUC": 0.669397,
+  "nDCG@5": 0.536712,
+  "source_hash": "0c3472834948",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4', 'tab_hour', 'dow_hour']\nloaded raw hourmin for 1,436,609 rows across 1,406,151 keys\nmatched raw hourmin for 1,436,609 tuple rows; missing 0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "2bc474197061",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000351,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.66972,
+      "nDCG@5": 0.537051,
+      "primary": 0.603386
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669157,
+      "nDCG@5": 0.536216,
+      "primary": 0.602687
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669314,
+      "nDCG@5": 0.536868,
+      "primary": 0.603091
+    }
+  ],
+  "seconds": 100.5,
+  "verdict": "noise",
+  "delta": 0.001555,
+  "tokens_in": 62702,
+  "tokens_out": 6238,
+  "tokens_cached": 42880,
+  "cost_usd": 0.133375,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 159.3,
+  "recovery_events": []
+}

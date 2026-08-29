@@ -1,0 +1,64 @@
+{
+  "iteration": 11,
+  "solution": "logs/record-run-11/solutions/011_finer_time_context.py",
+  "hypothesis": "improve 10: node 10 showed time context helps; add half-hour and tab\u00d7half-hour embeddings so the FM can learn finer and tab-specific temporal effects while keeping the loss unchanged.",
+  "parent": "10",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T07:26:22+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60307,
+  "GAUC": 0.669484,
+  "nDCG@5": 0.536655,
+  "source_hash": "8c011c8f7023",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+weekday+hour+daypart+halfhour+tab_halfhour\nraw hour rows loaded: 1,436,609 keys=1,406,151\nhour matched 1,436,609/1,436,609 (100.000%); dim 40260->40643; fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+weekday+hour+daypart+halfhour+tab_halfhour\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e33fbafc79e5",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.001148,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671252,
+      "nDCG@5": 0.537174,
+      "primary": 0.604213
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667617,
+      "nDCG@5": 0.536219,
+      "primary": 0.601918
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669583,
+      "nDCG@5": 0.536572,
+      "primary": 0.603078
+    }
+  ],
+  "seconds": 75.9,
+  "verdict": "noise",
+  "delta": 0.00157,
+  "tokens_in": 53289,
+  "tokens_out": 5148,
+  "tokens_cached": 36736,
+  "cost_usd": 0.11123,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 120.1,
+  "recovery_events": []
+}

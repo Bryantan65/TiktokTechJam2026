@@ -1,0 +1,64 @@
+{
+  "iteration": 15,
+  "solution": "logs/record-run-10/solutions/015_lambdarank_blend.py",
+  "hypothesis": "draft 5: replace the BCE member with a LightGBM LambdaRank model grouped by user_id, while keeping BPR at 60%; LambdaMART directly optimizes nDCG-style ranking and may provide a different mechanism from FM logloss (https://lightgbm.readthedocs.io/en/latest/Parameters.html#lambdarank).",
+  "parent": "9",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T03:26:47+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604091,
+  "GAUC": 0.670779,
+  "nDCG@5": 0.537404,
+  "source_hash": "05cf98424861",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], lambdarank\nloaded raw hourmin for 1,436,609 rows across 1,406,151 keys\nmatched raw hourmin for 1,436,609 tuple rows; missing 0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "a4b189a7c33b",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000497,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670277,
+      "nDCG@5": 0.537381,
+      "primary": 0.603829
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670606,
+      "nDCG@5": 0.536955,
+      "primary": 0.60378
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671453,
+      "nDCG@5": 0.537877,
+      "primary": 0.604665
+    }
+  ],
+  "seconds": 130.8,
+  "verdict": "KEPT",
+  "delta": 0.002591,
+  "tokens_in": 97759,
+  "tokens_out": 7876,
+  "tokens_cached": 74240,
+  "cost_usd": 0.174678,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 226.3,
+  "recovery_events": []
+}

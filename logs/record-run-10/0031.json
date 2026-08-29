@@ -1,0 +1,64 @@
+{
+  "iteration": 31,
+  "solution": "logs/record-run-10/solutions/031_deeper_lgb_dual_ranker.py",
+  "hypothesis": "improve 24: the dual-tree members are the main complementary signal, so increase only LightGBM ranker capacity (more leaves, lower LR, more rounds) while keeping FM members and 4-way rank blend fixed.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T04:32:38+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604656,
+  "GAUC": 0.671366,
+  "nDCG@5": 0.537946,
+  "source_hash": "4fdd4864cc60",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour', 'tod4'], 4way deeper lgb bpr/xendcg/lambdarank/bce\nloaded raw hourmin rows=1,436,609; matched=1,436,609; missing=0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "b86bb02a0f97",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 7.6e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671269,
+      "nDCG@5": 0.537886,
+      "primary": 0.604578
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671868,
+      "nDCG@5": 0.537591,
+      "primary": 0.60473
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67096,
+      "nDCG@5": 0.538361,
+      "primary": 0.60466
+    }
+  ],
+  "seconds": 253.3,
+  "verdict": "KEPT",
+  "delta": 0.003156,
+  "tokens_in": 164345,
+  "tokens_out": 6309,
+  "tokens_cached": 131840,
+  "cost_usd": 0.210273,
+  "model": "gpt-5.5",
+  "agent_iteration": 30,
+  "wall_seconds": 312.5,
+  "recovery_events": []
+}
