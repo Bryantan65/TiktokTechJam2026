@@ -816,11 +816,25 @@ runs; each frozen state has its own tag.
 1. commit and tag              DONE - one tag per run, see below
 2. archive the ledger          DONE - shakedown-02, void-run-1
 3. run the baseline by hand    DONE - iteration 1, by=human, 0.601413 +/- 0.000154
-4. launch once                 python -m agent          <- no flags
+4. launch once                 .venv/Scripts/python -m agent   <- no flags
 5. do not touch it
 6. it stops itself             converged(), not a budget cap
 7. score on test               once, at the end
 ```
+
+**Launch with the venv's interpreter, not whatever `python` resolves to.** The
+harness spawns solutions with `sys.executable`, so they inherit the Python that
+started the run, and `_resolve_device()` picks CUDA only if that Python's torch
+reports it. The venv holds `torch 2.6.0+cu124`; a system Python may hold a
+CPU-only build. Getting this wrong does not fail - it silently runs on the CPU
+and the run takes about 40% longer, on a wall-clock that is a scored criterion.
+
+```
+.venv/Scripts/python -c "import torch; print(torch.cuda.is_available())"   -> True
+```
+
+`HARNESS_DEVICE=cpu` forces the CPU path when you want it; `auto` is the default
+and falls back to CPU on its own if torch is missing or has no CUDA.
 
 **No `--max-iter`.** The default 100 sits above `MAX_EXPERIMENTS=80`; passing 40
 would make the loop cap bind first and the experiment backstop dead code. They
