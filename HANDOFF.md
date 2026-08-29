@@ -1411,6 +1411,62 @@ They score **higher** GAUC than the users BPR does train, and well above item
 popularity on their own slice. The item-side terms carry them, which is what the
 within-user-ranking argument predicts. Nothing to recover here.
 
+### The ensemble is saturated on both axes, 2026-08-29
+
+The winner blends 10 members, 7 of which are the same FM/BPR model at different
+seeds. The obvious hypothesis was that those 7 are near-duplicates and their
+slots are headroom - spend them on distinct objectives instead and the
+diversity term pays. **That hypothesis is wrong**, and the measurement is worth
+keeping precisely because it is counter-intuitive.
+
+```
+full 10-member ensemble            0.605344
+
+7 seed members only                0.605152
+3 structural members only          0.602609
+
+1 seed + all 3 structural          0.603737   -0.00161
+3 seed + all 3 structural          0.604684   -0.00066
+5 seed + all 3 structural          0.605356   +0.00001
+7 seed + all 3 structural          0.605344    baseline
+
+pairwise rank correlation
+  seed vs seed                     r = 0.9165
+  seed vs structural               r = 0.8519
+  structural vs structural         r = 0.7973
+```
+
+Seed members are **not** near-duplicates. At r = 0.9165 they are meaningfully
+decorrelated, and they carry the ensemble: the seven of them alone score 0.605152
+against the full blend's 0.605344, so all three structurally different members
+together contribute **+0.0002**. Removing seed members costs real score, and you
+need five of them before the curve flattens.
+
+So the diversity term is real but it comes from **seed variance, not
+architecture**, and it plateaus at five members. An eighth seed does nothing; a
+fourth objective is worth a fraction of a thousandth. Both axes are done.
+
+(This is a different axis from the earlier "+0.00001 from seed rank-averaging",
+which averaged whole ensembles across outer seeds. Both saturated, separately.)
+
+### What this means for the score
+
+The ensemble was the last untested mechanism. With data volume established as
+the binding constraint and capacity, regularisation, optimisation, auxiliary
+labels and now ensembling all measured flat, there is no known source of
+another +0.0005 that would survive the move to test.
+
+Valid can still be pushed higher by **selection** - run-to-run sd is 0.00034, so
+the maximum over enough runs drifts up on its own. We have the receipt on what
+that buys: a seed-picked run beat ours by +0.0002 on valid and +0.00034 on test.
+Selection fits the valid split's noise, not its signal.
+
+The one measurement that was genuinely higher is the cross-run blend at 0.6063,
+six independent runs' winners rank-averaged. That is not selection - independent
+runs really are decorrelated (r = 0.89-0.96 across runs against 0.98-0.99 within
+one) - but it consumes N times the compute budget, and whether it counts as one
+submission is exactly the open question in `docs/email-multirun-question.md`.
+
 ### Two structural facts worth keeping
 
 ```
