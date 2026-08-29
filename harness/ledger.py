@@ -121,7 +121,7 @@ def setup_control_row(run_dir: str):
 # a good idea from a bad one.
 BASELINES = {
     'pure': 0.6015,
-    '1k': None,      # filled in by docs/bonus-baselines.md once measured
+    '1k': 0.6451,    # kit FM on 1k, best epoch. docs/bonus-baselines.md
     '27k': None,
 }
 
