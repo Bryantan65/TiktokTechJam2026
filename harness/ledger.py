@@ -301,14 +301,29 @@ def _load_hash_index():
         except (ValueError, OSError):
             continue
         h = rec.get('source_hash')
-        if h:
-            _hash_index[h] = rec
+        # A 'duplicate' record is a REFUSAL, not a run - nothing was measured.
+        # Indexing it makes the refusal self-perpetuating: the rejected record
+        # becomes the prior that rejects the next attempt, so a solution can
+        # never be retried on the split it was blocked from. Caught by
+        # scratchpad/test_hashfix.py against run 13's own iteration 15.
+        if h and rec.get('status') != 'duplicate':
+            _hash_index[(h, rec.get('split', 'valid'))] = rec
 
 
-def find_by_hash(h):
-    """A previous record with this exact source, or None."""
+def find_by_hash(h, split='valid'):
+    """A previous record with this exact source ON THIS SPLIT, or None.
+
+    Keyed on split as well as source, because the same code on a different
+    split is not a rerun - it is the screen-then-confirm workflow the dev
+    holdout exists for. Keying on source alone blocked exactly that: run 13
+    screened on dev at iteration 14, tried to spend a counted valid run on the
+    same code at iteration 15, and was rejected as a duplicate. The idea was
+    left neither confirmed nor refuted and a slot out of 50 was spent learning
+    that. An identical rerun on the SAME split is still caught, which is what
+    the guard was for.
+    """
     _load_hash_index()
-    return _hash_index.get(h)
+    return _hash_index.get((h, split))
 
 
 def find_twin(predictions_hash, metrics, exclude_iteration=None):

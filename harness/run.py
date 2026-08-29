@@ -290,11 +290,11 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
         return rec
 
     rec['source_hash'] = ledger.source_hash(solution)
-    prior = ledger.find_by_hash(rec['source_hash'])
+    prior = ledger.find_by_hash(rec['source_hash'], split)
     if prior is not None:
         rec.update({'status': 'duplicate',
-                    'error': 'identical source already run at iteration %d '
-                             '(valid_primary %s)' % (prior['iteration'],
+                    'error': 'identical source already run on %s at iteration %d '
+                             '(valid_primary %s)' % (split, prior['iteration'],
                                                      prior.get('valid_primary'))})
         ledger.write(rec)
         return rec
