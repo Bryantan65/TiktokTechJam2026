@@ -1493,6 +1493,13 @@ runs really are decorrelated (r = 0.89-0.96 across runs against 0.98-0.99 within
 one) - but it consumes N times the compute budget, and whether it counts as one
 submission is exactly the open question in `docs/email-multirun-question.md`.
 
+> **Superseded 2026-08-30.** Those r values are *global* correlation, which is
+> nearly unrelated to the within-user ordering we are scored on. Remeasured with
+> within-user rank correlation the comparison reverses: within one run 0.8811,
+> across runs 0.9119. The blend gain is real; "independent runs are decorrelated"
+> is not the reason for it. See *The multi-agent question, settled by
+> measurement* at the end of this file.
+
 ### The tab decomposition, and same-tab negative sampling, 2026-08-29
 
 `long_view` rates run 4.2% on tab 0 to 48.9% on tab 4, and the organisers flagged
@@ -2043,3 +2050,244 @@ run 4 is; re-running the same agent to fish for a good draw is not.
 - **Prompt hygiene:** the agent's search queries have included the phrase
   "citation URL", leaked from the prompt line asking it to cite. Harmless, but it
   dilutes the query.
+
+---
+
+## The multi-agent question, settled by measurement, 2026-08-30
+
+A teammate proposed a role-split agent (researcher / implementer / reviewer);
+separately we proposed a parallel portfolio of independent agents. **Both were
+refuted against our own logs, and the second one was refuted by a measurement
+that also corrects a claim made earlier in this file.** What survived is small,
+cheap and not architectural.
+
+### The correlation claim in this file was measuring the wrong thing
+
+Above, under the ensembling section, this file says independent runs are
+decorrelated at "r = 0.89-0.96 across runs against 0.98-0.99 within one", and
+uses that to explain the 0.6063 cross-run blend. **That figure is global
+correlation, and global correlation is nearly unrelated to what we are scored
+on.** GAUC and nDCG@5 are within-user, so the quantity that matters is
+within-user rank correlation. Measured on the six blended winners:
+
+```
+run4 vs run5   global r = 0.9794   within-user rho = 0.9274
+run4 vs run6   global r = 0.5023   within-user rho = 0.9140
+```
+
+Global swings from 0.49 to 0.98 while the within-user figure barely leaves 0.91.
+Recomputed properly (`scratchpad/decorr.py`, no retraining - it reuses the
+winner predictions cached by `blend6.py`):
+
+```
+WITHIN one run   run 3's ensemble members       mean rho = 0.8811
+ACROSS runs      identical-config winners       mean rho = 0.9119
+                                                gap      = -0.0307
+```
+
+**The sign is backwards from the portfolio thesis.** One run's own ensemble
+members are *more* decorrelated than winners drawn from separate runs. Broken
+out, within-run structural-vs-structural pairs reach rho 0.7975 - the most
+diverse pairs anywhere in the archive - while cross-run winners sit at 0.9119,
+about where *seed variants of one model* sit (0.9201).
+
+So the 0.6063 blend is real but the explanation was wrong: it came from
+averaging six strong models at rho ~0.91, not from independent context producing
+diverse ones. Independent runs converge on the same mechanisms. **Diversity comes
+from deliberately retaining different models, not from hoping independent search
+produces them.**
+
+One caveat, stated so nobody over-reads it: the within-run set is ensemble
+*members* (some deliberately weak and built to differ) and the across-run set is
+*winners* (all strong, all near the ceiling), so selection explains part of the
+gap. It does not reverse the direction.
+
+**Consequence:** a multi-trajectory portfolio would spend a week reproducing rho
+0.91 when a single run already reaches 0.80 internally. Dropped. What replaces it
+is correlation-aware retention - keep a weaker-but-different model as a diverse
+reserve instead of discarding everything below the incumbent - measured with
+**within-user rank correlation, never global Pearson**.
+
+### The reviewer agent, audited against the record
+
+The proposal listed six defects an always-on reviewer would have caught. Checked
+against all 303 iterations:
+
+```
+string IDs joined against int keys    no instance found
+labels entering join keys             13 hypotheses already reason about leakage;
+                                      run-9 it=20 self-diagnosed it, fixed in it=21
+screen score read as validation       OUR error in a scratchpad script, twice.
+                                      logs/record-run-12/0005.json is correctly
+                                      stamped verdict: screen
+GroupCE without artifacts             also ours, outside the agent loop
+CUDA installed, harness on CPU        REAL - harness config, fixed by an assert
+ensemble refits unchanged members     REAL - already addressed via prompt caching
+```
+
+Four of six never happened inside the loop a reviewer would police. The two real
+ones are exactly the class the proposal itself says should be *"code, not another
+LLM opinion"*. The harness already implements no-op detection (7 caught),
+solution fingerprinting, split-aware verdicts and seed spread; `devdata.py` has
+no `test` key at all, so test access is structurally impossible rather than
+policed. **No reviewer agent.**
+
+### Explore vs exploit: real, but smaller than the labels suggest
+
+Hypothesis openers across runs 4-11 (n=222): `improve` 65%, `draft` 22%,
+`debug` 10%. Longest run of consecutive non-draft iterations: **16**, in run 10.
+
+That overstates it. Reading run 10's actual chain, iterations 16-24 are labelled
+`improve` but test LambdaRank, target stats, three-way blends and xendcg - four
+or five genuinely different mechanisms. **The real pathology is the tail:
+iterations 25-31, seven experiments all off node 24, all landing inside one error
+bar of each other.** Counting by hypothesis prefix measures naming, not
+behaviour, which also means the draft-vs-improve productivity table (drafts 50%
+success vs improves 29.5%) cannot carry causal weight until mechanisms are
+classified. Record `family_id` / `mechanism_id` / `parent` / `change_type` before
+using that comparison for anything.
+
+### The two-strike gate would have forbidden half our winners
+
+Proposed policy: a parent branch takes a strike per non-improving child, closes
+on the second. Replayed over every archived ledger (`scratchpad/strikes2.py`):
+
+```
+run-3   0.605493  027_deepfm_member.py          parent had 2 strikes   FORBIDDEN
+run-4   0.604615  031_user_trend_position.py               3           FORBIDDEN
+run-5   0.605368  026_mixed_tabhour_simple...              6           FORBIDDEN
+run-8   0.604793  024_lgb_user_pref_residual.py            3           FORBIDDEN
+run-9   0.605738  031_global_ctr_tiebreak.py               2           FORBIDDEN
+
+winners forbidden: 5 of 12 runs (6 of 12 with a noise margin)
+```
+
+Run 3 is **our submission of record**. Run 9 at 0.605738 is the best single-run
+result we have. Run 5's winner arrived after *six* consecutive non-improving
+children of the same parent. Winners routinely arrive after a string of failures
+on one node; that is persistence paying off, not grinding.
+
+This independently rediscovers the calibration already recorded in
+`agent/prompt.py`: the plateau detector's threshold comment says *"At 4 or 5 it
+fires on record-run-3 at iteration 12-13, which still had +0.00097 to give - a
+false alarm on the best run we have."*
+
+**The distinction we were missing: non-improving is not the same as
+uninformative.** Run 5's six failures were varied attempts carrying real
+information. Run 10's it=25-31 were seven variants inside one error bar carrying
+none. The thing worth suppressing is *unmeasurable* variation, not *unsuccessful*
+variation - and the existing plateau detector already measures the right
+quantity. Gate dropped; detector kept.
+
+Its real defect is different and remains open: it counts backwards and needs six
+consecutive indistinguishable results, so **it cannot fire until six experiments
+have already been wasted**. Its own comment concedes this - *"fires with <=1
+experiment left, where it cannot do harm"*. Runs 10 and 11 are the only two that
+ran with it, and they hold the two longest chains (16 and 12). The open question
+is whether it should *refuse* the experiment rather than advise against it. One
+flag, testable in a shakedown, not yet done.
+
+### A methodological trap worth remembering
+
+The first replay tried to simulate the whole counterfactual tree - block a node,
+delete its descendants, ask whether the winner survived. It produced identical
+numbers under four different success definitions, which was the tell. **You
+cannot replay a policy that changes what happens next against a fixed log of what
+did happen**: if the gate blocks an experiment the agent does something else, so
+the recorded descendants are not the counterfactual. Only the assumption-free
+question is answerable from a log - *had this node's parent already taken two
+strikes when the winner ran?* - and that is what the numbers above report.
+
+### web_search was never restricted; our prompt was
+
+`do_web_search` calls OpenAI's `web_search_preview` through `gpt-4o-mini`. That
+is general web search - Kaggle, Hugging Face, GitHub, forums, all reachable.
+
+```
+0 of 86 queries mentioned kaggle / huggingface / github / competition / leaderboard
+6 of 86 search results retained any URL at all
+```
+
+All 86 were academic-method queries, because the prompt said *"published methods
+are explicitly in scope"* and *"standard formulation"*. The agent obeyed
+perfectly. The capability was there the whole time and we told it to use a
+library card. And the prompt's instruction to *"put the citation URL in your
+hypothesis"* was near-unsatisfiable: `output_text` returns prose with links
+stripped, so the provenance for research-derived ideas is thinner than it looks.
+
+**Fixed 2026-08-30** in `agent/prompt.py`: the search section now names four
+source families (papers, competition writeups, model/dataset cards,
+implementations and library docs), tells the agent to name the kind of source in
+the query, and tells it to ask for the URL *inside* the query since a link it
+does not request is dropped. Budget rules unchanged - still 1 search per
+iteration, still new-directions-only. Untested; run 13 is the first run with it.
+
+Caveat: `gpt-4o-mini` does the searching and summarising, which is weak for
+judging which parts of a Kaggle writeup matter. The pages are reachable now; how
+much survives summarisation is unknown.
+
+### author_id is nearly a copy of video_id on Pure
+
+```
+7,538 videos    6,482 authors    ->  1.2 videos per author
+valid rows whose video is unseen in train : 17 (0.0%)
+author rescues over video_id              : 3 rows
+```
+
+Almost every creator has exactly one video in Pure. As a categorical field
+`author_id` carries almost nothing `video_id` does not, and as cold-start backoff
+it rescues three rows out of 124,909.
+
+**This reframes what our best features are doing.** At 1.2 videos per author,
+"user x author history" is nearly the same object as "user x video history", so
+the mechanism carrying our top scores (0.605438, 0.605367, 0.605216) is
+**repeat-consumption memory**, not creator affinity. It also explains the
+organisers' own result that `user_id x video_id` already captures most of the
+learnable signal, and that the extra CWM fields add nothing - several of them
+re-encode the same partition.
+
+Unverified: whether this holds on 1k/27k, where the same authors should span many
+more videos and `author_id` would become a real backoff. One CSV read answers it.
+
+### Attribution correction for the writeup
+
+**No organiser document forbids using `play_time_ms` as an input feature.** The
+README mentions it once, under direction 3: `is_click`, `is_like`, `is_follow`,
+`is_comment`, `is_forward` and `play_time_ms` *"can serve as auxiliary tasks
+alongside the main long_view objective"*. Tasks, not features - an implication,
+not a prohibition.
+
+The exclusion is still correct and still ours: `long_view` is a deterministic
+function of `play_time_ms` and `duration_ms` (97.8% agreement), so feeding it in
+reads the label through a thin wrapper, and nothing stops you mechanically -
+valid and test rows do contain the column, and `evaluate.py` only takes three
+arrays. **Describe it as our judgment call, not as an organiser rule.**
+
+By contrast `log_random_4_22_to_5_08_pure.csv` *was* stated by the organisers
+(Q&A, 2026-08-27) - but not in the README, which only calls it an unbiased
+validation set.
+
+### Correction: runs 4-11 were not identical
+
+Earlier analysis treated runs 4-11 as configuration-identical. The harness config
+genuinely is - `(50 experiments, 21600s, min_scored 30, gpt-5.5)`, one distinct
+value across all eight. But **`agent/prompt.py` was committed ten times inside
+that window**, so the runs are not interchangeable and should not be pooled
+without saying so.
+
+### Where this leaves the architecture
+
+```
+multi-trajectory portfolio    DROPPED   measured - cross-run rho 0.91 vs within-run 0.88
+always-on reviewer            DROPPED   4 of 6 claimed catches never happened in the loop
+two-strike branch gate        DROPPED   would forbid 5-6 of 12 winners
+research scout                DEFERRED  only if mechanism lock-on survives the prompt fix
+broader web_search            DONE      2026-08-30, untested
+device assert + reporting     TODO      ~20 lines
+within-user correlation       TODO      ~20 lines, feeds diverse-reserve retention
+family/mechanism identifiers  TODO      needed before the draft-vs-improve table means anything
+binding plateau detector      OPEN      one flag; replay it against all 12 runs first
+```
+
+**This was a search-policy question, not a multi-agent one.** Every architectural
+proposal died against the logs; the survivors are instrumentation.

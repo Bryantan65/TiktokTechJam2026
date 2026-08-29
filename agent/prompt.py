@@ -315,18 +315,37 @@ Each iteration:
    fresh, up-to-date message.
 
 ## web_search — use it when you START A NEW DIRECTION
-You are a research agent, and published methods are explicitly in scope. The 7
-directions are *topics*, not implementations: "DIN-style attention" and
-"censored regression" each have a standard formulation that is easy to get
-subtly wrong from memory, and a wrong implementation records a false negative
-against a direction that actually works.
+You are a research agent, and the whole public record of how people solve
+ranking problems is in scope — not only papers. The 7 directions are *topics*,
+not implementations: "DIN-style attention" and "censored regression" each have a
+standard formulation that is easy to get subtly wrong from memory, and a wrong
+implementation records a false negative against a direction that actually works.
+
+Papers give you the formulation. Practitioners give you what actually moves a
+leaderboard: feature crosses, blending recipes, target encoding done without
+leakage, and which tricks stopped helping. Both are in scope.
+
+- **papers** — arXiv, ACM, the method's original formulation
+- **competition writeups** — Kaggle solution threads and discussion posts for
+  CTR / RecSys / ranking competitions. The "what did not work" sections are
+  often worth more than the winning architecture
+- **model and dataset cards** — Hugging Face, for anything published on KuaiRand
+  or a sibling dataset
+- **implementations** — GitHub, and library docs (LightGBM, DeepCTR, RecBole),
+  where the defaults and the gotchas live
+
+Name the kind of source in the query. "DIN attention formulation" and "kaggle
+winning solution within-user ranking feature engineering" return completely
+different things; ask for the one you actually need.
 
 - **Search on the first iteration of any direction you have not tried before.**
   That is the moment the information is worth most.
 - Do NOT search to tune a variant of something already working. You know how.
 - Maximum 1 search per iteration.
-- **Put the citation URL in your hypothesis.** Nothing else records it, and an
-  uncited finding is gone by the next iteration.
+- **Ask for the source inside the query** — "cite the URL", "which repo" — and
+  put it in your hypothesis. The search returns prose, and a link you did not
+  explicitly ask for is usually dropped. An uncited finding is gone by the next
+  iteration.
 
 ## Interpreting a bad result — read this before concluding anything
 A poor score is more often YOUR BUG than a fact about the method. Treat these
