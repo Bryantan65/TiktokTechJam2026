@@ -1666,6 +1666,51 @@ and the direction is monotonic.
 now been ruled out by the same argument: they fix something our setup does not
 have wrong.
 
+### Which runs are clean autonomy evidence, and which is not
+
+On 2026-08-29 at 11:13 and 12:18 two commits added our own findings to the
+agent's instructions: a "Lessons from prior runs" section naming five results
+with their deltas (*"Do NOT try listwise softmax again"*), and four extra
+directions beyond the organisers' seven, one naming the exact CSV columns to
+read and one describing group-wise ranking. It was reverted at 13:35 onto
+`run13-clean-prompt`, but that branch was never merged, so `main` carried the
+injected prompt until commit `c085354`.
+
+**Every run started before 11:13 is clean.**
+
+```
+record-run-1    Aug 27 16:48    clean
+record-run-2    Aug 27 17:38    clean
+record-run-3    Aug 27 20:15    clean   <- the submission
+record-run-4    Aug 28 12:10    clean
+record-run-5    Aug 28 12:31    clean
+record-run-6    Aug 28 18:30    clean
+record-run-7    Aug 29 00:35    clean
+record-run-8    Aug 29 01:04    clean
+record-run-9    Aug 28 23:25    clean
+record-run-10   Aug 29 02:48    clean
+record-run-11   Aug 29 07:11    clean
+record-run-12   Aug 29 13:14    CONTAMINATED - started 21 min before the revert
+```
+
+**record-run-12 is not autonomy evidence.** Its own ledger names the injected
+directions: iteration 31 reads *"draft 8: train a readable 30% IPS-weighted BPR
+content-FM member"* - direction 8 was one of the four added that morning - and
+seven of its solutions are `content_*`, which is direction 9. It remains a valid
+*modelling* run and its scores are real; it is simply not evidence that the
+agent found those directions by itself.
+
+Everything the submission's case rests on was measured before the injection
+landed: eleven runs converging on BPR, seven listwise-softmax implementations
+independently rejected across six runs, two unrelated model families landing
+within 0.0007, and LightGBM reached for unprompted in runs 6, 10 and 11.
+
+**The lesson is about merge hygiene, not vigilance.** The injection was spotted
+within about an hour and reverted the same day. It survived because the revert
+lived on a branch nobody merged, and because nobody re-read `agent/prompt.py`
+while committing to `main` around it. A prompt is code that decides what a run
+proves, and it deserves the same review as the harness.
+
 ### Two structural facts worth keeping
 
 ```
