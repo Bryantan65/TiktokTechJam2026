@@ -91,7 +91,7 @@ which is stronger evidence than the final number alone. Runtime: 50 s numpy,
 
 **Target: valid 0.6035** (baseline 0.6015 + the official ε of 0.002).
 
-### The seven runs
+### The runs
 
 Each archive is kept because it is the evidence behind a fix, and deleting them
 would leave the fixes looking like guesses.
@@ -109,6 +109,10 @@ would leave the fixes looking like guesses.
 | `logs/record-run-6/` | 34 experiments, converged at +0.0035 | the GBDT capability test; run 3 held |
 | `logs/record-run-7/` | 3 experiments, **crashed** | a UnicodeEncodeError on an arrow; fixed |
 | `logs/record-run-8/` | 31 experiments, converged at +0.0033 | the plateau detector; run 3 held |
+| `logs/record-run-9/` | 33 experiments, converged, best 0.605738 | Zheng's; the headline is seed-picked, see below |
+| `logs/record-run-10/` | 31 experiments, converged, best 0.604931 | the LightGBM/LambdaMART family; run 3 held |
+| `logs/record-run-11/` | 30 experiments, converged, best 0.604653 | semi-hard sampling and LambdaRank weighting; run 3 held |
+| `logs/record-run-13/` | 2 experiments, **killed deliberately** | no code change since run 12; not worth the compute |
 
 **shakedown-02** is the one worth reading. Twelve experiments, all inside
 direction 1, ending in five consecutive tweaks of one loss weight across a
@@ -1526,6 +1530,60 @@ published a gain that does not exist. Every number in this file that is quoted
 as an improvement should be read against this: single-seed differences below
 about 0.0008 are indistinguishable from nothing, and the only defence is
 replication.
+
+### Two model families converge to the same number
+
+The strongest single argument that the ceiling is real rather than a failure of
+imagination. Across runs 10 and 11 the agent ran **26 gradient-boosted tree
+experiments** - LightGBM, LambdaMART, target encoding - unprompted, from nothing
+but `lightgbm 4.x` in the installed package list.
+
+```
+LightGBM / LambdaMART, best     GAUC 0.6714   nDCG@5 0.5379   ~ 0.6046
+FM/BPR ensemble (submission)    GAUC 0.6723   nDCG@5 0.5384   ~ 0.6053
+```
+
+Neural embeddings and boosted trees share no assumptions and fail in different
+ways. They land **within 0.0007 of each other**. One family plateauing means the
+search got stuck; two unrelated families arriving at the same place means the
+signal in this data runs out around there.
+
+Pure LightGBM with target encoding was clearly worse (GAUC 0.6573). The good
+tree numbers are all blends where a tree model is one member among FM rankers.
+
+### The agent's other objective experiments
+
+Recorded for completeness - each was found by the agent without being named in
+the prompt, and each lost to plain within-user BPR.
+
+| tried | result |
+| --- | --- |
+| xendcg | on par, not better; appears in run 10's blends |
+| semi-hard / score-based hard negative mining | 0.6012-0.6033, below the incumbent |
+| multi-negative BPR (several negatives per positive) | roughly neutral |
+| explicit user-video / user-author / user-tab cross fields | 0.6005, weak |
+| listwise softmax over a user's impressions | competitive, not better |
+
+### Zheng's 0.6057 is seed-picked
+
+Worth recording precisely, because it was briefly treated as a target to beat.
+
+`logs/record-run-9/solutions/028_seed0_history_tiebreak.py` accepts a `seed`
+argument and then passes a literal `seed=0` to the model. The reported 0.6057 is
+therefore one seed, not a mean.
+
+```
+honest 3-seed value    0.605353 +/- 0.000393
+iterations 27-33 add   +0.00004
+
+test    ours 0.598508    his 0.598847    gap 0.00034
+```
+
+The valid gap of +0.0002 became +0.00034 on test. This is the same trap the
+same-tab sampling arm walked into on this side - a single seed said an idea
+worked, and replication said otherwise. It is not misconduct, it is what
+single-seed reporting does, and it is the reason every claim in this file that
+matters is quoted with a seed count.
 
 ### Two structural facts worth keeping
 
