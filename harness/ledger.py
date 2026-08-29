@@ -109,7 +109,37 @@ def setup_control_row(run_dir: str):
         fh.write(line)
 
 # Official baseline, reproduced on this machine (see CLAUDE.md).
-BASELINE_VALID = 0.6015
+#
+# Per dataset, because the verdict rule and the ledger's `delta` column are both
+# measured against it. KuaiRand-Pure is the required benchmark and the only one
+# the organisers published a baseline for; 1k and 27k are bonus benchmarks whose
+# reference numbers we obtain by running the kit's own FM, at its shipped
+# hyperparameters, on that variant. See docs/bonus-baselines.md.
+#
+# Getting this wrong is quiet rather than loud: a 1k run graded against Pure's
+# 0.6015 marks every experiment KEPT, and the agent loses the signal that tells
+# a good idea from a bad one.
+BASELINES = {
+    'pure': 0.6015,
+    '1k': None,      # filled in by docs/bonus-baselines.md once measured
+    '27k': None,
+}
+
+BASELINE_VALID = BASELINES['pure']
+
+
+def use_dataset(name):
+    """Point the verdict rule at `name`'s baseline. Refuses an unmeasured one."""
+    global BASELINE_VALID
+    if name not in BASELINES:
+        raise ValueError('unknown dataset %r; expected one of %s'
+                         % (name, sorted(BASELINES)))
+    if BASELINES[name] is None:
+        raise ValueError(
+            'no baseline measured for %r. Run the kit FM on it first - grading '
+            'against another dataset fails silently, marking everything KEPT.' % name)
+    BASELINE_VALID = BASELINES[name]
+    return BASELINE_VALID
 EPSILON = 0.002          # official convergence threshold; also the accept gate
 N_CONVERGE = 3           # official: 3 consecutive iterations below epsilon
 
