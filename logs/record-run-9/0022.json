@@ -1,6 +1,6 @@
 {
   "iteration": 22,
-  "solution": "logs/record-run-7/solutions/022_seed_bag_node15.py",
+  "solution": "logs/record-run-9/solutions/022_seed_bag_node15.py",
   "hypothesis": "improve 15: node 15 is best and its member predictions for official seeds are cached; average the three unchanged node-15 outer-seed ensembles to reduce variance without changing the learned members.",
   "parent": "15",
   "by": "agent",

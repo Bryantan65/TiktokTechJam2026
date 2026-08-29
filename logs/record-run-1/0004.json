@@ -1,6 +1,6 @@
 {
   "iteration": 4,
-  "solution": "solutions/004_time_bpr_fm.py",
+  "solution": "logs/record-run-1/solutions/004_time_bpr_fm.py",
   "hypothesis": "Add temporal context features (date and hour) to the current BPR-FM, motivated by temporal dynamics in recommender systems (Koren 2009: https://dl.acm.org/doi/10.1145/1557019.1557072). The model still optimizes same-user BPR, but can learn time-dependent item/tab biases for train-valid drift and within-user session context.",
   "parent": "2",
   "by": "agent",

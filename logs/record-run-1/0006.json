@@ -1,7 +1,7 @@
 {
   "iteration": 6,
-  "solution": "solutions/006_din_history_bpr_fm.py",
-  "hypothesis": "Add a DIN-style target-aware attention term over each user\u2019s prior positive video history (DIN uses attention over behavior sequences; see https://arxiv.org/abs/2005.12981). This should add missing within-user preference signal while preserving the BPR objective and avoiding valid-label leakage by using only train-history for valid/test.",
+  "solution": "logs/record-run-1/solutions/006_din_history_bpr_fm.py",
+  "hypothesis": "Add a DIN-style target-aware attention term over each user’s prior positive video history (DIN uses attention over behavior sequences; see https://arxiv.org/abs/2005.12981). This should add missing within-user preference signal while preserving the BPR objective and avoiding valid-label leakage by using only train-history for valid/test.",
   "parent": "2",
   "by": "agent",
   "split": "valid",

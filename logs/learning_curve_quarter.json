@@ -1,0 +1,32 @@
+{
+  "scope": "Five-field pointwise FM only; this is not a global, Bayes, or label-oracle ceiling.",
+  "partition": {
+    "train_pool": "20220408-20220416",
+    "early_stop": "20220417-20220418",
+    "future_holdout": "20220419-20220421",
+    "public_valid_touched": false
+  },
+  "device": "cuda",
+  "seeds": 1,
+  "results": [
+    {
+      "fraction": 0.25,
+      "train_rows": 252803,
+      "mean_primary": 0.565658450126648,
+      "std_primary": null,
+      "per_seed": [
+        0.565658450126648
+      ]
+    }
+  ],
+  "saturating_curve": {
+    "form": "primary(n) = asymptote - gap * n^(-exponent)",
+    "params": [
+      0.5881879914394403,
+      0.9997697014318883,
+      0.3048702600115595
+    ],
+    "asymptote": 0.5881879914394403,
+    "fit_error": null
+  }
+}

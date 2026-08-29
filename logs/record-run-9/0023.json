@@ -1,6 +1,6 @@
 {
   "iteration": 23,
-  "solution": "logs/record-run-7/solutions/023_hardneg_time_bpr.py",
+  "solution": "logs/record-run-9/solutions/023_hardneg_time_bpr.py",
   "hypothesis": "improve 15: use hard same-user negative sampling for only the time/date BPR members, selecting the highest-scored of 4 sampled negatives to emphasize top-of-list errors; this follows the CWM/watch-time search citation context but tests a cheaper ranking-loss refinement before a full watch-time model (https://www.researchgate.net/publication/381372859_Counteracting_Duration_Bias_in_Video_Recommendation_via_Counterfactual_Watch_Time).",
   "parent": "15",
   "by": "agent",

@@ -1,6 +1,6 @@
 {
   "iteration": 14,
-  "solution": "logs/record-run-7/solutions/014_mtl_bpr_time_blend.py",
+  "solution": "logs/record-run-9/solutions/014_mtl_bpr_time_blend.py",
   "hypothesis": "draft 3: multi-task recommenders share representations across engagement objectives (https://dl.acm.org/doi/10.1145/3219819.3220007); train one content+history+time FM with primary BPR plus auxiliary click/like/follow/comment/forward BCE and blend it at a readable 30% with node 13.",
   "parent": "13",
   "by": "agent",

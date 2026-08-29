@@ -1,6 +1,6 @@
 {
   "iteration": 3,
-  "solution": "logs/record-run-7/solutions/003_bpr_4neg_fm.py",
+  "solution": "logs/record-run-9/solutions/003_bpr_4neg_fm.py",
   "hypothesis": "improve 2: one random negative per positive is a noisy BPR estimate; averaging four same-user negatives per positive should make the ranking gradient less noisy and improve top-5 ordering.",
   "parent": "2",
   "by": "agent",

@@ -1,6 +1,6 @@
 {
   "iteration": 10,
-  "solution": "logs/record-run-7/solutions/010_video_content_blend.py",
+  "solution": "logs/record-run-9/solutions/010_video_content_blend.py",
   "hypothesis": "draft 9: FMs are designed to exploit sparse side information through feature interactions (https://www.csie.ntu.edu.tw/~b97053/paper/Rendle2010FM.pdf); append KuaiRand video music/tag/type/upload/size fields to the history FM and blend it at 40% with cached base/history rankers.",
   "parent": "9",
   "by": "agent",

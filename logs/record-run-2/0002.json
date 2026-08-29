@@ -1,6 +1,6 @@
 {
   "iteration": 2,
-  "solution": "solutions/002_bpr_fm.py",
+  "solution": "logs/record-run-2/solutions/002_bpr_fm.py",
   "hypothesis": "draft 1: replace pointwise BCE with same-user BPR pairs, matching the pairwise implicit-feedback objective from Rendle et al. (https://arxiv.org/abs/1205.2618). Each epoch samples one negative from the same user for every positive impression.",
   "parent": "1",
   "by": "agent",

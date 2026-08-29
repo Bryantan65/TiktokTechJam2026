@@ -1,6 +1,6 @@
 {
   "iteration": 7,
-  "solution": "logs/record-run-7/solutions/007_bpr_bce_bag_weight.py",
+  "solution": "logs/record-run-9/solutions/007_bpr_bce_bag_weight.py",
   "hypothesis": "improve 6: node 6's BCE member complemented BPR at a readable 30%; bag three unchanged BCE FMs (cached under node-6 member keys) to reduce complement variance and raise its weight to 40%.",
   "parent": "6",
   "by": "agent",

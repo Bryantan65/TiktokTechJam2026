@@ -1,6 +1,6 @@
 {
   "iteration": 2,
-  "solution": "solutions/002_bpr_fm.py",
+  "solution": "logs/record-run-1/solutions/002_bpr_fm.py",
   "hypothesis": "Replace pointwise BCE with same-user BPR, optimizing -log sigmoid(s_pos-s_neg) on positive/negative impressions from the same user, directly matching within-user ranking (BPR formulation: https://arxiv.org/abs/1205.2618).",
   "parent": "1",
   "by": "agent",

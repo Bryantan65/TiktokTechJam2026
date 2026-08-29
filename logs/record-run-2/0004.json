@@ -1,6 +1,6 @@
 {
   "iteration": 4,
-  "solution": "solutions/004_bpr_fm_3neg.py",
+  "solution": "logs/record-run-2/solutions/004_bpr_fm_3neg.py",
   "hypothesis": "improve 3: one sampled negative per positive is a noisy approximation to BPR; sample three same-user negatives per positive so each epoch covers more pairwise constraints. If the gain in 003 is from ranking alignment rather than luck, denser pair sampling should improve or stabilize it.",
   "parent": "3",
   "by": "agent",

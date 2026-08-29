@@ -1,7 +1,7 @@
 {
   "iteration": 8,
-  "solution": "logs/record-run-7/solutions/008_bpr_history_features.py",
-  "hypothesis": "draft 2: add a DIN-inspired behaviour summary as FM fields\u2014prior user-video/user-author positive and negative buckets\u2014so the BPR ranker can condition on recent user history without a full sequence model (DIN reference: https://arxiv.org/abs/1706.06978).",
+  "solution": "logs/record-run-9/solutions/008_bpr_history_features.py",
+  "hypothesis": "draft 2: add a DIN-inspired behaviour summary as FM fields—prior user-video/user-author positive and negative buckets—so the BPR ranker can condition on recent user history without a full sequence model (DIN reference: https://arxiv.org/abs/1706.06978).",
   "parent": "6",
   "by": "agent",
   "split": "valid",

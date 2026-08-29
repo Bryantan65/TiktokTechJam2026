@@ -1,6 +1,6 @@
 {
   "iteration": 26,
-  "solution": "logs/record-run-7/solutions/026_exposure_seedbag_50.py",
+  "solution": "logs/record-run-9/solutions/026_exposure_seedbag_50.py",
   "hypothesis": "improve 25: node 25's seed-bagging improved GAUC but 55% exposure weight hurt nDCG; keep the deterministic cached seed bag and restore a 50/50 node10-vs-exposure blend to recover top-5 quality.",
   "parent": "25",
   "by": "agent",

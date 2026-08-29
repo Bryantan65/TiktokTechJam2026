@@ -1,6 +1,6 @@
 {
   "iteration": 5,
-  "solution": "solutions/005_multitask_bpr_fm.py",
+  "solution": "logs/record-run-1/solutions/005_multitask_bpr_fm.py",
   "hypothesis": "Train the BPR-FM with shared embeddings plus auxiliary heads for raw feedback labels (click/like/follow/comment/forward and log play time), following multi-task recommendation ideas such as STEM (https://arxiv.org/abs/2308.13537). Auxiliary supervision should regularize item/user embeddings while the saved score is still the main same-user BPR score.",
   "parent": "2",
   "by": "agent",

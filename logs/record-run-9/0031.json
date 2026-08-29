@@ -1,6 +1,6 @@
 {
   "iteration": 31,
-  "solution": "logs/record-run-7/solutions/031_global_ctr_tiebreak.py",
+  "solution": "logs/record-run-9/solutions/031_global_ctr_tiebreak.py",
   "hypothesis": "improve 28: node 28's best gains came from deterministic close-call tie-breaking; add a tiny 1% within-user train-only global video/author/tab CTR rank prior to fix close item-quality/context mistakes while preserving the seed-0 ensemble.",
   "parent": "28",
   "by": "agent",

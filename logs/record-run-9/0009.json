@@ -1,6 +1,6 @@
 {
   "iteration": 9,
-  "solution": "logs/record-run-7/solutions/009_base_history_rankblend.py",
+  "solution": "logs/record-run-9/solutions/009_base_history_rankblend.py",
   "hypothesis": "improve 8: node 8 only replaced the incumbent with history fields; blend cached node-6 base and node-8 history ensembles at 50/50 rank weight so any complementary per-user orderings get a readable vote instead of relying on a near-identical standalone score.",
   "parent": "8",
   "by": "agent",

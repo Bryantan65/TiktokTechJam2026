@@ -1,6 +1,6 @@
 {
   "iteration": 29,
-  "solution": "logs/record-run-7/solutions/029_enhanced_history_global_prior.py",
+  "solution": "logs/record-run-9/solutions/029_enhanced_history_global_prior.py",
   "hypothesis": "improve 28: the 5% history prior gave a real but tiny gain; strengthen the deterministic tie-breaker with train-only global video/author/tab-duration CTR backoffs plus repeat exposure at 6% weight.",
   "parent": "28",
   "by": "agent",

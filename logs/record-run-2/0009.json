@@ -1,6 +1,6 @@
 {
   "iteration": 9,
-  "solution": "solutions/009_time_richer_buckets.py",
+  "solution": "logs/record-run-2/solutions/009_time_richer_buckets.py",
   "hypothesis": "improve 8: node 8 shows temporal signal; add half-hour plus coarser daypart/weekend buckets so FM can learn both fine and shared time effects rather than only 24 isolated hours.",
   "parent": "8",
   "by": "agent",

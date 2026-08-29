@@ -1,6 +1,6 @@
 {
   "iteration": 12,
-  "solution": "logs/record-run-7/solutions/012_lgbm_lambdarank_blend.py",
+  "solution": "logs/record-run-9/solutions/012_lgbm_lambdarank_blend.py",
   "hypothesis": "draft 10: LambdaMART/LambdaRank directly optimizes listwise ranking objectives and nDCG (https://www.microsoft.com/en-us/research/publication/from-ranknet-to-lambdarank-to-lambdamart-an-overview/); train a LightGBM ranker grouped by user on content/history categorical features and blend it at 40% with cached node-10 FM ranks.",
   "parent": "10",
   "by": "agent",

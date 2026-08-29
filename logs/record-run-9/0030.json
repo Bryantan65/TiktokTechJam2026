@@ -1,6 +1,6 @@
 {
   "iteration": 30,
-  "solution": "logs/record-run-7/solutions/030_watchtime_prior_tiebreak.py",
+  "solution": "logs/record-run-9/solutions/030_watchtime_prior_tiebreak.py",
   "hypothesis": "draft 4: censored/watch-time modeling is a standard video-recommendation signal (survival-analysis framing; search summary above); add a readable 5% within-user train-only completion-ratio prior to current best rather than retraining a full ensemble.",
   "parent": "28",
   "by": "agent",

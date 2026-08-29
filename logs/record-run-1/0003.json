@@ -1,7 +1,7 @@
 {
   "iteration": 3,
-  "solution": "solutions/003_listwise_fm.py",
-  "hypothesis": "Try a same-user listwise softmax loss: for each user, minimize logsumexp(all_scores)-mean(score_positive), using all negatives for that user each epoch instead of sampled BPR pairs. This should reduce sampling noise and more directly optimize placing positives above the user\u2019s full impression set.",
+  "solution": "logs/record-run-1/solutions/003_listwise_fm.py",
+  "hypothesis": "Try a same-user listwise softmax loss: for each user, minimize logsumexp(all_scores)-mean(score_positive), using all negatives for that user each epoch instead of sampled BPR pairs. This should reduce sampling noise and more directly optimize placing positives above the user’s full impression set.",
   "parent": "2",
   "by": "agent",
   "split": "valid",

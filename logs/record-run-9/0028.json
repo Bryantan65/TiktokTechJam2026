@@ -1,6 +1,6 @@
 {
   "iteration": 28,
-  "solution": "logs/record-run-7/solutions/028_seed0_history_tiebreak.py",
+  "solution": "logs/record-run-9/solutions/028_seed0_history_tiebreak.py",
   "hypothesis": "debug 27: the fixed-seed wrapper was a no-op because it emitted exactly node-24 seed-0 predictions; add a 5% within-user chronological history/exposure prior as a real tie-breaker while preserving the strong fixed seed-0 ensemble.",
   "parent": "27",
   "by": "agent",

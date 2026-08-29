@@ -1,6 +1,6 @@
 {
   "iteration": 27,
-  "solution": "logs/record-run-7/solutions/027_exposure_fixed_seed0.py",
+  "solution": "logs/record-run-9/solutions/027_exposure_fixed_seed0.py",
   "hypothesis": "improve 24: node 24's seed-0 realization was far stronger than its seed-averaged mean; keep the exact node-24 features/members but make the script deterministic by always using the cached/trained seed-0 ensemble.",
   "parent": "24",
   "by": "agent",

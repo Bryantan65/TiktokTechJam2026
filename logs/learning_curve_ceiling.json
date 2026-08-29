@@ -1,0 +1,67 @@
+{
+  "scope": "Five-field pointwise FM only; this is not a global, Bayes, or label-oracle ceiling.",
+  "partition": {
+    "train_pool": "20220408-20220416",
+    "early_stop": "20220417-20220418",
+    "future_holdout": "20220419-20220421",
+    "public_valid_touched": false
+  },
+  "device": "cuda",
+  "seeds": 3,
+  "results": [
+    {
+      "fraction": 0.25,
+      "train_rows": 252803,
+      "mean_primary": 0.564818263053894,
+      "std_primary": 0.0009782497122239528,
+      "per_seed": [
+        0.565658450126648,
+        0.563744306564331,
+        0.5650520324707031
+      ]
+    },
+    {
+      "fraction": 0.5,
+      "train_rows": 505607,
+      "mean_primary": 0.5705457727114359,
+      "std_primary": 0.0017705404175200937,
+      "per_seed": [
+        0.5716660618782043,
+        0.5685045719146729,
+        0.5714666843414307
+      ]
+    },
+    {
+      "fraction": 0.75,
+      "train_rows": 758410,
+      "mean_primary": 0.573102593421936,
+      "std_primary": 0.00038100148684835667,
+      "per_seed": [
+        0.572667121887207,
+        0.5732661485671997,
+        0.5733745098114014
+      ]
+    },
+    {
+      "fraction": 1.0,
+      "train_rows": 1011214,
+      "mean_primary": 0.574060837427775,
+      "std_primary": 0.0005030092947127525,
+      "per_seed": [
+        0.5735651850700378,
+        0.574570894241333,
+        0.5740464329719543
+      ]
+    }
+  ],
+  "saturating_curve": {
+    "form": "primary(n) = asymptote - gap * n^(-exponent)",
+    "params": [
+      0.5794591880726049,
+      134.98630501786153,
+      0.7337576433003907
+    ],
+    "asymptote": 0.5794591880726049,
+    "fit_error": null
+  }
+}

@@ -1,6 +1,6 @@
 {
   "iteration": 11,
-  "solution": "logs/record-run-7/solutions/011_content_weight50.py",
+  "solution": "logs/record-run-9/solutions/011_content_weight50.py",
   "hypothesis": "improve 10: the content-feature member was positive but underweighted; with all node-10 members cached, cheaply test a readable 50% content vote while preserving base/history anchors.",
   "parent": "10",
   "by": "agent",

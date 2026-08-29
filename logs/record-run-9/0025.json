@@ -1,6 +1,6 @@
 {
   "iteration": 25,
-  "solution": "logs/record-run-7/solutions/025_exposure_seedbag_55.py",
+  "solution": "logs/record-run-9/solutions/025_exposure_seedbag_55.py",
   "hypothesis": "improve 24: exposure-count features helped but raised seed variance; reuse the unchanged cached node-24 members across outer seeds 0/1/2 and give the exposure member 55% weight to denoise while preserving the new signal.",
   "parent": "24",
   "by": "agent",

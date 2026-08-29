@@ -1,6 +1,6 @@
 {
   "iteration": 7,
-  "solution": "solutions/007_watchtime_pairwise_fm.py",
+  "solution": "logs/record-run-1/solutions/007_watchtime_pairwise_fm.py",
   "hypothesis": "Try a watch-time/CWM-inspired pairwise objective using raw play_time_ms versus duration_ms as a continuous preference signal, rather than only binary long_view labels; censored watch-time modeling is intended for short-video recommendation and should better separate positives near the top. Search reference used: CWM/censored watch-time overview (web result) and implementation will still predict valid from train-only learned parameters.",
   "parent": "2",
   "by": "agent",

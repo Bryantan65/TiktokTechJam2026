@@ -1,6 +1,6 @@
 {
   "iteration": 21,
-  "solution": "logs/record-run-7/solutions/021_zscore_rank_fusion.py",
+  "solution": "logs/record-run-9/solutions/021_zscore_rank_fusion.py",
   "hypothesis": "improve 15: all node-15 members are cached and unchanged; blend in 30% per-user z-score fusion of raw logits so the combiner can exploit confidence margins that rank averaging discards.",
   "parent": "15",
   "by": "agent",

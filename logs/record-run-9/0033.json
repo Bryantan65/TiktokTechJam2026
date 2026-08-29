@@ -1,6 +1,6 @@
 {
   "iteration": 33,
-  "solution": "logs/record-run-7/solutions/033_combine_ctr_watch_priors.py",
+  "solution": "logs/record-run-9/solutions/033_combine_ctr_watch_priors.py",
   "hypothesis": "improve 31: node 31's global CTR prior and node 30's watch-time prior each gave small real gains over node 28; combine them at their previously useful weights to test whether the deterministic close-call corrections are complementary.",
   "parent": "31",
   "by": "agent",

@@ -1,6 +1,6 @@
 {
   "iteration": 5,
-  "solution": "solutions/005_listwise_fm.py",
+  "solution": "logs/record-run-2/solutions/005_listwise_fm.py",
   "hypothesis": "improve 3: test the other standard ranking-loss variant under direction 1, a same-user listwise softmax loss logsumexp(all)-logsumexp(positives), instead of sampled BPR pairs. This should reduce pair-sampling noise and align directly with within-user ranking lists.",
   "parent": "3",
   "by": "agent",

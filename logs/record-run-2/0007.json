@@ -1,6 +1,6 @@
 {
   "iteration": 7,
-  "solution": "solutions/007_two_bpr_bce_ensemble.py",
+  "solution": "logs/record-run-2/solutions/007_two_bpr_bce_ensemble.py",
   "hypothesis": "improve 6: node 6's blend works and BPR is the higher-variance component; average two independently sampled BPR FMs before adding the BCE signal to reduce sampling/initialization noise without changing the successful objective mix.",
   "parent": "6",
   "by": "agent",

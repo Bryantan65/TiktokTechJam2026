@@ -1,6 +1,6 @@
 {
   "iteration": 17,
-  "solution": "logs/record-run-7/solutions/017_lgbm_time_blend.py",
+  "solution": "logs/record-run-9/solutions/017_lgbm_time_blend.py",
   "hypothesis": "improve 12: the first LambdaMART draft was weak, but listwise tree rankers should capture nonlinear feature thresholds missed by FM; train LightGBM LambdaRank on the best history+content+time/date fields and blend at a readable 30%.",
   "parent": "12",
   "by": "agent",

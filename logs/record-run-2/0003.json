@@ -1,6 +1,6 @@
 {
   "iteration": 3,
-  "solution": "solutions/003_bpr_fm_fix.py",
+  "solution": "logs/record-run-2/solutions/003_bpr_fm_fix.py",
   "hypothesis": "debug 2: 002 failed before training because encode() supplies users as a list; convert users and labels to NumPy arrays before sorting/fancy indexing. This tests the intended same-user BPR implementation rather than a loader bug.",
   "parent": "2",
   "by": "agent",

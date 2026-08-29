@@ -1,6 +1,6 @@
 {
   "iteration": 16,
-  "solution": "logs/record-run-7/solutions/016_prior_calibrated_time.py",
+  "solution": "logs/record-run-9/solutions/016_prior_calibrated_time.py",
   "hypothesis": "improve 15: the date/time member improved nDCG but lost GAUC; add a train-only smoothed tab-duration empirical prior as a 20% rank blend to capture coarse exposure/engagement bias cheaply. IPS/debiasing motivation: https://arxiv.org/abs/1602.05352",
   "parent": "15",
   "by": "agent",

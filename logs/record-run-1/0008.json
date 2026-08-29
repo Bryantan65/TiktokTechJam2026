@@ -1,6 +1,6 @@
 {
   "iteration": 8,
-  "solution": "solutions/008_deepfm_bpr.py",
+  "solution": "logs/record-run-1/solutions/008_deepfm_bpr.py",
   "hypothesis": "Try DeepFM with same-user BPR: the DeepFM paper combines an FM component with a deep component for higher-order feature interactions (https://arxiv.org/abs/1703.04247), which may improve top-5 ranking beyond the low-rank FM without changing the proven pair sampler.",
   "parent": "2",
   "by": "agent",

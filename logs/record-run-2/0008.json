@@ -1,6 +1,6 @@
 {
   "iteration": 8,
-  "solution": "solutions/008_time_features_two_bpr_bce.py",
+  "solution": "logs/record-run-2/solutions/008_time_features_two_bpr_bce.py",
   "hypothesis": "draft 6: add temporal context to the current best FM ensemble, using hour/day categorical features from the raw logs as recommended for time-aware FMs (search citation: web_search result on temporal context features for factorization machines). Temporal effects may explain within-user tab/date drift not captured by static IDs.",
   "parent": "7",
   "by": "agent",

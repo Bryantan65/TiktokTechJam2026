@@ -1,6 +1,6 @@
 {
   "iteration": 4,
-  "solution": "logs/record-run-7/solutions/004_bce_warm_bpr_fm.py",
+  "solution": "logs/record-run-9/solutions/004_bce_warm_bpr_fm.py",
   "hypothesis": "improve 2: pure BPR helps but trains from random init on only mixed-label users; warm up the FM with pointwise BCE on all rows, then checkpoint only BPR fine-tuning so the ranking loss actually determines the submitted model.",
   "parent": "2",
   "by": "agent",

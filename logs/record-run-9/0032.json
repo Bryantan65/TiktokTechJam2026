@@ -1,6 +1,6 @@
 {
   "iteration": 32,
-  "solution": "logs/record-run-7/solutions/032_global_ctr_weight2.py",
+  "solution": "logs/record-run-9/solutions/032_global_ctr_weight2.py",
   "hypothesis": "improve 31: the 1% global CTR prior gave a small but monotone gain over node 28; test a slightly stronger 2% weight using the exact same cached seed-0 ensemble and prior to see whether the tie-breaker is underweighted.",
   "parent": "31",
   "by": "agent",

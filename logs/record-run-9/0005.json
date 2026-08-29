@@ -1,6 +1,6 @@
 {
   "iteration": 5,
-  "solution": "logs/record-run-7/solutions/005_listwise_softmax_fm.py",
+  "solution": "logs/record-run-9/solutions/005_listwise_softmax_fm.py",
   "hypothesis": "improve 2: BPR's one pair at a time may miss the top-5 list structure; train a same-user multi-positive softmax loss over each user's whole impression list to optimize probability mass on positives.",
   "parent": "2",
   "by": "agent",

@@ -1,6 +1,6 @@
 {
   "iteration": 6,
-  "solution": "solutions/006_bpr_bce_ensemble.py",
+  "solution": "logs/record-run-2/solutions/006_bpr_bce_ensemble.py",
   "hypothesis": "improve 3: BPR improves ranking but may lose some calibrated pointwise signal; blend standardized scores from the current BPR FM with a separately trained BCE FM at a conservative 0.25 weight. This is the most direct way to combine node 3's GAUC lift with baseline's stable signal before convergence stops the run.",
   "parent": "3",
   "by": "agent",

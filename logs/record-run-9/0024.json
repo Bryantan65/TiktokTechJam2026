@@ -1,6 +1,6 @@
 {
   "iteration": 24,
-  "solution": "logs/record-run-7/solutions/024_time_exposure_counts.py",
+  "solution": "logs/record-run-9/solutions/024_time_exposure_counts.py",
   "hypothesis": "improve 15: add unlabeled sequential exposure-count fields to the time/date member, using prior impressions (not valid/test labels) for user-video/user-author/user/video/author to capture repeat-exposure policy and fatigue that static IDs miss.",
   "parent": "15",
   "by": "agent",

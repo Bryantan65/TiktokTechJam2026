@@ -1,6 +1,6 @@
 {
   "iteration": 18,
-  "solution": "logs/record-run-7/solutions/018_topheavy_rank_fusion.py",
+  "solution": "logs/record-run-9/solutions/018_topheavy_rank_fusion.py",
   "hypothesis": "improve 15: since node 15's gain is mainly nDCG@5, keep all cached FM members unchanged but change only the combiner to a top-heavy rank fusion (rank^1.5) blended at 30% to reward agreement at the head of each user list.",
   "parent": "15",
   "by": "agent",

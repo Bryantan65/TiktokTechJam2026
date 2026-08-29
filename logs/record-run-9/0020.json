@@ -1,6 +1,6 @@
 {
   "iteration": 20,
-  "solution": "logs/record-run-7/solutions/020_debug_ips_single_bce.py",
+  "solution": "logs/record-run-9/solutions/020_debug_ips_single_bce.py",
   "hypothesis": "debug 19: node 19 timed out because it trained a full IPS ensemble; test the same IPS exposure correction cheaply with one clipped IPS-weighted BCE time/content member blended at 30%, so a scored result can diagnose the direction.",
   "parent": "19",
   "by": "agent",

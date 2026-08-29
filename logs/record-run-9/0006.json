@@ -1,6 +1,6 @@
 {
   "iteration": 6,
-  "solution": "logs/record-run-7/solutions/006_bpr_bag_bce_rankblend.py",
+  "solution": "logs/record-run-9/solutions/006_bpr_bag_bce_rankblend.py",
   "hypothesis": "improve 2: BPR is the only branch with positive signal, so make that signal less noisy by bagging three BPR FMs and blend in a readable 30% within-user rank-normalized BCE FM for users with weak pairwise coverage.",
   "parent": "2",
   "by": "agent",

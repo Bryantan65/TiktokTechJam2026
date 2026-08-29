@@ -1,6 +1,6 @@
 {
   "iteration": 15,
-  "solution": "logs/record-run-7/solutions/015_time_date_blend.py",
+  "solution": "logs/record-run-9/solutions/015_time_date_blend.py",
   "hypothesis": "improve 13: node 13 used hour/weekday but not absolute date; add day/week/date and tab-time crosses to capture train-valid exposure drift, with the changed time member at 50% so the signal is readable.",
   "parent": "13",
   "by": "agent",
