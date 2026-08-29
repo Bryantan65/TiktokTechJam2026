@@ -1347,6 +1347,68 @@ rather than argued about, and all came back inside seed noise or worse.
 | ApproxNDCG / NeuralNDCG | published as on-par with LambdaRank, which we measured at -0.0032. Three untried methods ruled out by one measurement we already had |
 | cold-start literature | addresses unseen ITEMS; ours are 99.99% seen. Wrong problem shape |
 
+### Optimisation quality and transfer, 2026-08-29 (later)
+
+The under-fit diagnosis has two halves. Capacity and priors were already ruled
+out (k flat, weight decay monotonically worse). These test the other half -
+whether the model is being trained hard enough - and whether a denser label can
+substitute for the rows we cannot have. Both come back empty, and between them
+they close the question.
+
+| tried | result |
+| --- | --- |
+| batch size 8192 -> 2048 | 0.605136, -0.00018 |
+| patience 4 -> 12, epoch cap 40 -> 100 | 0.605300, -0.00002 |
+| pretrain 3 epochs on `is_click`, fine-tune on `long_view` | -0.00062 |
+| pretrain 8 epochs on `is_click`, fine-tune on `long_view` | -0.01151 |
+
+**The model is under-fit but converged.** More updates, smaller updates and more
+patience all do nothing, so it is not stopping early and it is not starved of
+optimisation - it has already extracted what the data supports.
+
+#### Why no auxiliary label can help, in one number
+
+`is_click` fires on 46.3% of rows against `long_view`'s 33.7%, and yields 37%
+more BPR pairs per epoch. It is the densest auxiliary signal available. But BPR
+only learns from users who have both a positive and a negative:
+
+```
+long_view   pairable users  24290   pairs/epoch  382579
+is_click    pairable users  24406   pairs/epoch  524927
+```
+
+**116 extra users. 0.5%.** The additional supervision lands almost entirely on
+users the model already trains on. Every other engagement column is sparser than
+`is_click` and falls on the same users, so this rules out the family, not just
+the instance.
+
+The degradation is also monotonic in pretraining length, which is the mechanism
+showing itself: the click geometry is not a coarse version of the target that
+fine-tuning refines, it is a different optimum that fine-tuning has to walk back.
+Pretraining alone scores 0.584 - real signal, wrong target. This is a different
+result from the multi-task experiment, which optimised both jointly; sequential
+transfer was the untested variant and it is now tested.
+
+#### The users BPR never trains are not a weak spot
+
+`make_user_pairs` silently drops any user without both a positive and a negative,
+so unlike the pointwise baseline, those users' embeddings receive no gradient.
+That sounded like a real gap - it is not:
+
+```
+discriminative valid users whose embedding BPR never trains   508 of 12929 (3.9%)
+their share of GAUC weight                                    3.63%
+
+                        rows     GAUC     nDCG@5
+BPR-trained users     119266   0.6715     0.5438
+BPR-untrained users     5643   0.6919     0.4639
+same slice, item popularity only                 0.6432     0.4502
+```
+
+They score **higher** GAUC than the users BPR does train, and well above item
+popularity on their own slice. The item-side terms carry them, which is what the
+within-user-ranking argument predicts. Nothing to recover here.
+
 ### Two structural facts worth keeping
 
 ```
