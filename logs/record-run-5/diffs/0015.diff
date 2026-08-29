@@ -1,0 +1,91 @@
+# iteration 15  (parent: 13)
+# hypothesis: improve 13: half-hour over-sparsified, but tab has very different positive rates, so add a compact tab×hour categorical cross to model tab-specific daily drift. This keeps the successful weekday+hour features and only adds 120 reusable buckets.
+# result: GAUC 0.672034 | nDCG@5 0.538349 | primary 0.605191 | verdict KEPT
+
+--- logs/record-run-5/solutions/013_debug12_bpr_weekday_hour_fm.py
++++ logs/record-run-5/solutions/015_bpr_weekday_hour_tabcross_fm.py
+@@ -1,9 +1,9 @@
+-"""Debug of node 12: 3-model multi-negative BPR FM with weekday/hour features.
+-
+-The raw log_standard CSV does not contain author_id, so the node-12 raw-time
+-lookup crashed before training. This version keys raw rows by columns actually
+-present in both the loader tuple and log CSV: date, user_id, video_id, tab, and
+-duration_ms, with a deque to preserve file order for duplicates.
++"""3-model multi-negative BPR FM with weekday/hour and tab-hour cross features.
++
++Parent 13 is the current best. This refinement keeps the successful reusable
++weekday and hour features, and adds a compact tab-by-hour categorical cross
++(5*24 buckets) so the linear/FM model can learn tab-specific diurnal propensities
++rather than relying only on a low-rank tab-hour interaction.
+ """
+ import argparse
+ import csv
+@@ -99,24 +99,35 @@
+     raw_time = build_raw_time_lookup(data_dir)
+     out = {}
+     missing = 0
++    off_dow = dim
++    off_hour = off_dow + 7
++    off_tab_hour = off_hour + 24
++    final_dim = off_tab_hour + 5 * 24
+     for sp, rows in splits.items():
+         X, y, u = enc[sp]
+-        feats = np.empty((len(rows), 2), dtype=np.int64)
++        feats = np.empty((len(rows), 3), dtype=np.int64)
+         for i, row in enumerate(rows):
+             # tuple: date, user_id, video_id, author_id, tab, duration_ms, label
+-            key = (int(row[0]), int(row[1]), int(row[2]), int(row[4]), int(row[5]))
++            tab = int(row[4])
++            key = (int(row[0]), int(row[1]), int(row[2]), tab, int(row[5]))
+             if raw_time.get(key):
+                 dow, hour = raw_time[key].popleft()
+             else:
+                 missing += 1
+                 dow, hour = yyyymmdd_to_weekday(row[0]), 0
+-            feats[i, 0] = dim + dow
+-            feats[i, 1] = dim + 7 + hour
++            tab_bucket = tab
++            if tab_bucket < 0:
++                tab_bucket = 0
++            if tab_bucket > 4:
++                tab_bucket = 4
++            feats[i, 0] = off_dow + dow
++            feats[i, 1] = off_hour + hour
++            feats[i, 2] = off_tab_hour + tab_bucket * 24 + hour
+         X2 = np.concatenate([X.astype(np.int64), feats], axis=1)
+         out[sp] = (X2, y, u)
+     if missing:
+         print(f"warning: {missing} rows missing raw hourmin; used hour=0 fallback")
+-    return out, dim + 7 + 24
++    return out, final_dim
+ 
+ 
+ def make_user_pair_pools(y, users):
+@@ -180,7 +191,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | multineg_bpr_time {np.mean(losses):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | multineg_bpr_tab_hour {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -234,7 +245,8 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+['weekday','hour']")
++    print({k_: len(v) for k_, v in splits.items()},
++          f"fields={FIELDS}+['weekday','hour','tab_hour']")
+ 
+     models, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                       neg_k=a.neg_k, seed=a.seed, device=a.device,
+@@ -247,7 +259,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== debug12_bpr_weekday_hour_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_weekday_hour_tabcross_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, predict_ensemble(models, Xs, device=a.device))

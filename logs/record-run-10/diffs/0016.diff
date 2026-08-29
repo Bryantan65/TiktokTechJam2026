@@ -1,0 +1,158 @@
+# iteration 16  (parent: 15)
+# hypothesis: improve 15: LambdaRank helped as an independent member; append the trained BPR score as a numeric feature so LambdaRank can learn tree residual corrections around the strong FM ranker, then give LambdaRank a readable 45% blend weight.
+# result: GAUC 0.669681 | nDCG@5 0.536708 | primary 0.603195 | verdict noise
+
+--- logs/record-run-10/solutions/015_lambdarank_blend.py
++++ logs/record-run-10/solutions/016_ltr_bpr_feature.py
+@@ -1,8 +1,9 @@
+-"""BPR + LightGBM LambdaRank blend with day/hour features.
+-
+-Branches from 009.  The BPR FM member is unchanged; the BCE FM member is
+-replaced by a LambdaMART/LambdaRank tree model trained with user_id groups, so
+-its objective directly targets top-of-user ranking rather than pointwise logloss.
++"""BPR + LambdaRank blend, with the BPR score also fed to LambdaRank.
++
++Improves 015: train the same BPR FM first, append its prediction as a numeric
++feature for the user-grouped LightGBM LambdaRank member, then blend within-user
++ranks.  This lets LambdaRank learn residual/tree corrections around the strong
++FM ranker instead of replacing the BCE member blindly.
+ """
+ import argparse
+ import csv
+@@ -20,7 +21,6 @@
+                                 '..', 'kuairand-starter-kit'))
+ from data import load, FIELDS                         # noqa: E402
+ from evaluate import evaluate                         # noqa: E402
+-
+ 
+ EXT_FIELDS = FIELDS + ['dow', 'hour', 'tod4']
+ 
+@@ -196,19 +196,24 @@
+     pos_lists, neg_lists, weights = [], [], []
+     for neg, pos in buckets.values():
+         if pos and neg:
+-            pos_a = np.asarray(pos, dtype=np.int64); neg_a = np.asarray(neg, dtype=np.int64)
+-            pos_lists.append(pos_a); neg_lists.append(neg_a)
++            pos_a = np.asarray(pos, dtype=np.int64)
++            neg_a = np.asarray(neg, dtype=np.int64)
++            pos_lists.append(pos_a)
++            neg_lists.append(neg_a)
+             weights.append(min(len(pos_a) * len(neg_a), 2000))
+-    weights = np.asarray(weights, dtype=np.float64); weights /= weights.sum()
++    weights = np.asarray(weights, dtype=np.float64)
++    weights /= weights.sum()
+     return pos_lists, neg_lists, weights
+ 
+ 
+ def sample_pairs(pos_lists, neg_lists, weights, n_pairs, rng):
+     uids = rng.choice(len(pos_lists), size=n_pairs, replace=True, p=weights)
+-    pos_idx = np.empty(n_pairs, dtype=np.int64); neg_idx = np.empty(n_pairs, dtype=np.int64)
++    pos_idx = np.empty(n_pairs, dtype=np.int64)
++    neg_idx = np.empty(n_pairs, dtype=np.int64)
+     for u in np.unique(uids):
+         m = np.nonzero(uids == u)[0]
+-        pos = pos_lists[u]; neg = neg_lists[u]
++        pos = pos_lists[u]
++        neg = neg_lists[u]
+         pos_idx[m] = pos[rng.integers(0, len(pos), size=len(m))]
+         neg_idx[m] = neg[rng.integers(0, len(neg), size=len(m))]
+     return pos_idx, neg_idx
+@@ -230,14 +235,17 @@
+         t0 = time.time()
+         pidx, nidx = sample_pairs(pos_lists, neg_lists, weights, n_pairs, rng)
+         order = rng.permutation(n_pairs)
+-        model.train(); losses = []
++        model.train()
++        losses = []
+         for i in range(0, n_pairs, bs):
+             sel = order[i:i + bs]
+             xb_pos = Xtr_t[torch.from_numpy(pidx[sel])].to(device)
+             xb_neg = Xtr_t[torch.from_numpy(nidx[sel])].to(device)
+             opt.zero_grad(set_to_none=True)
+             loss = F.softplus(-(model(xb_pos) - model(xb_neg))).mean()
+-            loss.backward(); opt.step(); losses.append(loss.item())
++            loss.backward()
++            opt.step()
++            losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+             print(f"  BPR epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+@@ -264,6 +272,16 @@
+         group.append(end - start)
+         start = end
+     return X[order], y[order], group, order
++
++
++def append_score_feature(rawcat, enc, bpr, device='cpu'):
++    out = {}
++    for name, X0 in rawcat.items():
++        s = bpr.predict(enc[name][0], device=device).astype(np.float32)
++        # Standardize per split only for tree numerical stability; ranking uses order, not scale.
++        s = (s - s.mean()) / (s.std() + 1e-6)
++        out[name] = np.column_stack([X0, s])
++    return out
+ 
+ 
+ def train_lambdarank(rawcat, enc, seed=0, verbose=True):
+@@ -303,7 +321,7 @@
+     return model
+ 
+ 
+-def weighted_within_user_rank(scores_a, scores_b, users, wa=0.60):
++def weighted_within_user_rank(scores_a, scores_b, users, wa=0.55):
+     users = np.asarray(users)
+     out = np.zeros(len(users), dtype=np.float64)
+     order_u = np.argsort(users, kind='mergesort')
+@@ -318,7 +336,8 @@
+         if n == 1:
+             out[idx[0]] = 0.0
+         else:
+-            ra = np.empty(n, dtype=np.float64); rb = np.empty(n, dtype=np.float64)
++            ra = np.empty(n, dtype=np.float64)
++            rb = np.empty(n, dtype=np.float64)
+             ra[np.argsort(scores_a[idx], kind='mergesort')] = np.linspace(0.0, 1.0, n)
+             rb[np.argsort(scores_b[idx], kind='mergesort')] = np.linspace(0.0, 1.0, n)
+             out[idx] = wa * ra + (1.0 - wa) * rb
+@@ -331,8 +350,9 @@
+     enc, rawcat, dim = encode_ext(splits, hour_lookup)
+     bpr = train_bpr(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed,
+                     device=device, verbose=verbose)
+-    ltr = train_lambdarank(rawcat, enc, seed=seed + 1009, verbose=verbose)
+-    return bpr, ltr, enc, rawcat
++    rawcat2 = append_score_feature(rawcat, enc, bpr, device=device)
++    ltr = train_lambdarank(rawcat2, enc, seed=seed + 1009, verbose=verbose)
++    return bpr, ltr, enc, rawcat2
+ 
+ 
+ if __name__ == '__main__':
+@@ -351,23 +371,25 @@
+     print(f"loading {a.data_dir} ...")
+     if a.split == 'dev':
+         from devdata import load as load_dev
+-        splits = load_dev(a.data_dir); target = 'valid'
++        splits = load_dev(a.data_dir)
++        target = 'valid'
+     else:
+-        splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, lambdarank")
++        splits = load(a.data_dir)
++        target = a.split
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS} + bpr_score, lambdarank")
+ 
+     bpr, ltr, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                                 seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[target]
+     s_bpr = bpr.predict(X, device=a.device)
+     s_ltr = ltr.predict(rawcat[target], num_iteration=ltr.best_iteration)
+-    scores = weighted_within_user_rank(s_bpr, s_ltr, users, wa=0.60)
++    scores = weighted_within_user_rank(s_bpr, s_ltr, users, wa=0.55)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+         r = evaluate(users, y, scores)
+-        print(f"\n=== lambdarank_blend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== ltr_bpr_feature (seed={a.seed}, device={a.device}) ===")
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

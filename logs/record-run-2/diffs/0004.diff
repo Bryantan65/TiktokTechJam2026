@@ -1,0 +1,75 @@
+# iteration 4  (parent: 3)
+# hypothesis: improve 3: one sampled negative per positive is a noisy approximation to BPR; sample three same-user negatives per positive so each epoch covers more pairwise constraints. If the gain in 003 is from ranking alignment rather than luck, denser pair sampling should improve or stabilize it.
+# result: GAUC 0.669071 | nDCG@5 0.536353 | primary 0.602712 | verdict noise
+
+--- logs/record-run-2/solutions/003_bpr_fm_fix.py
++++ logs/record-run-2/solutions/004_bpr_fm_3neg.py
+@@ -1,7 +1,8 @@
+-"""FM trained with a within-user BPR pairwise ranking loss.
++"""FM trained with within-user BPR, sampling multiple negatives per positive.
+ 
+-Bugfix of 002: encode() returns users as a Python list, so convert users/y to
+-NumPy arrays before sorting and fancy indexing.
++This refines 003 by giving each positive three independently sampled same-user
++negatives per epoch. The model/features/optimizer are unchanged; only the BPR
++pair sampler supplies a denser approximation to the pairwise ranking objective.
+ """
+ import argparse
+ import os
+@@ -65,15 +66,16 @@
+     return groups
+ 
+ 
+-def sample_pairs(groups, rng):
+-    """One positive-anchored epoch: every positive gets one same-user negative."""
++def sample_pairs(groups, rng, n_neg=3):
++    """Sample n_neg same-user negatives for every positive impression."""
+     pos_parts = []
+     neg_parts = []
+     for pos, neg in groups:
+-        p = pos.copy()
++        # Repeat positives so each receives n_neg independently sampled negatives.
++        p = np.repeat(pos, n_neg)
+         rng.shuffle(p)
+         n = rng.choice(neg, size=len(p), replace=(len(neg) < len(p)))
+-        pos_parts.append(p)
++        pos_parts.append(p.astype(np.int64))
+         neg_parts.append(n.astype(np.int64))
+     pi = np.concatenate(pos_parts)
+     ni = np.concatenate(neg_parts)
+@@ -82,7 +84,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True):
++        seed=0, device='cpu', verbose=True, n_neg=3):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -90,7 +92,7 @@
+     groups = build_user_pos_neg(ytr, utr)
+     if verbose:
+         npos = sum(len(p) for p, _ in groups)
+-        print(f"BPR groups={len(groups):,d} paired_positives/epoch={npos:,d}")
++        print(f"BPR groups={len(groups):,d} positives={npos:,d} pairs/epoch={npos*n_neg:,d}")
+ 
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+@@ -102,7 +104,7 @@
+     best, best_state, bad = -1.0, None, 0
+ 
+     for ep in range(1, epochs + 1):
+-        pi, ni = sample_pairs(groups, rng)
++        pi, ni = sample_pairs(groups, rng, n_neg=n_neg)
+         t0 = time.time()
+         model.train()
+         losses = []
+@@ -165,7 +167,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm_fix (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_fm_3neg (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

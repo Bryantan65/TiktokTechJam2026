@@ -1,0 +1,110 @@
+# iteration 3  (parent: 2)
+# hypothesis: improve 2: pure BPR improved GAUC but may lose pointwise priors useful for top-5, so add a small BCE auxiliary term (0.25) while keeping same-user BPR as the main objective.
+# result: GAUC 0.667737 | nDCG@5 0.536032 | primary 0.601885 | verdict noise
+
+--- logs/record-run-10/solutions/002_bpr_loss.py
++++ logs/record-run-10/solutions/003_bpr_bce_mix.py
+@@ -1,9 +1,9 @@
+-"""FM trained with within-user BPR pairwise loss.
++"""FM trained with a mixed within-user BPR + pointwise BCE objective.
+ 
+-This keeps the official FM feature representation/model but replaces pointwise
+-BCE with a ranking objective: for a sampled (positive, negative) pair belonging
+-to the same user, maximize score(pos) - score(neg).  This directly matches the
+-within-user ranking nature of GAUC/nDCG better than calibrated logloss.
++Node 2 showed that pure BPR improves within-user ranking, especially GAUC, but
++it may discard some stable exposure/tab/item priors learned by BCE.  This keeps
++BPR as the main signal and adds a small BCE term on randomly sampled training
++rows in every update.
+ """
+ import argparse
+ import os
+@@ -46,7 +46,6 @@
+ 
+ 
+ def build_user_pair_sources(y, users):
+-    """Return per-user positive/negative row arrays for users with both labels."""
+     buckets = {}
+     for i, (u, yy) in enumerate(zip(users, y)):
+         if u not in buckets:
+@@ -59,8 +58,6 @@
+             neg_a = np.asarray(neg, dtype=np.int64)
+             pos_lists.append(pos_a)
+             neg_lists.append(neg_a)
+-            # Sample users roughly in proportion to the number of useful pairs,
+-            # capped so very heavy users do not dominate every epoch.
+             weights.append(min(len(pos_a) * len(neg_a), 2000))
+     weights = np.asarray(weights, dtype=np.float64)
+     weights /= weights.sum()
+@@ -68,11 +65,9 @@
+ 
+ 
+ def sample_pairs(pos_lists, neg_lists, weights, n_pairs, rng):
+-    """Sample same-user (positive row, negative row) training pairs."""
+     uids = rng.choice(len(pos_lists), size=n_pairs, replace=True, p=weights)
+     pos_idx = np.empty(n_pairs, dtype=np.int64)
+     neg_idx = np.empty(n_pairs, dtype=np.int64)
+-    # Looping over unique sampled users is cheap (users per batch/epoch << rows)
+     for u in np.unique(uids):
+         m = np.nonzero(uids == u)[0]
+         pos = pos_lists[u]
+@@ -83,7 +78,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True):
++        seed=0, device='cpu', verbose=True, bce_weight=0.25):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -105,26 +100,38 @@
+         t0 = time.time()
+         model.train()
+         losses = []
++        bprs = []
++        bces = []
+         pidx, nidx = sample_pairs(pos_lists, neg_lists, weights, n_pairs, rng)
+         order = rng.permutation(n_pairs)
++        # Independent pointwise sample of the same total size as the BPR epoch.
++        bce_idx = rng.integers(0, len(ytr), size=n_pairs, dtype=np.int64)
+         for i in range(0, n_pairs, bs):
+             sel = order[i:i + bs]
+             pi = torch.from_numpy(pidx[sel])
+             ni = torch.from_numpy(nidx[sel])
++            bi = torch.from_numpy(bce_idx[sel])
+             xb_pos = Xtr_t[pi].to(device)
+             xb_neg = Xtr_t[ni].to(device)
++            xb_bce = Xtr_t[bi].to(device)
++            yb_bce = ytr_t[bi].to(device)
++
+             opt.zero_grad(set_to_none=True)
+             s_pos = model(xb_pos)
+             s_neg = model(xb_neg)
+-            # -log sigmoid(s_pos - s_neg), numerically stable.
+-            loss = F.softplus(-(s_pos - s_neg)).mean()
++            bpr_loss = F.softplus(-(s_pos - s_neg)).mean()
++            bce_loss = F.binary_cross_entropy_with_logits(model(xb_bce), yb_bce)
++            loss = bpr_loss + bce_weight * bce_loss
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
++            bprs.append(bpr_loss.item())
++            bces.append(bce_loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | loss {np.mean(losses):.4f} "
++                  f"bpr {np.mean(bprs):.4f} bce {np.mean(bces):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -174,7 +181,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_bce_mix_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

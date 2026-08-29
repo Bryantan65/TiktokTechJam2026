@@ -1,0 +1,81 @@
+# iteration 13  (parent: 12)
+# hypothesis: debug 12: node 12 crashed because log_standard lacks author_id, so key raw rows only by shared tuple/log columns while preserving duplicate order with deques. This checks the intended weekday+hour time feature rather than abandoning the direction.
+# result: GAUC 0.671824 | nDCG@5 0.538247 | primary 0.605035 | verdict KEPT
+
+--- logs/record-run-5/solutions/012_ensemble3_bpr_weekday_hour_fm.py
++++ logs/record-run-5/solutions/013_debug12_bpr_weekday_hour_fm.py
+@@ -1,9 +1,9 @@
+-"""3-model multi-negative BPR FM with weekday and hour-of-day features.
+-
+-Improves the kept weekday model by reading raw log_standard CSVs to recover
+-hourmin. Weekday and hour are shared categories across the chronological split,
+-so they avoid the non-generalising raw-date embedding problem while exposing
+-within-day behaviour drift to the FM interactions.
++"""Debug of node 12: 3-model multi-negative BPR FM with weekday/hour features.
++
++The raw log_standard CSV does not contain author_id, so the node-12 raw-time
++lookup crashed before training. This version keys raw rows by columns actually
++present in both the loader tuple and log CSV: date, user_id, video_id, tab, and
++duration_ms, with a deque to preserve file order for duplicates.
+ """
+ import argparse
+ import csv
+@@ -54,7 +54,6 @@
+ 
+ def parse_hour(hourmin):
+     hm = int(float(hourmin))
+-    # KuaiRand hourmin is an HHMM integer (e.g. 930, 2137).
+     h = hm // 100
+     if h < 0:
+         h = 0
+@@ -82,11 +81,11 @@
+             reader = csv.DictReader(f)
+             for r in reader:
+                 d = int(float(_get(r, 'date')))
++                # author_id is in the processed tuple but not in log_standard.
+                 key = (
+                     d,
+                     int(float(_get(r, 'user_id'))),
+                     int(float(_get(r, 'video_id'))),
+-                    int(float(_get(r, 'author_id'))),
+                     int(float(_get(r, 'tab'))),
+                     int(float(_get(r, 'duration_ms'))),
+                 )
+@@ -99,22 +98,24 @@
+     enc, dim = encode(splits)
+     raw_time = build_raw_time_lookup(data_dir)
+     out = {}
++    missing = 0
+     for sp, rows in splits.items():
+         X, y, u = enc[sp]
+         feats = np.empty((len(rows), 2), dtype=np.int64)
+         for i, row in enumerate(rows):
+-            key = (int(row[0]), int(row[1]), int(row[2]), int(row[3]),
+-                   int(row[4]), int(row[5]))
++            # tuple: date, user_id, video_id, author_id, tab, duration_ms, label
++            key = (int(row[0]), int(row[1]), int(row[2]), int(row[4]), int(row[5]))
+             if raw_time.get(key):
+                 dow, hour = raw_time[key].popleft()
+             else:
+-                # Fallback should almost never be used; it keeps the script robust
+-                # to harmless CSV/loader representation differences.
++                missing += 1
+                 dow, hour = yyyymmdd_to_weekday(row[0]), 0
+             feats[i, 0] = dim + dow
+             feats[i, 1] = dim + 7 + hour
+         X2 = np.concatenate([X.astype(np.int64), feats], axis=1)
+         out[sp] = (X2, y, u)
++    if missing:
++        print(f"warning: {missing} rows missing raw hourmin; used hour=0 fallback")
+     return out, dim + 7 + 24
+ 
+ 
+@@ -246,7 +247,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== ensemble3_bpr_weekday_hour_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== debug12_bpr_weekday_hour_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, predict_ensemble(models, Xs, device=a.device))

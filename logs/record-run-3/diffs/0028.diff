@@ -1,0 +1,75 @@
+# iteration 28  (parent: 27)
+# hypothesis: improve 27: node 27's DeepFM member only shifted the GAUC/nDCG tradeoff, so make the deep path a small residual around FM (smaller MLP, near-zero last layer, 0.25 scale) to preserve GAUC while keeping higher-order top-list signal.
+# result: GAUC 0.67246 | nDCG@5 0.538356 | primary 0.605408 | verdict KEPT
+
+--- logs/record-run-3/solutions/027_deepfm_member.py
++++ logs/record-run-3/solutions/028_residual_deepfm.py
+@@ -1,9 +1,4 @@
+-"""Node-24 ensemble plus one weak DeepFM BPR member.
+-
+-Draft direction 5: preserve the strong FM BPR/time/watch/user-balanced ensemble,
+-and add a small DeepFM member trained with the same within-user BPR objective to
+-contribute higher-order feature interactions without letting capacity dominate.
+-"""
++"""Node-24 ensemble plus a residual-shrunk DeepFM BPR member."""
+ import argparse
+ import csv
+ import datetime as _dt
+@@ -53,21 +48,28 @@
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+         torch.manual_seed(seed + 12345)
+         self.deep = torch.nn.Sequential(
+-            torch.nn.Linear(n_fields * k, 64), torch.nn.ReLU(), torch.nn.Dropout(0.10),
+-            torch.nn.Linear(64, 32), torch.nn.ReLU(),
+-            torch.nn.Linear(32, 1),
++            torch.nn.Linear(n_fields * k, 32), torch.nn.ReLU(), torch.nn.Dropout(0.05),
++            torch.nn.Linear(32, 16), torch.nn.ReLU(),
++            torch.nn.Linear(16, 1),
+         )
+         for m in self.deep.modules():
+             if isinstance(m, torch.nn.Linear):
+                 torch.nn.init.xavier_uniform_(m.weight)
+                 torch.nn.init.zeros_(m.bias)
++        # Make the high-order path a genuine residual around a strong FM rather than
++        # a second unconstrained scorer.  Node 27's DeepFM gained nDCG but cost GAUC;
++        # this smaller, softly-gated residual should keep the useful top-list signal.
++        last = self.deep[-1]
++        torch.nn.init.normal_(last.weight, mean=0.0, std=1e-3)
++        torch.nn.init.zeros_(last.bias)
++        self.deep_scale = 0.25
+ 
+     def forward(self, X):
+         E = self.V[X]
+         S = E.sum(1)
+         inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
+         fm = self.b + self.W[X].sum(1) + inter
+-        return fm + self.deep(E.reshape(E.shape[0], -1)).squeeze(1)
++        return fm + self.deep_scale * self.deep(E.reshape(E.shape[0], -1)).squeeze(1)
+ 
+     @torch.no_grad()
+     def predict(self, X, bs=200000, device='cpu'):
+@@ -243,7 +245,7 @@
+     s = seed + 8089; torch.manual_seed(s)
+     models.append(train_one(enc, dim, user_balanced=True, k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag="userbal1/1")); weights.append(0.75)
+     s = seed + 9091; torch.manual_seed(s)
+-    models.append(train_one(enc, dim, model_kind='deepfm', k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag="deepfm1/1")); weights.append(0.50)
++    models.append(train_one(enc, dim, model_kind='deepfm', k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag="resdeepfm1/1")); weights.append(0.50)
+     return models, np.asarray(weights, dtype=np.float64), enc
+ 
+ 
+@@ -276,13 +278,13 @@
+     a = ap.parse_args(); torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time; ensemble=7label+0.75watchconf+0.75userbal+0.50deepfm")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time; ensemble=7label+0.75watchconf+0.75userbal+0.50resdeepfm")
+     models, weights, enc = train_ensemble(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[a.split]; scores = ensemble_predict(models, weights, X, users, device=a.device)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== deepfm_member (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== residual_deepfm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]; r = evaluate(us, ys, ensemble_predict(models, weights, Xs, us, device=a.device))
+             print(f"  {sp:5s} GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")

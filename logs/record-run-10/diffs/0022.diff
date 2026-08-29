@@ -1,0 +1,39 @@
+# iteration 22  (parent: 19)
+# hypothesis: improve 19: keep node 19 fixed except swap the tree member from LambdaRank to LightGBM rank_xendcg, whose XE_NDCG objective is designed as a smoother listwise approximation to NDCG@k and may lift the nDCG half directly.
+# result: GAUC 0.671423 | nDCG@5 0.53775 | primary 0.604586 | verdict KEPT
+
+--- logs/record-run-10/solutions/019_threeway_bpr_ltr_bce.py
++++ logs/record-run-10/solutions/022_xendcg_3way_blend.py
+@@ -1,9 +1,8 @@
+-"""Three-way rank blend: BPR FM + LambdaRank + BCE FM.
+-
+-Debugs 018 by removing the target-stat features that collapsed LambdaRank and
+-returning to the raw LambdaRank feature set of 015, then tests whether the BCE
+-FM member from the previous best time-aware FM blend adds complementary within-
+-user ranking signal at readable weight.
++"""Three-way rank blend: BPR FM + XE_NDCG LightGBM ranker + BCE FM.
++
++Copy of node 19 with one targeted change: use LightGBM's rank_xendcg
++objective instead of lambdarank for the tree member, keeping features, FM
++members, early stopping, and blend weights fixed.
+ """
+ import argparse
+ import csv
+@@ -226,7 +225,7 @@
+     dtrain = lgb.Dataset(Xtr, label=ytr.astype(np.int32), group=gtr, categorical_feature=list(range(len(EXT_FIELDS))), free_raw_data=False)
+     dvalid = lgb.Dataset(Xva, label=yva.astype(np.int32), group=gva, categorical_feature=list(range(len(EXT_FIELDS))), reference=dtrain, free_raw_data=False)
+     params = {
+-        'objective': 'lambdarank', 'metric': 'ndcg', 'ndcg_eval_at': [5], 'label_gain': [0, 1],
++        'objective': 'rank_xendcg', 'metric': 'ndcg', 'ndcg_eval_at': [5], 'label_gain': [0, 1],
+         'learning_rate': 0.04, 'num_leaves': 63, 'min_data_in_leaf': 80,
+         'feature_fraction': 0.85, 'bagging_fraction': 0.85, 'bagging_freq': 1,
+         'lambda_l2': 1.0, 'max_cat_threshold': 64, 'verbosity': -1, 'num_threads': 4,
+@@ -279,7 +278,7 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 3way bpr/ltr/bce")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 3way bpr/xendcg/bce")
+     bpr, bce, ltr, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[target]
+     sbpr = bpr.predict(X, device=a.device)

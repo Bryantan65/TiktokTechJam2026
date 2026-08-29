@@ -1,0 +1,122 @@
+# iteration 13  (parent: 9)
+# hypothesis: improve 9: refine the strongest loss node by sampling half the within-user negatives from the positive row's tab, making the sampled softmax compare items in comparable contexts instead of mostly learning coarse tab preference.
+# result: GAUC 0.670683 | nDCG@5 0.537207 | primary 0.603945 | verdict KEPT
+
+--- logs/record-run-4/solutions/009_multitask_aux_time_softmax.py
++++ logs/record-run-4/solutions/013_hard_tab_negatives.py
+@@ -1,8 +1,9 @@
+-"""Sampled-softmax FM with time features and auxiliary feedback tasks.
+-
+-Builds on the best time-aware listwise FM: train long_view with within-user
+-sampled softmax, and add small BCE losses for raw feedback columns (click/like/
+-follow/comment/forward/profile/hate) using separate heads sharing FM embeddings.
++"""Sampled-softmax FM with time/aux tasks and mixed hard negatives.
++
++Compared with node 9, keep the same model/features/objective but sample half of
++same-user negatives from the positive row's tab when possible.  Uniform negatives
++learn coarse tab preference; same-tab negatives force the FM to learn item/author
++ranking within a comparable context, closer to per-user top-k ranking.
+ """
+ import argparse
+ import csv
+@@ -158,12 +159,13 @@
+     return out, aux_out, matched, int(dim + sizes.sum())
+ 
+ 
+-def make_pair_sampler(y, users):
++def make_pair_sampler(y, users, X):
+     y = np.asarray(y)
+     users = np.asarray(users)
++    tabs = np.asarray(X[:, 3])
+     order = np.argsort(users, kind='mergesort')
+     us = users[order]
+-    pos_chunks, neg_pools = [], []
++    pos_chunks, neg_pools, hard_pools = [], [], []
+     i = 0
+     while i < len(order):
+         j = i + 1
+@@ -175,11 +177,17 @@
+         if len(pos) and len(neg):
+             pos_chunks.append(pos.astype(np.int64, copy=False))
+             neg = neg.astype(np.int64, copy=False)
+-            neg_pools.extend([neg] * len(pos))
++            by_tab = {}
++            for tv in np.unique(tabs[neg]):
++                by_tab[int(tv)] = neg[tabs[neg] == tv].astype(np.int64, copy=False)
++            for p in pos:
++                neg_pools.append(neg)
++                hp = by_tab.get(int(tabs[p]))
++                hard_pools.append(hp if hp is not None and len(hp) else neg)
+         i = j
+     if not pos_chunks:
+         raise RuntimeError('no users with both positive and negative rows')
+-    return np.concatenate(pos_chunks), np.asarray(neg_pools, dtype=object)
++    return np.concatenate(pos_chunks), np.asarray(neg_pools, dtype=object), np.asarray(hard_pools, dtype=object)
+ 
+ 
+ def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096,
+@@ -188,7 +196,6 @@
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+-    # Drop degenerate/unmatched auxiliary tasks so constant columns cannot swamp ranking.
+     valid_rows = matched['train']
+     prev = aux['train'][valid_rows].mean(0) if valid_rows.any() else np.zeros(len(AUX_NAMES))
+     keep_aux = np.where((prev > 0.001) & (prev < 0.999))[0]
+@@ -206,8 +213,10 @@
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     aux_t = torch.from_numpy(aux_tr.astype(np.float32))
+-    pos_idx, neg_pools = make_pair_sampler(ytr, utr)
++    pos_idx, neg_pools, hard_pools = make_pair_sampler(ytr, utr, Xtr)
+     rng = np.random.default_rng(seed)
++    hard_k = max(1, neg_k // 2)
++    uni_k = neg_k - hard_k
+ 
+     best, best_state, bad = -1.0, None, 0
+     for ep in range(1, epochs + 1):
+@@ -220,8 +229,13 @@
+             bsz = len(psel)
+             pidx = pos_idx[psel]
+             nidx = np.empty((bsz, neg_k), dtype=np.int64)
+-            for t, pool in enumerate(neg_pools[psel]):
+-                nidx[t] = pool[rng.integers(len(pool), size=neg_k)]
++            for t, s in enumerate(psel):
++                hp = hard_pools[s]
++                up = neg_pools[s]
++                if hard_k:
++                    nidx[t, :hard_k] = hp[rng.integers(len(hp), size=hard_k)]
++                if uni_k:
++                    nidx[t, hard_k:] = up[rng.integers(len(up), size=uni_k)]
+             cand_idx = np.concatenate([pidx.reshape(-1, 1), nidx], axis=1)
+ 
+             xp = Xtr_t[torch.from_numpy(pidx)].to(device)
+@@ -247,8 +261,8 @@
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+             kept = ','.join(AUX_NAMES[i] for i in keep_aux)
+-            print(f"  epoch {ep:2d} | mt-softmax {np.mean(losses):.4f} aux=[{kept}] | valid "
+-                  f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
++            print(f"  epoch {ep:2d} | hardtab-mt-softmax {np.mean(losses):.4f} hard={hard_k}/{neg_k} "
++                  f"aux=[{kept}] | valid GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+@@ -280,7 +294,7 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES}")
++          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} hard_tab_neg")
+ 
+     model, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                      seed=a.seed, device=a.device, verbose=a.out is None)
+@@ -291,7 +305,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== multitask_aux_time_softmax (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== hard_tab_negatives (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

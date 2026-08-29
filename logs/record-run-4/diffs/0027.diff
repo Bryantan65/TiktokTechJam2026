@@ -1,0 +1,74 @@
+# iteration 27  (parent: 25)
+# hypothesis: improve 25: neg32 saturated the loss, so spend the final high-risk pass on the strongest residual path: add a small user-author-tab history term, since tab strongly changes positive rate and author recurrence was the useful history signal.
+# result: GAUC 0.671489 | nDCG@5 0.537573 | primary 0.604531 | verdict KEPT
+
+--- logs/record-run-4/solutions/025_neg16_recent_history.py
++++ logs/record-run-4/solutions/027_author_tab_history.py
+@@ -1,4 +1,4 @@
+-"""Sampled-softmax multitask FM plus time and recent history; use more same-user negatives."""
++"""Sampled-softmax multitask FM plus time and recent history; add author-by-tab user history residual."""
+ import argparse, csv, datetime as _dt, os, sys, time
+ from collections import defaultdict, deque
+ import numpy as np
+@@ -86,8 +86,8 @@
+ def _logit(p): p=_clip01(p); return np.log(p/(1.0-p))
+ 
+ def build_history_stats(train_rows, decay=0.97):
+-    up=defaultdict(float); uc=defaultdict(float); uap=defaultdict(float); uac=defaultdict(float); uvp=defaultdict(float); uvc=defaultdict(float); utp=defaultdict(float); utc=defaultdict(float); gp=0.; gc=0.
+-    t_user=defaultdict(int); final_t=defaultdict(int); ruap=defaultdict(float); ruac=defaultdict(float); rual={}; ruvp=defaultdict(float); ruvc=defaultdict(float); ruvl={}; rutp=defaultdict(float); rutc=defaultdict(float); rutl={}
++    up=defaultdict(float); uc=defaultdict(float); uap=defaultdict(float); uac=defaultdict(float); uvp=defaultdict(float); uvc=defaultdict(float); utp=defaultdict(float); utc=defaultdict(float); uatp=defaultdict(float); uatc=defaultdict(float); gp=0.; gc=0.
++    t_user=defaultdict(int); final_t=defaultdict(int); ruap=defaultdict(float); ruac=defaultdict(float); rual={}; ruvp=defaultdict(float); ruvc=defaultdict(float); ruvl={}; rutp=defaultdict(float); rutc=defaultdict(float); rutl={}; ruatp=defaultdict(float); ruatc=defaultdict(float); ruatl={}
+     def upd(p,c,l,key,t,lab):
+         last=l.get(key)
+         if last is not None:
+@@ -95,12 +95,13 @@
+         p[key]+=lab; c[key]+=1.; l[key]=t
+     for r in train_rows:
+         user=_to_int(r[1]); video=_to_int(r[2]); author=_to_int(r[3]); tab=_to_int(r[4]); lab=float(_to_int(r[6])); gp+=lab; gc+=1.; up[user]+=lab; uc[user]+=1.
+-        ka=(user,author); kv=(user,video); kt=(user,tab); uap[ka]+=lab; uac[ka]+=1.; uvp[kv]+=lab; uvc[kv]+=1.; utp[kt]+=lab; utc[kt]+=1.
+-        t_user[user]+=1; t=t_user[user]; final_t[user]=t; upd(ruap,ruac,rual,ka,t,lab); upd(ruvp,ruvc,ruvl,kv,t,lab); upd(rutp,rutc,rutl,kt,t,lab)
+-    for p,c,l in ((ruap,ruac,rual),(ruvp,ruvc,ruvl),(rutp,rutc,rutl)):
++        ka=(user,author); kv=(user,video); kt=(user,tab); kat=(user,author,tab)
++        uap[ka]+=lab; uac[ka]+=1.; uvp[kv]+=lab; uvc[kv]+=1.; utp[kt]+=lab; utc[kt]+=1.; uatp[kat]+=lab; uatc[kat]+=1.
++        t_user[user]+=1; t=t_user[user]; final_t[user]=t; upd(ruap,ruac,rual,ka,t,lab); upd(ruvp,ruvc,ruvl,kv,t,lab); upd(rutp,rutc,rutl,kt,t,lab); upd(ruatp,ruatc,ruatl,kat,t,lab)
++    for p,c,l in ((ruap,ruac,rual),(ruvp,ruvc,ruvl),(rutp,rutc,rutl),(ruatp,ruatc,ruatl)):
+         for key,last in list(l.items()):
+             fac=decay**(final_t[key[0]]-last); p[key]*=fac; c[key]*=fac
+-    return {'global':gp/max(gc,1.),'up':up,'uc':uc,'uap':uap,'uac':uac,'uvp':uvp,'uvc':uvc,'utp':utp,'utc':utc,'ruap':ruap,'ruac':ruac,'ruvp':ruvp,'ruvc':ruvc,'rutp':rutp,'rutc':rutc}
++    return {'global':gp/max(gc,1.),'up':up,'uc':uc,'uap':uap,'uac':uac,'uvp':uvp,'uvc':uvc,'utp':utp,'utc':utc,'uatp':uatp,'uatc':uatc,'ruap':ruap,'ruac':ruac,'ruvp':ruvp,'ruvc':ruvc,'rutp':rutp,'rutc':rutc,'ruatp':ruatp,'ruatc':ruatc}
+ 
+ def history_adjust(rows, stats):
+     g=stats['global']; out=np.zeros(len(rows),dtype=np.float32)
+@@ -112,12 +113,16 @@
+         if cv>0: adj += 0.30*np.sqrt(cv/(cv+3.))*(_logit((stats['uvp'].get(kv,0.)+1.5*ur)/(cv+1.5))-base)
+         kt=(user,tab); ct=stats['utc'].get(kt,0.)
+         if ct>0: adj += 0.20*np.sqrt(ct/(ct+8.))*(_logit((stats['utp'].get(kt,0.)+4.*ur)/(ct+4.))-base)
++        kat=(user,author,tab); cat=stats['uatc'].get(kat,0.)
++        if cat>0: adj += 0.06*np.sqrt(cat/(cat+4.))*(_logit((stats['uatp'].get(kat,0.)+2.0*ur)/(cat+2.0))-base)
+         rca=stats['ruac'].get(ka,0.)
+         if rca>0: adj += 0.10*np.sqrt(rca/(rca+2.))*(_logit((stats['ruap'].get(ka,0.)+1.5*ur)/(rca+1.5))-base)
+         rcv=stats['ruvc'].get(kv,0.)
+         if rcv>0: adj += 0.08*np.sqrt(rcv/(rcv+2.))*(_logit((stats['ruvp'].get(kv,0.)+1.0*ur)/(rcv+1.0))-base)
+         rct=stats['rutc'].get(kt,0.)
+         if rct>0: adj += 0.06*np.sqrt(rct/(rct+5.))*(_logit((stats['rutp'].get(kt,0.)+2.5*ur)/(rct+2.5))-base)
++        rcat=stats['ruatc'].get(kat,0.)
++        if rcat>0: adj += 0.035*np.sqrt(rcat/(rcat+3.))*(_logit((stats['ruatp'].get(kat,0.)+1.5*ur)/(rcat+1.5))-base)
+         out[i]=np.float32(np.clip(adj,-1.,1.))
+     return out
+ 
+@@ -155,13 +160,13 @@
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test']); ap.add_argument('--out',default=None)
+     ap.add_argument('--k',type=int,default=16); ap.add_argument('--lr',type=float,default=0.001); ap.add_argument('--epochs',type=int,default=40); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+-    torch.manual_seed(a.seed); print(f"loading {a.data_dir} ..."); splits=load(a.data_dir); print({k_:len(v) for k_,v in splits.items()}, f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} recent_history neg16")
++    torch.manual_seed(a.seed); print(f"loading {a.data_dir} ..."); splits=load(a.data_dir); print({k_:len(v) for k_,v in splits.items()}, f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} author_tab_history neg16")
+     model,enc,hist=run(splits,a.data_dir,k=a.k,lr=a.lr,epochs=a.epochs,seed=a.seed,device=a.device,verbose=a.out is None)
+     X,y,users=enc[a.split]; scores=model.predict(X,device=a.device)+history_adjust(splits[a.split],hist)
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== recent_history_neg16 (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== author_tab_history_neg16 (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid','test'):
+             Xs,ys,us=enc[sp]; pred=model.predict(Xs,device=a.device)+history_adjust(splits[sp],hist); r=evaluate(us,ys,pred)
+             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")

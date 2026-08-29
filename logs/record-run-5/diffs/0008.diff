@@ -1,0 +1,85 @@
+# iteration 8  (parent: 6)
+# hypothesis: improve 6: pure multi-negative BPR is best but ignores the stable calibration signal from pointwise BCE; add a small simultaneous BCE regularizer on the same positive and sampled same-user negatives so the BPR objective remains dominant.
+# result: GAUC 0.669185 | nDCG@5 0.536466 | primary 0.602826 | verdict noise
+
+--- logs/record-run-5/solutions/006_multineg_bpr_fm.py
++++ logs/record-run-5/solutions/008_multineg_bpr_bce_fm.py
+@@ -1,9 +1,9 @@
+-"""FM trained with within-user multi-negative BPR loss.
++"""FM with within-user multi-negative BPR plus a small balanced BCE term.
+ 
+-Debug of 005_hard_bpr_fm.py: hard max over sampled negatives collapsed, likely
+-because early noisy high scores become adversarial false negatives. Keep the extra
+-same-user negative sampling, but average the BPR loss over all sampled negatives
+-instead of taking the max, so every comparison is a standard random BPR pair.
++Improve 006: multi-negative random BPR is best, but pure pairwise training ignores
++users without both classes and only optimizes score differences. Add a modest BCE
++term on the same positive and sampled negative rows so the learned ordering is
++regularized by the stable pointwise signal without reverting to a BCE warmup.
+ """
+ import argparse
+ import os
+@@ -64,7 +64,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        neg_k=4, seed=0, device='cpu', verbose=True):
++        neg_k=4, bce_w=0.15, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -100,15 +100,24 @@
+             opt.zero_grad(set_to_none=True)
+             sp = model(xp).view(-1, 1)
+             sn = model(xn).view(len(sel), neg_k)
+-            # Average standard BPR over K random same-user negatives; no hard max.
+-            loss = F.softplus(-(sp - sn)).mean()
++            bpr = F.softplus(-(sp - sn)).mean()
++
++            # Balanced pointwise regularizer on exactly the rows used by BPR.
++            # This keeps the ranking objective dominant but anchors positives high
++            # and negatives low, a stable signal in the BCE baseline.
++            logits = torch.cat([sp.reshape(-1), sn.reshape(-1)])
++            labels = torch.cat([torch.ones(len(sel), device=device),
++                                torch.zeros(len(sel) * neg_k, device=device)])
++            bce = F.binary_cross_entropy_with_logits(logits, labels)
++            loss = bpr + bce_w * bce
++
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | multineg_bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | loss {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -135,6 +144,7 @@
+     ap.add_argument('--lr', type=float, default=0.001)
+     ap.add_argument('--epochs', type=int, default=40)
+     ap.add_argument('--neg_k', type=int, default=4)
++    ap.add_argument('--bce_w', type=float, default=0.15)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+@@ -145,7 +155,8 @@
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+     model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, neg_k=a.neg_k,
+-                     seed=a.seed, device=a.device, verbose=a.out is None)
++                     bce_w=a.bce_w, seed=a.seed, device=a.device,
++                     verbose=a.out is None)
+ 
+     X, y, users = enc[a.split]
+     scores = model.predict(X, device=a.device)
+@@ -154,7 +165,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== multineg_bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== multineg_bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

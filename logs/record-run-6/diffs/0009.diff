@@ -1,0 +1,56 @@
+# iteration 9  (parent: 8)
+# hypothesis: debug 8: auxiliary targets were nearly all zero because the join key included raw duration_ms while load() appears to bucket that field; align by (date,user,video,author,tab) and preserve duplicate order with per-key deques.
+# result: GAUC 0.669079 | nDCG@5 0.536688 | primary 0.602884 | verdict no-op
+
+--- logs/record-run-6/solutions/008_multitask_histfm.py
++++ logs/record-run-6/solutions/009_multitask_auxkey5.py
+@@ -1,10 +1,9 @@
+ """FM + history features with auxiliary feedback multi-task training.
+ 
+-Draft multi-task direction: keep the node-6 main scorer, but add auxiliary heads
+-for raw feedback signals (click/like/follow/comment/forward and watch-ratio
+-thresholds).  The auxiliary heads share the FM embeddings through pooled field
+-embeddings, acting as representation regularisation; predictions are still the
+-main label logit only.
++Debug node 8: the raw auxiliary alignment used duration_ms in the join key, but
++load()/encode uses a dur_bucket-style value there on this starter kit path.  Join
++raw rows to load() rows on (date,user,video,author,tab) with per-key deques in
++file order instead, preserving duplicate row order.
+ """
+ import argparse
+ import csv
+@@ -40,12 +39,14 @@
+ 
+ 
+ def _row_key_from_raw(r):
++    # Do not include duration: in the loaded tuples this field is bucketed by
++    # the starter kit, while the raw CSV stores milliseconds.
+     return (_to_int(r.get('date')), _to_int(r.get('user_id')), _to_int(r.get('video_id')),
+-            _to_int(r.get('author_id')), _to_int(r.get('tab')), _to_int(r.get('duration_ms')))
++            _to_int(r.get('author_id')), _to_int(r.get('tab')))
+ 
+ 
+ def _row_key(row):
+-    return (int(row[0]), int(row[1]), int(row[2]), int(row[3]), int(row[4]), int(row[5]))
++    return (int(row[0]), int(row[1]), int(row[2]), int(row[3]), int(row[4]))
+ 
+ 
+ def read_aux_targets(data_dir, splits):
+@@ -63,8 +64,6 @@
+                 for name in AUX_NAMES:
+                     vals.append(float(_to_int(r.get(name), 0) > 0))
+                 ratio = play / float(dur)
+-                # watch-time tasks are deliberately coarse binary tasks to keep
+-                # the loss scale comparable to the sparse feedback BCE losses.
+                 vals.append(float(ratio >= 0.25))
+                 vals.append(float(ratio >= 0.50))
+                 vals.append(float(ratio >= 1.00))
+@@ -292,7 +291,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== multitask_histfm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== multitask_auxkey5 (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, hist[sp], device=a.device))

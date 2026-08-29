@@ -1,0 +1,243 @@
+# iteration 20  (parent: 17)
+# hypothesis: draft 6: add raw CSV hourmin/date time context as a train-only smoothed prior blended at 20% with the node-17 content rank ensemble; cyclical/time-window features are a standard way to capture temporal preference drift (search note: hourmin feature engineering, cyclical/time windows). This is a readable new mechanism but reuses unchanged content caches.
+# result: GAUC 0.671493 | nDCG@5 0.537478 | primary 0.604485 | verdict KEPT
+
+--- logs/record-run-12/solutions/018_content_features_rank.py
++++ logs/record-run-12/solutions/021_content_time_prior.py
+@@ -1,17 +1,19 @@
+-"""FM rank ensemble with item content side features.
+-
+-Draft direction 9.  Starting from node 11's BPR/BCE rank-fusion ensemble, append
+-categorical video metadata from video_features_basic_pure.csv to the FM fields:
+-music_id, tag, video_type, upload_type, server_width, server_height, music_type.
+-This tests whether user-content interactions generalise better than opaque
+-video_id alone.  Member predictions are cached with new names because the
+-feature space changed.
++"""Content FM rank ensemble plus a train-only time-of-day prior.
++
++Starts from node 17's cached content-feature BPR/BCE percentile-rank ensemble and
++adds a cheap direction-6 signal from raw CSV hourmin.  The prior is learned only
++from train labels with heavy smoothing, including user-by-coarse-hour residuals,
++then fused at 80/20 per-user percentile rank.  If content caches are absent this
++still trains the unchanged node-17 members from scratch.
+ """
+ import argparse
+ import csv
+ import os
+ import sys
+ import time
++import math
++from collections import defaultdict
++from datetime import datetime
+ 
+ import numpy as np
+ import torch
+@@ -62,19 +64,13 @@
+         return mp
+     with open(path, newline='', encoding='utf-8') as f:
+         rdr = csv.DictReader(f)
+-        # tolerate either video_id or item_id naming, but the public file uses video_id
+         vid_col = 'video_id' if 'video_id' in (rdr.fieldnames or []) else ('item_id' if 'item_id' in (rdr.fieldnames or []) else None)
+         if vid_col is None:
+             print('WARNING: video feature file has no video_id/item_id; all content missing')
+             return mp
+         for rec in rdr:
+             vid = norm_val(rec.get(vid_col))
+-            vals = []
+-            for c in CONTENT_FIELDS:
+-                v = norm_val(rec.get(c))
+-                # Tags can be long multi-tags; preserving the exact token is still categorical side info.
+-                vals.append(v)
+-            mp[vid] = tuple(vals)
++            mp[vid] = tuple(norm_val(rec.get(c)) for c in CONTENT_FIELDS)
+     print('loaded video content rows', len(mp))
+     return mp
+ 
+@@ -85,12 +81,9 @@
+     for sp in ['train', 'valid', 'test']:
+         if sp in splits:
+             rows_all.extend(splits[sp])
+-    # Build category maps from all exposed rows only, unsupervised.  Missing gets a real category.
+     maps = [{ '__MISS__': 0 } for _ in CONTENT_FIELDS]
+     for r in rows_all:
+-        vals = content.get(norm_val(r[2]), None)
+-        if vals is None:
+-            vals = ('__MISS__',) * len(CONTENT_FIELDS)
++        vals = content.get(norm_val(r[2]), ('__MISS__',) * len(CONTENT_FIELDS))
+         for j, v in enumerate(vals):
+             if v not in maps[j]:
+                 maps[j][v] = len(maps[j])
+@@ -99,14 +92,11 @@
+     for m in maps:
+         offsets.append(off); off += len(m)
+     print('content cardinalities', {CONTENT_FIELDS[i]: len(maps[i]) for i in range(len(CONTENT_FIELDS))}, 'new_dim', off)
+-
+     out = {}
+     for sp, (X, y, u) in enc.items():
+         C = np.empty((len(X), len(CONTENT_FIELDS)), dtype=np.int64)
+         for i, r in enumerate(splits[sp]):
+-            vals = content.get(norm_val(r[2]), None)
+-            if vals is None:
+-                vals = ('__MISS__',) * len(CONTENT_FIELDS)
++            vals = content.get(norm_val(r[2]), ('__MISS__',) * len(CONTENT_FIELDS))
+             for j, v in enumerate(vals):
+                 C[i, j] = offsets[j] + maps[j].get(v, 0)
+         out[sp] = (np.concatenate([X.astype(np.int64), C], axis=1), y, u)
+@@ -242,6 +232,127 @@
+     return preds
+ 
+ 
++def parse_hourmin(v):
++    try:
++        x = int(float(str(v).strip()))
++    except Exception:
++        return -1, -1
++    h = x // 100
++    m = x % 100
++    if h < 0 or h > 23 or m < 0 or m > 59:
++        return -1, -1
++    return h, m
++
++
++def day_of_week(date_val):
++    try:
++        return datetime.strptime(str(int(date_val)), '%Y%m%d').weekday()
++    except Exception:
++        return -1
++
++
++def row_key(r):
++    return (str(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(r[5]))
++
++
++def raw_key(rec):
++    return (norm_val(rec.get('date')), norm_val(rec.get('user_id')), norm_val(rec.get('video_id')),
++            norm_val(rec.get('author_id')), norm_val(rec.get('tab')), norm_val(rec.get('duration_ms')))
++
++
++def load_raw_times(data_dir):
++    files = ['log_standard_4_08_to_4_21_pure.csv', 'log_standard_4_22_to_5_08_pure.csv']
++    mp = defaultdict(list)
++    total = 0
++    for fn in files:
++        path = os.path.join(data_dir, fn)
++        if not os.path.isfile(path):
++            print('WARNING: missing raw log', path)
++            continue
++        with open(path, newline='', encoding='utf-8') as f:
++            rdr = csv.DictReader(f)
++            for rec in rdr:
++                h, m = parse_hourmin(rec.get('hourmin', ''))
++                mp[raw_key(rec)].append((h, m))
++                total += 1
++    print('loaded raw hour rows', total, 'unique keys', len(mp))
++    return mp
++
++
++def attach_times(splits, data_dir):
++    raw = load_raw_times(data_dir)
++    ptr = defaultdict(int)
++    out = {}
++    miss = 0; seen = 0
++    for sp in ['train', 'valid', 'test']:
++        if sp not in splits:
++            continue
++        arr = np.empty((len(splits[sp]), 5), dtype=np.int16)
++        for i, r in enumerate(splits[sp]):
++            k = row_key(r); j = ptr[k]
++            if j < len(raw.get(k, [])):
++                h, m = raw[k][j]; ptr[k] += 1
++            else:
++                h, m = -1, -1; miss += 1
++            dow = day_of_week(r[0])
++            coarse = (h // 4) if h >= 0 else -1
++            quarter = (h * 4 + m // 15) if h >= 0 else -1
++            weekend = 1 if dow in (5, 6) else (0 if dow >= 0 else -1)
++            arr[i] = (h, coarse, quarter, dow, weekend)
++            seen += 1
++        out[sp] = arr
++    print('time join missing', miss, 'of', seen)
++    return out
++
++
++def fit_time_prior(train_rows, y, train_time):
++    y = np.asarray(y, dtype=np.float64)
++    mu = float(y.mean())
++    eps = 1e-6
++    def logit(p):
++        p = min(max(p, eps), 1.0 - eps)
++        return math.log(p / (1.0 - p))
++    global_logit = logit(mu)
++
++    sums = defaultdict(lambda: [0.0, 0.0])
++    def add(key, val):
++        sums[key][0] += val; sums[key][1] += 1.0
++    for r, yy, tt in zip(train_rows, y, train_time):
++        user = str(r[1]); tab = str(r[4]); durb = str(r[5])
++        h, coarse, quarter, dow, weekend = [int(x) for x in tt]
++        add(('h', h), yy); add(('c', coarse), yy); add(('q', quarter), yy); add(('dow', dow), yy)
++        add(('htab', h, tab), yy); add(('qtab', quarter, tab), yy); add(('cdur', coarse, durb), yy)
++        add(('u_c', user, coarse), yy); add(('u_h', user, h), yy)
++    # Different smoothing strengths: user-specific cells are sparse, so shrink hard.
++    smooth = {'h': 200.0, 'c': 200.0, 'q': 150.0, 'dow': 500.0, 'htab': 120.0, 'qtab': 80.0, 'cdur': 120.0, 'u_c': 8.0, 'u_h': 5.0}
++    table = {}
++    for key, (s, n) in sums.items():
++        lam = smooth.get(key[0], 100.0)
++        p = (s + lam * mu) / (n + lam)
++        table[key] = logit(p) - global_logit
++    return mu, global_logit, table
++
++
++def predict_time_prior(rows, tarr, prior):
++    mu, global_logit, table = prior
++    scores = np.empty(len(rows), dtype=np.float64)
++    for i, (r, tt) in enumerate(zip(rows, tarr)):
++        user = str(r[1]); tab = str(r[4]); durb = str(r[5])
++        h, coarse, quarter, dow, weekend = [int(x) for x in tt]
++        s = global_logit
++        # Mostly global time context, with a small user temporal residual.
++        s += 0.22 * table.get(('h', h), 0.0)
++        s += 0.14 * table.get(('q', quarter), 0.0)
++        s += 0.12 * table.get(('dow', dow), 0.0)
++        s += 0.20 * table.get(('htab', h, tab), 0.0)
++        s += 0.12 * table.get(('qtab', quarter, tab), 0.0)
++        s += 0.08 * table.get(('cdur', coarse, durb), 0.0)
++        s += 0.08 * table.get(('u_c', user, coarse), 0.0)
++        s += 0.04 * table.get(('u_h', user, h), 0.0)
++        scores[i] = s
++    return scores
++
++
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser()
+     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+@@ -258,18 +369,25 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+{CONTENT_FIELDS}")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+{CONTENT_FIELDS}+raw_time_prior")
+     enc0, dim0 = encode(splits)
+     enc, dim = append_content_features(splits, enc0, dim0, a.data_dir)
+     Xtar, _, utar = enc[target]
+     verbose = (a.out is None)
+ 
+-    blended = []
++    content_blended = []
+     for member_seed in (0, 1, 2):
+         bpr = get_member_preds('content_bpr_anchor_v1', train_bpr_member, enc, dim, Xtar, member_seed, a.device, verbose)
+         bce = get_member_preds('content_bce_v1', train_bce_member, enc, dim, Xtar, member_seed, a.device, verbose)
+-        blended.append(0.70 * percentile_rank_by_user(bpr, utar) + 0.30 * percentile_rank_by_user(bce, utar))
+-    scores = np.mean(blended, axis=0)
++        content_blended.append(0.70 * percentile_rank_by_user(bpr, utar) + 0.30 * percentile_rank_by_user(bce, utar))
++    content_score = np.mean(content_blended, axis=0)
++
++    times = attach_times(splits, a.data_dir)
++    prior = fit_time_prior(splits['train'], enc['train'][1], times['train'])
++    time_raw = predict_time_prior(splits[target], times[target], prior)
++    time_score = percentile_rank_by_user(time_raw, utar)
++
++    scores = 0.80 * content_score + 0.20 * time_score
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

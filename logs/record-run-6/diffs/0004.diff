@@ -1,0 +1,117 @@
+# iteration 4  (parent: 3)
+# hypothesis: improve 3: pure per-user softmax dropped single-class users and hurt calibration, so keep BCE on all rows and add a small alpha=0.10 listwise term only for mixed users. This checks whether ranking pressure helps when the baseline signal is preserved.
+# result: GAUC 0.662567 | nDCG@5 0.533591 | primary 0.598079 | verdict worse
+
+--- logs/record-run-6/solutions/003_listwise_softmax_fm_fix_users.py
++++ logs/record-run-6/solutions/004_hybrid_bce_listwise_fm.py
+@@ -1,7 +1,8 @@
+-"""FM trained with a per-user listwise softmax loss.
++"""FM trained with BCE plus a small per-user listwise softmax term.
+ 
+-Debug of 002: encode() returns users as a Python list, so convert labels/users to
+-NumPy arrays before sorting/grouping.  The method is otherwise unchanged.
++Improves 003: pure listwise discarded single-class users and lost calibration.  This
++keeps BCE on every training row, while adding listwise pressure only for mixed
++(label-positive and label-negative) users inside each user batch.
+ """
+ import argparse
+ import os
+@@ -43,19 +44,18 @@
+ 
+ 
+ def make_user_groups(y, users):
+-    """Return row-index arrays for users having both classes."""
+     y = np.asarray(y)
+     users = np.asarray(users)
+     order = np.argsort(users, kind='mergesort')
+     su = users[order]
+     cuts = np.r_[0, np.flatnonzero(su[1:] != su[:-1]) + 1, len(su)]
+-    groups = []
++    groups, mixed = [], []
+     for a, b in zip(cuts[:-1], cuts[1:]):
+-        idx = order[a:b]
++        idx = order[a:b].astype(np.int64, copy=False)
+         s = float(y[idx].sum())
+-        if s > 0.0 and s < (b - a):
+-            groups.append(idx.astype(np.int64, copy=False))
+-    return groups
++        groups.append(idx)
++        mixed.append(s > 0.0 and s < (b - a))
++    return groups, np.asarray(mixed, dtype=bool)
+ 
+ 
+ def segment_logsumexp(z, gid, n_groups):
+@@ -75,7 +75,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, user_bs=512, patience=4,
+-        seed=0, device='cpu', verbose=True):
++        alpha=0.10, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -84,10 +84,11 @@
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}],
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
++    bce = torch.nn.BCEWithLogitsLoss()
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     ytr_t = torch.from_numpy(np.asarray(ytr, dtype=np.float32))
+-    groups = make_user_groups(ytr, utr)
++    groups, mixed_flags = make_user_groups(ytr, utr)
+ 
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+@@ -98,7 +99,8 @@
+         model.train()
+         losses = []
+         for st in range(0, len(gorder), user_bs):
+-            chosen = [groups[j] for j in gorder[st:st + user_bs]]
++            chosen_ids = gorder[st:st + user_bs]
++            chosen = [groups[j] for j in chosen_ids]
+             sizes = np.fromiter((len(g) for g in chosen), dtype=np.int64)
+             rows_np = np.concatenate(chosen)
+             gid_np = np.repeat(np.arange(len(chosen), dtype=np.int64), sizes)
+@@ -106,17 +108,29 @@
+             rows = torch.from_numpy(rows_np)
+             xb = Xtr_t[rows].to(device)
+             yb = ytr_t[rows].to(device)
+-            gid = torch.from_numpy(gid_np).to(device)
++            logits = model(xb)
++            loss = bce(logits, yb)
++
++            batch_mixed = mixed_flags[chosen_ids]
++            if batch_mixed.any():
++                mixed_gid_old = np.flatnonzero(batch_mixed)
++                remap = -np.ones(len(chosen), dtype=np.int64)
++                remap[mixed_gid_old] = np.arange(len(mixed_gid_old), dtype=np.int64)
++                row_mask_np = remap[gid_np] >= 0
++                gid2_np = remap[gid_np[row_mask_np]]
++                row_mask = torch.from_numpy(row_mask_np).to(device)
++                gid2 = torch.from_numpy(gid2_np).to(device)
++                loss = loss + alpha * listwise_loss(logits[row_mask], yb[row_mask], gid2,
++                                                    len(mixed_gid_old))
+ 
+             opt.zero_grad(set_to_none=True)
+-            loss = listwise_loss(model(xb), yb, gid, len(chosen))
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | listloss {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | hybrid {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -161,7 +175,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== listwise_softmax_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== hybrid_bce_listwise_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

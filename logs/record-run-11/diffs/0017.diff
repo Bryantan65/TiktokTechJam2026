@@ -1,0 +1,82 @@
+# iteration 17  (parent: 16)
+# hypothesis: improve 16: DeepFM helped but is noisy; make the MLP a learned small residual initialized near the FM scorer so it can add nonlinear signal without disrupting the strong ranking backbone.
+# result: GAUC 0.671083 | nDCG@5 0.537585 | primary 0.604334 | verdict KEPT
+
+--- logs/record-run-11/solutions/016_deepfm_aux_play.py
++++ logs/record-run-11/solutions/017_deepfm_scaled_residual.py
+@@ -1,8 +1,9 @@
+-"""DeepFM variant of the best ranking/time/multitask model.
+-
+-Keeps node 13's inputs and BPR/Lambda/BCE/aux-play training, but changes the
+-scorer from a pure FM to DeepFM: FM logit plus a small MLP over concatenated
+-field embeddings. Auxiliary heads still share the summed embedding tower.
++"""DeepFM residual variant.
++
++Parent 16 changed scorer from FM to DeepFM. This keeps the same data, losses,
++time fields, and auxiliary heads, but gates the deep tower as a small learned
++residual so the model starts close to the strong FM solution instead of letting
++random MLP logits perturb all rankings from epoch 1.
+ """
+ import argparse
+ import csv
+@@ -30,6 +31,7 @@
+         self.V = torch.nn.Parameter(torch.from_numpy(rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
++        self.deep_scale = torch.nn.Parameter(torch.tensor(0.10, dtype=torch.float32))
+         self.n_aux = int(n_aux)
+         self.use_play = bool(use_play)
+         self.deep = torch.nn.Sequential(
+@@ -41,7 +43,6 @@
+             torch.nn.Dropout(0.05),
+             torch.nn.Linear(32, 1),
+         )
+-        # deterministic init controlled by the provided seed, not torch defaults
+         with torch.no_grad():
+             for m in self.deep:
+                 if isinstance(m, torch.nn.Linear):
+@@ -66,7 +67,7 @@
+         inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
+         fm = self.b + self.W[X].sum(1) + inter
+         deep = self.deep(E.reshape(E.shape[0], -1)).squeeze(1)
+-        return fm + deep
++        return fm + self.deep_scale * deep
+ 
+     def aux_logits(self, X):
+         if self.n_aux <= 0:
+@@ -252,7 +253,7 @@
+     atr, mtr = aux['train']; ptr, pmtr = play['train']
+     model = DeepFMTower(dim, Xtr.shape[1], k=k, n_aux=len(active_aux), use_play=has_play, seed=seed).to(device)
+     params_decay = [model.V, model.W] + list(model.deep.parameters())
+-    params_nodecay = [model.b]
++    params_nodecay = [model.b, model.deep_scale]
+     if len(active_aux) > 0:
+         params_decay += [model.aux_A, model.aux_W]; params_nodecay += [model.aux_b]
+     if has_play:
+@@ -298,7 +299,7 @@
+                 loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} deepfm | loss {np.mean(losses):.4f} | valid GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
++            print(f"  epoch {ep:2d} scaled_deepfm | scale {float(model.deep_scale.detach().cpu()):+.3f} | loss {np.mean(losses):.4f} | valid GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -329,7 +330,7 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+weekday+hour+daypart aux={AUX_COLS}+{PLAY_COL} DeepFM")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+weekday+hour+daypart aux={AUX_COLS}+{PLAY_COL} scaled residual DeepFM")
+     model, enc = run(splits, data_dir=a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[target]
+     scores = model.predict(X, device=a.device)
+@@ -337,7 +338,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== deepfm_aux_play (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== scaled_deepfm_aux_play (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

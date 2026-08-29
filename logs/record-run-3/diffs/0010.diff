@@ -1,0 +1,56 @@
+# iteration 10  (parent: 9)
+# hypothesis: improve 9: the five-member within-user rank ensemble gave a clear gain, so test whether the same variance-reduction mechanism is still moving by increasing to seven BPR rankers with the identical Borda combiner. A new-direction search was opened for multi-task background, but this iteration expands the current best because convergence is at risk.
+# result: GAUC 0.671432 | nDCG@5 0.53761 | primary 0.604521 | verdict KEPT
+
+--- logs/record-run-3/solutions/009_bpr_5_rank_ensemble.py
++++ logs/record-run-3/solutions/010_bpr_7_rank_ensemble.py
+@@ -1,10 +1,9 @@
+-"""Five-member within-user rank ensemble of BPR FMs.
+-
+-This refines 008 by adding two more independently initialized BPR members and
+-combining them as per-user rank/Borda scores instead of raw margins.  The metric
+-is purely within-user ranking, so converting each member to within-user ranks
+-keeps that member's ordering while avoiding user/member-specific margin scale
+-noise before averaging.
++"""Seven-member within-user rank ensemble of BPR FMs.
++
++Refines 009 by keeping exactly the same BPR training and within-user Borda/rank
++combiner, but averaging seven independent members instead of five.  This tests
++whether the node-8 -> node-9 gain was still mostly variance reduction from more
++BPR rankers rather than a saturated ensemble.
+ """
+ import argparse
+ import os
+@@ -138,12 +137,13 @@
+ def train_ensemble(splits, k=16, lr=0.001, epochs=40, seed=0,
+                    device='cpu', verbose=True):
+     enc, dim = encode(splits)
+-    seeds = [seed, seed + 1009, seed + 2027, seed + 3037, seed + 4051]
++    seeds = [seed, seed + 1009, seed + 2027, seed + 3037, seed + 4051,
++             seed + 5059, seed + 6073]
+     models = []
+     for j, s in enumerate(seeds):
+         torch.manual_seed(s)
+         m = train_one(enc, dim, k=k, lr=lr, epochs=epochs, seed=s,
+-                      device=device, verbose=verbose, tag=f"m{j+1}/5")
++                      device=device, verbose=verbose, tag=f"m{j+1}/7")
+         models.append(m)
+     return models, enc
+ 
+@@ -164,7 +164,6 @@
+             out[idx] = 0.0
+             continue
+         vals = scores[idx]
+-        # Stable tie-break by original row order for deterministic output.
+         ord_local = np.argsort(vals, kind='mergesort')
+         ranks = np.empty(m, dtype=np.float64)
+         ranks[ord_local] = np.arange(m, dtype=np.float64) / (m - 1.0)
+@@ -210,7 +209,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_5_rank_ensemble (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_7_rank_ensemble (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, ensemble_predict(models, Xs, us, device=a.device))

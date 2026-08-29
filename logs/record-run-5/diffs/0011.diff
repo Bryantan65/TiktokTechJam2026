@@ -1,0 +1,88 @@
+# iteration 11  (parent: 10)
+# hypothesis: draft time features: add a leakage-safe weekday embedding to the kept 3-model BPR ensemble so the FM can model recurring temporal interactions; raw date would not generalize across the chronological split. KuaiRand auxiliary/time columns context: https://kuairand.com/
+# result: GAUC 0.670808 | nDCG@5 0.537367 | primary 0.604088 | verdict KEPT
+
+--- logs/record-run-5/solutions/010_ensemble3_multineg_bpr_fm.py
++++ logs/record-run-5/solutions/011_ensemble3_bpr_dow_fm.py
+@@ -1,14 +1,15 @@
+-"""Equal-weight ensemble of the best multi-negative BPR FM.
++"""3-model multi-negative BPR FM with a trainable day-of-week time feature.
+ 
+-The best single BPR model is just below target and has seed variation. This script
+-trains three independent K=4 multi-negative BPR FMs per requested seed and averages
+-their logits, making the tested signal readable (100% this mechanism, not a tiny
+-blend with something else).
++This drafts a small time-feature branch from the kept ensemble. Raw calendar date is
++not useful as an embedding because valid/test dates are mostly unseen in train, so
++we add weekday (shared across train/valid/test) to let the FM learn temporal
++interactions without changing the ranking objective.
+ """
+ import argparse
+ import os
+ import sys
+ import time
++from datetime import datetime
+ 
+ import numpy as np
+ import torch
+@@ -43,6 +44,21 @@
+             xb = torch.from_numpy(X[i:i + bs].astype(np.int64)).to(device)
+             out.append(self(xb).cpu().numpy())
+         return np.concatenate(out)
++
++
++def yyyymmdd_to_weekday(d):
++    return datetime.strptime(str(int(d)), '%Y%m%d').weekday()  # Monday=0
++
++
++def encode_with_weekday(splits):
++    enc, dim = encode(splits)
++    out = {}
++    for sp, rows in splits.items():
++        X, y, u = enc[sp]
++        dow = np.asarray([yyyymmdd_to_weekday(r[0]) for r in rows], dtype=np.int64)
++        X2 = np.concatenate([X.astype(np.int64), (dim + dow)[:, None]], axis=1)
++        out[sp] = (X2, y, u)
++    return out, dim + 7
+ 
+ 
+ def make_user_pair_pools(y, users):
+@@ -106,7 +122,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | multineg_bpr {np.mean(losses):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | multineg_bpr_dow {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -126,10 +142,8 @@
+ 
+ def run(splits, k=16, lr=0.001, epochs=40, neg_k=4, seed=0, device='cpu',
+         verbose=True, n_models=3):
+-    enc, dim = encode(splits)
++    enc, dim = encode_with_weekday(splits)
+     models = []
+-    # Widely spaced deterministic seeds give independent initializations and
+-    # negative samples while keeping the script reproducible for the harness seed.
+     seeds = [seed + 1009 * i for i in range(n_models)]
+     for i, s in enumerate(seeds):
+         torch.manual_seed(s)
+@@ -162,7 +176,7 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+['weekday']")
+ 
+     models, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, neg_k=a.neg_k,
+                       seed=a.seed, device=a.device, verbose=a.out is None,
+@@ -175,7 +189,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== ensemble3_multineg_bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== ensemble3_bpr_dow_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, predict_ensemble(models, Xs, device=a.device))

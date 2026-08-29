@@ -1,0 +1,61 @@
+# iteration 25  (parent: 22)
+# hypothesis: improve 22: squared ranks helped nDCG but discard score-margin confidence, so blend 30% per-user z-scored mean-logit margin back into the successful power-rank ensemble to break rank ties and recover GAUC without making a low-weight new-mechanism ensemble.
+# result: GAUC 0.670891 | nDCG@5 0.538177 | primary 0.604534 | verdict KEPT
+
+--- logs/record-run-6/solutions/022_power_rankavg.py
++++ logs/record-run-6/solutions/025_rank_margin_blend.py
+@@ -9,6 +9,7 @@
+ 
+ AUX_NAMES = ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']
+ RANK_GAMMA = 2.0
++MARGIN_WEIGHT = 0.30
+ 
+ def to_int(x, default=0):
+     try: return int(float(x))
+@@ -151,8 +152,9 @@
+             if bad >= patience: break
+     m.load_state_dict(state); return m
+ 
+-def per_user_power_rank_average(preds, users, gamma=RANK_GAMMA):
++def per_user_rank_margin_blend(preds, users, gamma=RANK_GAMMA, margin_weight=MARGIN_WEIGHT):
+     P = np.vstack(preds).astype(np.float64)
++    meanp = P.mean(axis=0)
+     users = np.asarray(users)
+     out = np.zeros(P.shape[1], dtype=np.float64)
+     order = np.argsort(users, kind='mergesort')
+@@ -163,7 +165,7 @@
+         while end < len(order) and su[end] == su[start]: end += 1
+         idx = order[start:end]; n = end - start
+         if n <= 1:
+-            out[idx] = P[:, idx].mean(0)
++            out[idx] = meanp[idx]
+         else:
+             acc = np.zeros(n, dtype=np.float64)
+             for mi in range(P.shape[0]):
+@@ -171,18 +173,22 @@
+                 r = np.empty(n, dtype=np.float64)
+                 r[np.argsort(vals, kind='mergesort')] = np.arange(n, dtype=np.float64)
+                 acc += (r / (n - 1.0)) ** gamma
+-            out[idx] = acc / P.shape[0]
++            rank_score = acc / P.shape[0]
++            z = meanp[idx]
++            z = (z - z.mean()) / (z.std() + 1e-6)
++            margin_score = 1.0 / (1.0 + np.exp(-z))
++            out[idx] = (1.0 - margin_weight) * rank_score + margin_weight * margin_score
+         start = end
+     return out
+ 
+ if __name__ == '__main__':
+-    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--rank_gamma', type=float, default=RANK_GAMMA); a = ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'fields+coarse_time; 8x power-rank ensemble gamma={a.rank_gamma}')
++    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--rank_gamma', type=float, default=RANK_GAMMA); ap.add_argument('--margin_weight', type=float, default=MARGIN_WEIGHT); a = ap.parse_args()
++    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'fields+coarse_time; 8x rank+margin blend gamma={a.rank_gamma} mw={a.margin_weight}')
+     enc, dim, hist, aux_t = prepare(splits, a.data_dir); X, y, users = enc[a.split]; preds = []
+     for s in range(8):
+         m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None))
+         preds.append(m.predict(X, hist[a.split], device=a.device))
+-    scores = per_user_power_rank_average(preds, users, gamma=a.rank_gamma)
++    scores = per_user_rank_margin_blend(preds, users, gamma=a.rank_gamma, margin_weight=a.margin_weight)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else: print(scores[:10])

@@ -1,0 +1,38 @@
+# iteration 26  (parent: 24)
+# hypothesis: improve 24: dual rankers add complementary signal, so shift weight from the weaker BCE slot to both tree rankers (BPR/XENDCG/LambdaRank/BCE 0.35/0.25/0.25/0.15) rather than adding more models.
+# result: GAUC 0.671176 | nDCG@5 0.537938 | primary 0.604557 | verdict KEPT
+
+--- logs/record-run-10/solutions/024_dual_ranker_4way.py
++++ logs/record-run-10/solutions/026_tree_heavy_blend.py
+@@ -1,8 +1,9 @@
+-"""Four-way rank blend: BPR FM + XE_NDCG LightGBM + LambdaRank LightGBM + BCE FM.
+-
+-Copy of node 22, adding back the node-19 lambdarank tree as a second tree
+-ranker.  All members get readable weight (>=20%) except none are hidden: BPR
+-0.40, XE_NDCG 0.20, LambdaRank 0.20, BCE 0.20.
++"""Four-way rank blend: tree-heavier weights.
++
++Copy of node 24 with only the final rank-blend weights changed from
++BPR/XE_NDCG/LambdaRank/BCE = 0.40/0.20/0.20/0.20 to 0.35/0.25/0.25/0.15.
++The previous step showed the second tree objective was complementary; this gives
++both tree rankers more readable influence while trimming the weaker BCE member.
+ """
+ import argparse
+ import csv
+@@ -279,14 +280,14 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 4way bpr/xendcg/lambdarank/bce")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 4way tree-heavy bpr/xendcg/lambdarank/bce")
+     bpr, bce, xendcg, lambdarank, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[target]
+     sbpr = bpr.predict(X, device=a.device)
+     sbce = bce.predict(X, device=a.device)
+     sx = xendcg.predict(rawcat[target], num_iteration=xendcg.best_iteration)
+     sl = lambdarank.predict(rawcat[target], num_iteration=lambdarank.best_iteration)
+-    scores = multi_rank_blend([sbpr, sx, sl, sbce], [0.40, 0.20, 0.20, 0.20], users)
++    scores = multi_rank_blend([sbpr, sx, sl, sbce], [0.35, 0.25, 0.25, 0.15], users)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:

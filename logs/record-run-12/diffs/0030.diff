@@ -1,0 +1,71 @@
+# iteration 30  (parent: 26)
+# hypothesis: improve 26: node 26 is a rank-average ensemble; test a readable 30% top-heavy reciprocal-rank fusion (RRF, related to curriculum/hard top ranking ideas; https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) so models that strongly agree on top-5 get amplified for nDCG without changing cached members.
+# result: GAUC 0.671083 | nDCG@5 0.537851 | primary 0.604467 | verdict KEPT
+
+--- logs/record-run-12/solutions/027_behavior_prior.py
++++ logs/record-run-12/solutions/031_rrf_top_fusion.py
+@@ -1,5 +1,5 @@
+-"""Best cached content-FM/DeepFM ensemble plus train-only user-history target priors."""
+-import argparse, csv, os, sys, time
++"""Best cached content-FM/DeepFM ensemble plus behavior prior, with a top-heavy RRF blend."""
++import argparse, csv, os, sys
+ import numpy as np
+ import torch
+ import torch.nn.functional as F
+@@ -163,6 +163,22 @@
+         out[ord2]=0.0 if m<=1 else np.arange(m,dtype=np.float64)/(m-1.0); s=e
+     return out
+ 
++def rrf_by_user(score_list, users, weights=None, c=10.0):
++    users=np.asarray(users); n=len(users); out=np.zeros(n,dtype=np.float64)
++    if weights is None: weights=[1.0/len(score_list)]*len(score_list)
++    order=np.argsort(users,kind='mergesort'); us=users[order]; s=0
++    while s<n:
++        e=s+1
++        while e<n and us[e]==us[s]: e+=1
++        idx=order[s:e]
++        for sc,w in zip(score_list,weights):
++            # descending ranks: rank 1 is best for this member
++            ord2=idx[np.argsort(-np.asarray(sc)[idx],kind='mergesort')]
++            ranks=np.arange(1,len(ord2)+1,dtype=np.float64)
++            out[ord2] += w/(c+ranks)
++        s=e
++    return percentile_rank_by_user(out,users)
++
+ def get_preds(prefix,name,train_fn,enc,dim,Xtar,seed,device,verbose):
+     os.makedirs('pred_cache',exist_ok=True); path=os.path.join('pred_cache',f'{prefix}_{name}_seed{seed}_n{len(Xtar)}.npy')
+     if os.path.isfile(path): print('loading cached',path); return np.load(path).astype(np.float64)
+@@ -194,11 +210,9 @@
+     for i,r in enumerate(splits[target]):
+         num=0.0; den=0.0; st=0.0
+         for name,fn,alpha,wt,d in maps:
+-            n,s=d.get(fn(r),(0,0.0)); rate=(s+alpha*global_mean)/(n+alpha)
+-            shrink=n/(n+alpha)
++            n,s=d.get(fn(r),(0,0.0)); rate=(s+alpha*global_mean)/(n+alpha); shrink=n/(n+alpha)
+             num += wt*shrink*rate; den += wt*shrink; st += wt*shrink
+-        raw[i]=global_mean if den<=0 else num/den
+-        strength[i]=st
++        raw[i]=global_mean if den<=0 else num/den; strength[i]=st
+     print('behavior prior mean/std/coverage/strength',float(raw.mean()),float(raw.std()),float((strength>0).mean()),float(strength.mean()))
+     return raw
+ 
+@@ -223,13 +237,14 @@
+         dp=get_preds('024','deepfm_content_bpr_v1',train_deep_bpr,enc,dim,Xtar,s,a.device,verbose)
+         deep_bags.append(percentile_rank_by_user(dp,utar))
+     deep=np.mean(deep_bags,axis=0)
+-    vc=train_video_counts(splits,target)
+-    w=0.20 + 0.25/(1.0 + vc/5.0)
++    vc=train_video_counts(splits,target); w=0.20 + 0.25/(1.0 + vc/5.0)
+     base=(1.0-w)*fm_base + w*deep
+     prior=percentile_rank_by_user(make_behavior_prior(splits,target,content),utar)
+-    # Train-only personalized history is sparse/noisy, so use it as a small nDCG-oriented reranker.
+-    scores=0.88*base + 0.12*prior
+-    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'behavior blend 0.12')
++    current=0.88*base + 0.12*prior
++    # RRF is top-heavy inside each user; blend at 30% so any nDCG@5 signal is readable.
++    rrf=rrf_by_user([fm_base,deep,prior],utar,weights=[0.58,0.30,0.12],c=10.0)
++    scores=0.70*current + 0.30*rrf
++    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'behavior blend 0.12 plus 30% RRF(c=10)')
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,} predictions')
+     else: print('done')

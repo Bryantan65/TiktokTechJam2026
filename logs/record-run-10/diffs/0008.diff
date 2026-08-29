@@ -1,0 +1,130 @@
+# iteration 8  (parent: 7)
+# hypothesis: draft 6: add a shared day-of-week categorical time feature to the current best BCE+BPR rank blend; time-aware recommender features can capture periodic behavior without raw-date leakage (https://dl.acm.org/doi/10.1145/1864708.1864727).
+# result: GAUC 0.670141 | nDCG@5 0.536788 | primary 0.603464 | verdict noise
+
+--- logs/record-run-10/solutions/007_bce_bpr_rankblend_60.py
++++ logs/record-run-10/solutions/008_time_dow_blend.py
+@@ -1,9 +1,9 @@
+-"""Score-level blend of pointwise FM and pairwise-BPR FM.
+-
+-Refines 006 by changing only the fixed blend weight.  The 70/30 BPR/BCE rank
+-blend improved over either mixed-loss training or pure BPR; give BCE a larger
+-vote (40%) because its pointwise prior may help top-5 ordering while BPR still
+-remains the majority signal.
++"""BCE+BPR rank blend with a simple time feature (day of week).
++
++This is copied from 007 and changes only the encoder/model input fields: in
++addition to [user_id, video_id, author_id, tab, dur_bucket], each row gets a
++7-way day-of-week categorical feature derived from the tuple's date.  Unlike raw
++date ids, day-of-week categories are shared between train and future splits.
+ """
+ import argparse
+ import os
+@@ -16,8 +16,71 @@
+ 
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 '..', 'kuairand-starter-kit'))
+-from data import load, encode, FIELDS          # noqa: E402
+-from evaluate import evaluate                  # noqa: E402
++from data import load, FIELDS                         # noqa: E402
++from evaluate import evaluate                         # noqa: E402
++
++
++EXT_FIELDS = FIELDS + ['dow']
++
++
++def yyyymmdd_to_dow(d):
++    # Sakamoto algorithm, returns Monday=0 ... Sunday=6.
++    y = int(d) // 10000
++    m = (int(d) // 100) % 100
++    day = int(d) % 100
++    t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4]
++    if m < 3:
++        y -= 1
++    # Algorithm returns Sunday=0; convert to Monday=0.
++    return (y + y // 4 - y // 100 + y // 400 + t[m - 1] + day + 6) % 7
++
++
++def dur_bucket(ms):
++    try:
++        ms = int(ms)
++    except Exception:
++        ms = 0
++    # Match the starter-kit bucket boundaries used by 001.
++    if ms < 7_000:
++        return 0
++    if ms < 15_000:
++        return 1
++    if ms < 30_000:
++        return 2
++    if ms < 60_000:
++        return 3
++    return 4
++
++
++def row_features(row):
++    # (date, user_id, video_id, author_id, tab, duration_ms, label)
++    return (row[1], row[2], row[3], row[4], dur_bucket(row[5]), yyyymmdd_to_dow(row[0]))
++
++
++def encode_ext(splits):
++    vocabs = [{} for _ in EXT_FIELDS]
++    # Fit vocabularies on every split, as the starter encode does for id fields.
++    for rows in splits.values():
++        for r in rows:
++            vals = row_features(r)
++            for j, v in enumerate(vals):
++                if v not in vocabs[j]:
++                    vocabs[j][v] = len(vocabs[j])
++    offsets = np.cumsum([0] + [len(v) for v in vocabs[:-1]], dtype=np.int64)
++    dim = int(offsets[-1] + len(vocabs[-1]))
++    enc = {}
++    for name, rows in splits.items():
++        X = np.empty((len(rows), len(EXT_FIELDS)), dtype=np.int64)
++        y = np.empty(len(rows), dtype=np.float32)
++        users = np.empty(len(rows), dtype=object)
++        for i, r in enumerate(rows):
++            vals = row_features(r)
++            for j, v in enumerate(vals):
++                X[i, j] = vocabs[j][v] + offsets[j]
++            y[i] = float(r[6])
++            users[i] = r[1]
++        enc[name] = (X, y, users)
++    return enc, dim
+ 
+ 
+ class TorchFM(torch.nn.Module):
+@@ -165,7 +228,6 @@
+ 
+ 
+ def weighted_within_user_rank(scores_a, scores_b, users, wa=0.60):
+-    """Return a label-free weighted rank blend; each input is monotone-invariant."""
+     users = np.asarray(users)
+     out = np.zeros(len(users), dtype=np.float64)
+     order_u = np.argsort(users, kind='mergesort')
+@@ -190,7 +252,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, epochs=40, seed=0, device='cpu', verbose=True):
+-    enc, dim = encode(splits)
++    enc, dim = encode_ext(splits)
+     bpr = train_bpr(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed,
+                     device=device, verbose=verbose)
+     bce = train_bce(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed + 1009,
+@@ -219,7 +281,7 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}")
+ 
+     bpr, bce, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+                         device=a.device, verbose=a.out is None)
+@@ -233,6 +295,6 @@
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+         r = evaluate(users, y, scores)
+-        print(f"\n=== bce_bpr_rankblend_60 (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== time_dow_blend (seed={a.seed}, device={a.device}) ===")
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

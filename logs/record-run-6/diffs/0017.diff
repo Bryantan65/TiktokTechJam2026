@@ -1,0 +1,35 @@
+# iteration 17  (parent: 16)
+# hypothesis: improve 16: the 3-model bag beat the target, so expand the same readable incumbent-only ensemble to five seeds to reduce residual rank variance further. No new mechanism is diluted; only the seed bag size changes.
+# result: GAUC 0.670249 | nDCG@5 0.537661 | primary 0.603955 | verdict KEPT
+
+--- logs/record-run-6/solutions/016_ensemble3_time_histfm.py
++++ logs/record-run-6/solutions/017_ensemble5_time_histfm.py
+@@ -1,9 +1,7 @@
+-"""Improve node 12: average three independently seeded copies of the best FM.
+-
+-The model, features, loss, and checkpointing are unchanged from node 12; the only
+-change is test-time/training-time ensembling over three seeds inside one script.
+-This should reduce variance and can improve within-user top-k rankings without
+-introducing an unreadable low-weight new mechanism.
++"""Improve node 16: average five independently seeded copies of the best FM.
++
++Same node-12 model/features/loss/checkpointing as the current best; only the
++internal seed bag changes from 3 to 5 models to reduce residual rank variance.
+ """
+ import argparse
+ import csv
+@@ -284,12 +282,9 @@
+ 
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+coarse_time; 3x ensemble")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+coarse_time; 5x ensemble")
+     enc, dim, hist, aux_t = prepare(splits, a.data_dir)
+-    # Fixed seed bag: the harness already evaluates three outer seeds; using a fixed
+-    # internal bag makes this script a deterministic ensemble rather than another
+-    # noisy single member.
+-    seed_bag = [0, 1, 2]
++    seed_bag = [0, 1, 2, 3, 4]
+     preds = []
+     X, y, users = enc[a.split]
+     for s in seed_bag:

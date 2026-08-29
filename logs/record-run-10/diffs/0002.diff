@@ -1,0 +1,226 @@
+# iteration 2  (parent: 1)
+# hypothesis: draft 1: replace pointwise BCE with same-user BPR pairwise loss so training directly orders positives above negatives within each user, following Rendle et al.'s BPR formulation https://arxiv.org/abs/1205.2618. This tests the ranked objective standalone rather than as a low-weight blend.
+# result: GAUC 0.668844 | nDCG@5 0.536213 | primary 0.602528 | verdict noise
+
+--- solutions/001_torch_fm.py
++++ logs/record-run-10/solutions/002_bpr_loss.py
+@@ -1,19 +1,9 @@
+-"""FM in PyTorch — a straight port of the official baseline, model unchanged.
++"""FM trained with within-user BPR pairwise loss.
+ 
+-Purpose: replace hand-derived gradients with autograd. Nothing about the model,
+-data, splits or scoring changes, so this must reproduce the official numbers
+-(valid primary ~0.6015, test ~0.5953). If it doesn't, the port is wrong.
+-
+-Why bother when the score is identical: every later experiment changes the loss
+-function. With hand-derived gradients that is a fresh calculus problem each
+-time, and a mistake does not crash - it trains toward the wrong thing and
+-reports a plausible number. Autograd makes the gradient correct by construction.
+-
+-To make the comparison exact this reuses the baseline's initialisation and batch
+-order (same numpy RNG, same seed), so the only moving part is how gradients are
+-computed.
+-
+-    python solutions/001_torch_fm.py --data_dir rec_datasets/KuaiRand-Pure/data
++This keeps the official FM feature representation/model but replaces pointwise
++BCE with a ranking objective: for a sampled (positive, negative) pair belonging
++to the same user, maximize score(pos) - score(neg).  This directly matches the
++within-user ranking nature of GAUC/nDCG better than calibrated logloss.
+ """
+ import argparse
+ import os
+@@ -22,30 +12,26 @@
+ 
+ import numpy as np
+ import torch
++import torch.nn.functional as F
+ 
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 '..', 'kuairand-starter-kit'))
+-from data import load, encode, FIELDS          # noqa: E402  official, unmodified
+-from evaluate import evaluate                  # noqa: E402  official, unmodified
++from data import load, encode, FIELDS          # noqa: E402
++from evaluate import evaluate                  # noqa: E402
+ 
+ 
+ class TorchFM(torch.nn.Module):
+-    """Same arithmetic as baseline.py's FM class.
+-
+-    logits = b + sum(W[x]) + 0.5 * ((sum E)^2 - sum(E^2))
+-    """
+-
+     def __init__(self, dim, k=16, seed=0):
+         super().__init__()
+-        rng = np.random.default_rng(seed)       # same init as the baseline
++        rng = np.random.default_rng(seed)
+         V0 = rng.normal(0, 0.01, (dim, k)).astype(np.float32)
+         self.V = torch.nn.Parameter(torch.from_numpy(V0))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+ 
+     def forward(self, X):
+-        E = self.V[X]                                    # (B, F, k)
+-        S = E.sum(1)                                     # (B, k)
++        E = self.V[X]
++        S = E.sum(1)
+         inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
+         return self.b + self.W[X].sum(1) + inter
+ 
+@@ -59,45 +45,86 @@
+         return np.concatenate(out)
+ 
+ 
++def build_user_pair_sources(y, users):
++    """Return per-user positive/negative row arrays for users with both labels."""
++    buckets = {}
++    for i, (u, yy) in enumerate(zip(users, y)):
++        if u not in buckets:
++            buckets[u] = [[], []]
++        buckets[u][1 if yy > 0.5 else 0].append(i)
++    pos_lists, neg_lists, weights = [], [], []
++    for neg, pos in buckets.values():
++        if pos and neg:
++            pos_a = np.asarray(pos, dtype=np.int64)
++            neg_a = np.asarray(neg, dtype=np.int64)
++            pos_lists.append(pos_a)
++            neg_lists.append(neg_a)
++            # Sample users roughly in proportion to the number of useful pairs,
++            # capped so very heavy users do not dominate every epoch.
++            weights.append(min(len(pos_a) * len(neg_a), 2000))
++    weights = np.asarray(weights, dtype=np.float64)
++    weights /= weights.sum()
++    return pos_lists, neg_lists, weights
++
++
++def sample_pairs(pos_lists, neg_lists, weights, n_pairs, rng):
++    """Sample same-user (positive row, negative row) training pairs."""
++    uids = rng.choice(len(pos_lists), size=n_pairs, replace=True, p=weights)
++    pos_idx = np.empty(n_pairs, dtype=np.int64)
++    neg_idx = np.empty(n_pairs, dtype=np.int64)
++    # Looping over unique sampled users is cheap (users per batch/epoch << rows)
++    for u in np.unique(uids):
++        m = np.nonzero(uids == u)[0]
++        pos = pos_lists[u]
++        neg = neg_lists[u]
++        pos_idx[m] = pos[rng.integers(0, len(pos), size=len(m))]
++        neg_idx[m] = neg[rng.integers(0, len(neg), size=len(m))]
++    return pos_idx, neg_idx
++
++
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+         seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+-    Xtr, ytr, _ = enc['train']
+-    Xva, yva, uva = enc['valid']       # early stopping only; test is never read here
++    Xtr, ytr, utr = enc['train']
++    Xva, yva, uva = enc['valid']
+ 
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+-    # l2 in the baseline is applied to V and W but not to b, so b gets its own
+-    # group. (In practice b cannot affect the score at all: it is constant
+-    # across every row, and the metric ranks within a user.)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}],
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
+-    lossfn = torch.nn.BCEWithLogitsLoss()
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+-    ytr_t = torch.from_numpy(ytr)
++    ytr_t = torch.from_numpy(ytr.astype(np.float32))
++    pos_lists, neg_lists, weights = build_user_pair_sources(ytr, utr)
++    n_pairs = max(1, int((ytr > 0.5).sum()))
+ 
+-    rng = np.random.default_rng(seed)           # same batch order as the baseline
++    rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+ 
+     for ep in range(1, epochs + 1):
+-        idx = rng.permutation(len(ytr))
+         t0 = time.time()
+         model.train()
+         losses = []
+-        for i in range(0, len(idx), bs):
+-            sel = torch.from_numpy(idx[i:i + bs])
+-            xb = Xtr_t[sel].to(device)
+-            yb = ytr_t[sel].to(device)
++        pidx, nidx = sample_pairs(pos_lists, neg_lists, weights, n_pairs, rng)
++        order = rng.permutation(n_pairs)
++        for i in range(0, n_pairs, bs):
++            sel = order[i:i + bs]
++            pi = torch.from_numpy(pidx[sel])
++            ni = torch.from_numpy(nidx[sel])
++            xb_pos = Xtr_t[pi].to(device)
++            xb_neg = Xtr_t[ni].to(device)
+             opt.zero_grad(set_to_none=True)
+-            loss = lossfn(model(xb), yb)        # <- the only line to change
+-            loss.backward()                     # <- autograd, no hand calculus
++            s_pos = model(xb_pos)
++            s_neg = model(xb_neg)
++            # -log sigmoid(s_pos - s_neg), numerically stable.
++            loss = F.softplus(-(s_pos - s_neg)).mean()
++            loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | loss {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -118,12 +145,8 @@
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser()
+     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+-    ap.add_argument('--split', default='valid',
+-                    choices=['train', 'valid', 'test', 'dev'],
+-                    help='which split to write predictions for. "dev" is a '
+-                         'train-only holdout for screening; see the block below')
+-    ap.add_argument('--out', default=None,
+-                    help='write predictions here as .npy, one score per row')
++    ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test', 'dev'])
++    ap.add_argument('--out', default=None)
+     ap.add_argument('--k', type=int, default=16)
+     ap.add_argument('--lr', type=float, default=0.001)
+     ap.add_argument('--epochs', type=int, default=40)
+@@ -134,10 +157,6 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     if a.split == 'dev':
+-        # Screening run: fit on the earlier training days, predict the later
+-        # ones. Same row format, so nothing downstream changes - but no test
+-        # data exists in this view at all, and the holdout stands in for
+-        # 'valid'. Costs no public-validation experiment.
+         from devdata import load as load_dev
+         splits = load_dev(a.data_dir)
+         target = 'valid'
+@@ -148,23 +167,17 @@
+ 
+     model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+                      device=a.device, verbose=a.out is None)
+-
+     X, y, users = enc[target]
+     scores = model.predict(X, device=a.device)
+ 
+     if a.out:
+-        # Harness mode: emit predictions only. The harness owns the labels and
+-        # does the scoring, so a solution can neither grade itself nor pick
+-        # which split it is graded on.
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        # Standalone mode: report, for a human running this directly.
+-        print(f"\n=== torch_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+-            Xs, ys, us = enc[sp]
+-            r = evaluate(us, ys, model.predict(Xs, device=a.device))
+-            print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+-                  f"| primary {r['primary']:.4f}")
+-        print("\n  official baseline: valid primary 0.6016 | test primary 0.5946")
++            if sp in enc:
++                Xs, ys, us = enc[sp]
++                r = evaluate(us, ys, model.predict(Xs, device=a.device))
++                print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

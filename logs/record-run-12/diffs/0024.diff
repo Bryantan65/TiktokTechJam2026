@@ -1,0 +1,89 @@
+# iteration 24  (parent: 23)
+# hypothesis: improve 23: DeepFM raised GAUC but hurt nDCG, so bag its three cached seeds and gate its blend weight higher only for videos with sparse train evidence where content/high-order sharing should help most.
+# result: GAUC 0.672208 | nDCG@5 0.537959 | primary 0.605083 | verdict KEPT
+
+--- logs/record-run-12/solutions/024_deepfm_content.py
++++ logs/record-run-12/solutions/025_deepfm_bag_gate.py
+@@ -1,4 +1,4 @@
+-"""DeepFM content member blended with the best cached content-FM rank ensemble."""
++"""Seed-bagged DeepFM content member with rare-video gated blending."""
+ import argparse, csv, os, sys, time
+ import numpy as np
+ import torch
+@@ -29,14 +29,12 @@
+         super().__init__(); rng=np.random.default_rng(seed)
+         self.V=torch.nn.Parameter(torch.from_numpy(rng.normal(0,0.01,(dim,k)).astype(np.float32)))
+         self.W=torch.nn.Parameter(torch.zeros(dim,dtype=torch.float32)); self.b=torch.nn.Parameter(torch.zeros((),dtype=torch.float32))
+-        self.D=torch.nn.Embedding(dim,k)
+-        torch.nn.init.normal_(self.D.weight,0.0,0.01)
++        self.D=torch.nn.Embedding(dim,k); torch.nn.init.normal_(self.D.weight,0.0,0.01)
+         self.mlp=torch.nn.Sequential(torch.nn.Linear(n_fields*k,64),torch.nn.ReLU(),torch.nn.Dropout(0.10),torch.nn.Linear(64,32),torch.nn.ReLU(),torch.nn.Linear(32,1))
+     def forward(self,X):
+         E=self.V[X]; S=E.sum(1)
+         fm=self.b + self.W[X].sum(1) + 0.5*((S*S).sum(1)-(E*E).sum((1,2)))
+-        deep=self.mlp(self.D(X).reshape(X.shape[0],-1)).squeeze(1)
+-        return fm + deep
++        return fm + self.mlp(self.D(X).reshape(X.shape[0],-1)).squeeze(1)
+     @torch.no_grad()
+     def predict(self,X,bs=65536,device='cpu'):
+         self.eval(); out=[]
+@@ -49,7 +47,7 @@
+ 
+ def load_video_content(data_dir):
+     path=os.path.join(data_dir,'video_features_basic_pure.csv'); mp={}
+-    if not os.path.isfile(path): print('WARNING: no video_features_basic_pure.csv'); return mp
++    if not os.path.isfile(path): return mp
+     with open(path,newline='',encoding='utf-8') as f:
+         rdr=csv.DictReader(f); names=rdr.fieldnames or []
+         vid_col='video_id' if 'video_id' in names else ('item_id' if 'item_id' in names else None)
+@@ -149,8 +147,7 @@
+                 if bce_weight>0:
+                     lab=torch.cat([torch.ones(m,device=device),torch.zeros(m,device=device)]); loss=loss+bce_weight*F.binary_cross_entropy_with_logits(logits,lab)
+                 loss.backward(); opt.step(); losses.append(float(loss.detach().cpu()))
+-        va=evaluate(uva,yva,model.predict(Xva,device=device))
+-        print(f'deep seed {seed} epoch {ep} loss {np.mean(losses):.4f} primary {va["primary"]:.5f} {time.time()-t0:.1f}s')
++        va=evaluate(uva,yva,model.predict(Xva,device=device)); print(f'deep seed {seed} epoch {ep} loss {np.mean(losses):.4f} primary {va["primary"]:.5f} {time.time()-t0:.1f}s')
+         if va['primary']>best+1e-5: best=va['primary']; bad=0; state={k_:v.detach().clone() for k_,v in model.state_dict().items()}
+         else:
+             bad+=1
+@@ -170,6 +167,12 @@
+     os.makedirs('pred_cache',exist_ok=True); path=os.path.join('pred_cache',f'{prefix}_{name}_seed{seed}_n{len(Xtar)}.npy')
+     if os.path.isfile(path): print('loading cached',path); return np.load(path).astype(np.float64)
+     print('training',name,'seed',seed); model=train_fn(enc,dim,seed=seed,device=device,verbose=verbose); p=model.predict(Xtar,device=device).astype(np.float64); np.save(path,p); return p
++
++def train_video_counts(splits, target):
++    cnt={}
++    for r in splits['train']:
++        v=norm_val(r[2]); cnt[v]=cnt.get(v,0)+1
++    return np.array([cnt.get(norm_val(r[2]),0) for r in splits[target]],dtype=np.float64)
+ 
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test','dev']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+@@ -181,17 +184,22 @@
+         splits=load(a.data_dir); target=a.split
+     print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+{CONTENT_FIELDS}')
+     enc0,dim0=encode(splits); enc,dim=append_content_features(splits,enc0,dim0,a.data_dir); Xtar,_,utar=enc[target]; verbose=(a.out is None)
+-    # Best node-17 member ensemble, loaded from cache when present; still trains from scratch if needed.
+     bags=[]
+     for s in (0,1,2):
+         bpr=get_preds('018','content_bpr_anchor_v1',train_bpr_member,enc,dim,Xtar,s,a.device,verbose)
+         bce=get_preds('018','content_bce_v1',train_bce_member,enc,dim,Xtar,s,a.device,verbose)
+         bags.append(0.70*percentile_rank_by_user(bpr,utar)+0.30*percentile_rank_by_user(bce,utar))
+     base=np.mean(bags,axis=0)
+-    # New mechanism: high-order feature interactions via DeepFM.
+-    dp=get_preds('024','deepfm_content_bpr_v1',train_deep_bpr,enc,dim,Xtar,a.seed,a.device,verbose)
+-    deep=percentile_rank_by_user(dp,utar)
+-    scores=0.70*base + 0.30*deep
++    deep_bags=[]
++    for s in (0,1,2):
++        dp=get_preds('024','deepfm_content_bpr_v1',train_deep_bpr,enc,dim,Xtar,s,a.device,verbose)
++        deep_bags.append(percentile_rank_by_user(dp,utar))
++    deep=np.mean(deep_bags,axis=0)
++    # Content/deep interactions should matter most where opaque video_id evidence is sparse.
++    vc=train_video_counts(splits,target)
++    w=0.20 + 0.25/(1.0 + vc/5.0)   # 0.45 for unseen videos, asymptotes to 0.20 for frequent videos
++    scores=(1.0-w)*base + w*deep
++    print('deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()))
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions')
+     else: print('done')

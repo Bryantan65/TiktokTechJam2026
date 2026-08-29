@@ -1,0 +1,121 @@
+# iteration 8  (parent: 7)
+# hypothesis: improve 7: time context gave a clear stable gain; add finer 10-minute bucket plus hour×dow and tab×dow categorical crosses so FM interactions can model periodic context beyond raw hour.
+# result: GAUC 0.671083 | nDCG@5 0.537544 | primary 0.604314 | verdict KEPT
+
+--- logs/record-run-4/solutions/007_time_features_softmax8.py
++++ logs/record-run-4/solutions/008_time_crosses_softmax8.py
+@@ -1,7 +1,8 @@
+-"""Sampled-softmax FM with raw-log time context features.
+-
+-Adds hour-of-day and day-of-week categorical fields read from the original log CSVs
+-while keeping the best listwise same-user sampled softmax objective.
++"""Sampled-softmax FM with finer temporal context crosses.
++
++Refines 007 by adding 10-minute time-of-day bins plus hour/day/tab crosses
++from the raw KuaiRand log CSVs, while keeping the same within-user sampled
++softmax objective.
+ """
+ import argparse
+ import csv
+@@ -69,7 +70,6 @@
+ 
+ 
+ def _raw_time_maps(data_dir):
+-    """Build queues mapping each raw row identity to (hour, dow, hour_tab)."""
+     names = ['log_standard_4_08_to_4_21_pure.csv',
+              'log_standard_4_22_to_5_08_pure.csv']
+     full = defaultdict(deque)
+@@ -86,14 +86,21 @@
+                 video = _to_int(_get(r, 'video_id', 'item_id', 'photo_id'))
+                 author = _to_int(_get(r, 'author_id'))
+                 tab = _to_int(_get(r, 'tab'))
++                tab_clip = max(0, min(tab, 7))
+                 dur = _to_int(_get(r, 'duration_ms', 'duration'))
+-                # The starter-kit binary target for KuaiRand-Pure is long_view.
+                 lab = _to_int(_get(r, 'long_view', 'label', 'is_click'))
+                 hm = _to_int(_get(r, 'hourmin', 'hour_min', 'time'))
+                 hour = (hm // 100) % 24 if hm >= 100 else hm % 24
++                minute = hm % 100 if hm >= 100 else 0
++                if minute < 0 or minute > 59:
++                    minute = 0
+                 dow = _dow_from_date(date)
+-                htab = hour * 8 + max(0, min(tab, 7))
+-                extra = (hour, dow, htab)
++                # Keep 007's fields first, then add finer contextual crosses.
++                htab = hour * 8 + tab_clip                  # 24*8
++                t10 = hour * 6 + min(minute // 10, 5)       # 24*6
++                hdow = hour * 7 + dow                       # 24*7
++                tdow = tab_clip * 7 + dow                   # 8*7
++                extra = (hour, dow, htab, t10, hdow, tdow)
+                 k_full = (date, user, video, author, tab, dur, lab)
+                 k_nodur = (date, user, video, author, tab, lab)
+                 full[k_full].append(extra)
+@@ -102,15 +109,14 @@
+ 
+ 
+ def encode_with_time(splits, data_dir):
+-    """Use starter-kit encoding for base fields, then append time fields."""
+     enc, dim = encode(splits)
+     full, nodur = _raw_time_maps(data_dir)
+-    offsets = np.array([dim, dim + 24, dim + 24 + 7], dtype=np.int64)
+-    extra_dim = 24 + 7 + 24 * 8
++    sizes = np.array([24, 7, 24 * 8, 24 * 6, 24 * 7, 8 * 7], dtype=np.int64)
++    offsets = dim + np.concatenate([[0], np.cumsum(sizes)[:-1]]).astype(np.int64)
+     out = {}
+     for sp, rows in splits.items():
+         Xb, y, users = enc[sp]
+-        extra = np.zeros((len(rows), 3), dtype=np.int64)
++        extra = np.zeros((len(rows), len(sizes)), dtype=np.int64)
+         for i, row in enumerate(rows):
+             date, user, video, author, tab, dur, lab = row
+             k_full = (_to_int(date), _to_int(user), _to_int(video),
+@@ -124,10 +130,9 @@
+             q = nodur.get(k_nodur)
+             if q:
+                 extra[i] = q.popleft()
+-            # else leave zeros: safe fallback if raw CSV columns differ.
+         Xt = np.concatenate([Xb.astype(np.int64), extra + offsets], axis=1)
+         out[sp] = (Xt, y, users)
+-    return out, dim + extra_dim
++    return out, int(dim + sizes.sum())
+ 
+ 
+ def make_pair_sampler(y, users):
+@@ -135,8 +140,7 @@
+     users = np.asarray(users)
+     order = np.argsort(users, kind='mergesort')
+     us = users[order]
+-    pos_chunks = []
+-    neg_pools = []
++    pos_chunks, neg_pools = [], []
+     i = 0
+     while i < len(order):
+         j = i + 1
+@@ -198,7 +202,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | softmax8+time {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | softmax8+timeX {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+@@ -230,7 +234,8 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+hour,dow,hour_tab")
++    print({k_: len(v) for k_, v in splits.items()},
++          f"fields={FIELDS}+hour,dow,hour_tab,time10,hour_dow,tab_dow")
+ 
+     model, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                      seed=a.seed, device=a.device, verbose=a.out is None)
+@@ -241,7 +246,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== time_features_softmax8 (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== time_crosses_softmax8 (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

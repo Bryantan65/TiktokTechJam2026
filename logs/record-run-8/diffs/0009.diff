@@ -1,0 +1,103 @@
+# iteration 9  (parent: 3)
+# hypothesis: improve 3: add explicit user-video/user-author/user-tab cross fields to the best BPR+BCE FM so repeated items and user-specific author/tab preferences can be learned directly rather than only through rank-16 interactions.
+# result: GAUC 0.665711 | nDCG@5 0.535245 | primary 0.600478 | verdict noise
+
+--- logs/record-run-8/solutions/003_bpr_bce_fm.py
++++ logs/record-run-8/solutions/009_crossfield_bpr_bce_fm.py
+@@ -1,9 +1,9 @@
+-"""Factorization Machine trained with within-user BPR plus a small BCE term.
+-
+-Starts from 002_bpr_fm.py: same FM, same same-user positive/negative pair sampler.
+-The change is the loss: BPR remains primary, with a lightly weighted pointwise
+-BCE on the paired rows to preserve the useful calibration/static-feature signal
+-from the original baseline while still optimizing within-user ranking.
++"""BPR+BCE FM with explicit user-cross categorical fields.
++
++This refines the best loss node by adding exact sparse cross fields that the
++low-rank FM can only approximate: user_id x video_id, user_id x author_id and
++user_id x tab.  These first-order cross ids can memorize repeat/user-specific
++preferences while the BPR+BCE objective remains unchanged.
+ """
+ import argparse
+ import os
+@@ -43,6 +43,34 @@
+             xb = torch.from_numpy(X[i:i + bs].astype(np.int64)).to(device)
+             out.append(self(xb).cpu().numpy())
+         return np.concatenate(out)
++
++
++def add_cross_fields(splits, enc, base_dim):
++    """Append [user,video], [user,author], [user,tab] categorical columns."""
++    cross_specs = [
++        ('uv', lambda r: (r[1], r[2])),
++        ('ua', lambda r: (r[1], r[3])),
++        ('ut', lambda r: (r[1], r[4])),
++    ]
++    maps = []
++    offset = int(base_dim)
++    for name, fn in cross_specs:
++        vals = []
++        for sp in splits:
++            vals.extend(fn(r) for r in splits[sp])
++        uniq = {v: i + offset for i, v in enumerate(sorted(set(vals), key=str))}
++        maps.append((fn, uniq, offset))
++        offset += len(uniq)
++
++    out = {}
++    for sp, rows in splits.items():
++        X, y, users = enc[sp]
++        cols = []
++        for fn, mp, _ in maps:
++            cols.append(np.asarray([mp[fn(r)] for r in rows], dtype=np.int64))
++        X2 = np.concatenate([X.astype(np.int64)] + [c[:, None] for c in cols], axis=1)
++        out[sp] = (X2, y, users)
++    return out, offset
+ 
+ 
+ def build_user_groups(y, users):
+@@ -75,14 +103,16 @@
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+         seed=0, device='cpu', verbose=True, bce_weight=0.15):
+-    enc, dim = encode(splits)
++    base_enc, base_dim = encode(splits)
++    enc, dim = add_cross_fields(splits, base_enc, base_dim)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+     groups = build_user_groups(ytr, utr)
+     if verbose:
+         n_pairs = sum(len(p) for p, _ in groups)
+-        print(f"BPR eligible users={len(groups):,d}, sampled pairs/epoch={n_pairs:,d}, bce_weight={bce_weight}")
++        print(f"BPR eligible users={len(groups):,d}, sampled pairs/epoch={n_pairs:,d}, "
++              f"base_dim={base_dim:,d}, crossed_dim={dim:,d}, bce_weight={bce_weight}")
+ 
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+@@ -109,8 +139,6 @@
+             sp = model(xp)
+             sn = model(xn)
+             bpr = -torch.nn.functional.logsigmoid(sp - sn).mean()
+-            # Balanced pointwise term on the same paired rows; positives target 1,
+-            # sampled negatives target 0.  Using softplus avoids allocating labels.
+             bce = 0.5 * (torch.nn.functional.softplus(-sp).mean() +
+                          torch.nn.functional.softplus(sn).mean())
+             loss = bpr + bce_weight * bce
+@@ -162,7 +190,7 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS} + user-video/user-author/user-tab crosses")
+ 
+     model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+                      device=a.device, verbose=a.out is None,
+@@ -175,7 +203,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== crossfield_bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

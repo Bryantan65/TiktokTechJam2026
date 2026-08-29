@@ -1,0 +1,115 @@
+# iteration 11  (parent: 10)
+# hypothesis: improve 10: node 10 showed time context helps; add half-hour and tab×half-hour embeddings so the FM can learn finer and tab-specific temporal effects while keeping the loss unchanged.
+# result: GAUC 0.669484 | nDCG@5 0.536655 | primary 0.60307 | verdict noise
+
+--- logs/record-run-11/solutions/010_time_context.py
++++ logs/record-run-11/solutions/011_finer_time_context.py
+@@ -1,9 +1,9 @@
+-"""FM with semi-hard BPR+BCE plus temporal context embeddings.
+-
+-Branches from node 9.  The ranking loss is unchanged except that the encoded
+-feature matrix is augmented with weekday/hour/daypart categorical fields.  Hour
+-comes from the raw log CSVs and is matched back to starter-kit tuples by
+-(date,user_id,video_id,tab) in original order.
++"""FM with semi-hard BPR+BCE plus finer temporal context embeddings.
++
++Improves node 10 by keeping the same ranking loss and raw hourmin join, but
++adds half-hour and tab x half-hour categorical fields.  The intent is to keep
++node 10's useful time signal while letting the model learn short-period and
++tab-specific temporal context.
+ """
+ import argparse
+ import csv
+@@ -55,7 +55,6 @@
+ 
+ 
+ def _read_hour_queues(data_dir):
+-    """Return key -> queue of hourmin values from raw logs."""
+     files = [
+         os.path.join(data_dir, 'log_standard_4_08_to_4_21_pure.csv'),
+         os.path.join(data_dir, 'log_standard_4_22_to_5_08_pure.csv'),
+@@ -86,15 +85,18 @@
+     hour_q = _read_hour_queues(data_dir)
+     new_enc = {}
+     total = matched = 0
+-    # offsets: weekday 0..7, hour 0..24, daypart 0..6 (last value = unknown)
++    # offsets: weekday 0..7, hour 0..24, daypart 0..6,
++    # halfhour 0..48, tab_x_halfhour 0..293 (6 tab slots x 49 halfhour slots)
+     off_week = dim
+     off_hour = off_week + 8
+     off_part = off_hour + 25
+-    new_dim = off_part + 7
++    off_half = off_part + 7
++    off_tab_half = off_half + 49
++    new_dim = off_tab_half + 6 * 49
+ 
+     for sp, (X, y, users) in enc.items():
+         rows = splits[sp]
+-        extra = np.empty((len(rows), 3), dtype=np.int64)
++        extra = np.empty((len(rows), 5), dtype=np.int64)
+         for i, row in enumerate(rows):
+             date, uid, vid, _aid, tab, _dur, _lab = row
+             wd = _weekday(date)
+@@ -107,21 +109,33 @@
+             if hm is None:
+                 hour = 24
+                 part = 6
++                half = 48
+             else:
+                 hour = int(hm) // 100
+-                if hour < 0 or hour > 23:
++                minute = int(hm) % 100
++                if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+                     hour = 24
+                     part = 6
++                    half = 48
+                 else:
+                     part = hour // 4
++                    half = hour * 2 + (1 if minute >= 30 else 0)
+             if wd < 0 or wd > 6:
+                 wd = 7
++            try:
++                tab_i = int(tab)
++            except Exception:
++                tab_i = 5
++            if tab_i < 0 or tab_i > 4:
++                tab_i = 5
+             extra[i, 0] = off_week + wd
+             extra[i, 1] = off_hour + hour
+             extra[i, 2] = off_part + part
++            extra[i, 3] = off_half + half
++            extra[i, 4] = off_tab_half + tab_i * 49 + half
+         X2 = np.concatenate([X.astype(np.int64), extra], axis=1)
+         new_enc[sp] = (X2, y, users)
+-    print(f"hour matched {matched:,d}/{total:,d} ({matched / max(total,1):.3%}); dim {dim}->{new_dim}; fields={FIELDS}+weekday+hour+daypart")
++    print(f"hour matched {matched:,d}/{total:,d} ({matched / max(total,1):.3%}); dim {dim}->{new_dim}; fields={FIELDS}+weekday+hour+daypart+halfhour+tab_halfhour")
+     return new_enc, new_dim
+ 
+ 
+@@ -255,7 +269,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            phase = 'bce' if ep <= bce_warmup else 'time_lambda_semihard'
++            phase = 'bce' if ep <= bce_warmup else 'finer_time_lambda_semihard'
+             print(f"  epoch {ep:2d} {phase} | loss {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+@@ -295,7 +309,7 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+weekday+hour+daypart")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+weekday+hour+daypart+halfhour+tab_halfhour")
+ 
+     model, enc = run(splits, data_dir=a.data_dir, k=a.k, lr=a.lr,
+                      epochs=a.epochs, seed=a.seed, device=a.device,
+@@ -306,7 +320,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== time_context_lambda_semihard (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== finer_time_context_lambda_semihard (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

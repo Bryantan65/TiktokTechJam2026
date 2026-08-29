@@ -1,0 +1,58 @@
+# iteration 34  (parent: 29)
+# hypothesis: improve 29: the current ensemble may smooth away high-confidence item/author priors, so add a readable 30% per-user rank correction from smoothed video/author/tab empirical positive-rate logits computed on train only.
+# result: GAUC 0.669311 | nDCG@5 0.537064 | primary 0.603187 | verdict noise
+
+--- logs/record-run-6/solutions/029_blend_fm_deepfm.py
++++ logs/record-run-6/solutions/034_prior_calib_blend.py
+@@ -11,6 +11,7 @@
+ RANK_GAMMA = 2.0
+ MARGIN_WEIGHT = 0.30
+ DEEP_WEIGHT = 0.65
++PRIOR_WEIGHT = 0.30
+ 
+ def to_int(x, default=0):
+     try: return int(float(x))
+@@ -184,9 +185,30 @@
+         start = end
+     return out
+ 
++def _add_count(d, key, y):
++    c, p = d.get(key, (0, 0)); d[key] = (c + 1, p + y)
++
++def _logit_rate(d, key, g, alpha):
++    c, p = d.get(key, (0, 0)); r = (p + alpha * g) / (c + alpha); r = min(max(r, 1e-5), 1 - 1e-5)
++    return np.log(r / (1 - r))
++
++def prior_raw_scores(splits, split):
++    train = splits['train']; g = (sum(1 for r in train if r[6] > 0) + 1.0) / (len(train) + 2.0)
++    vid = {}; auth = {}; tab = {}; dur = {}; atab = {}; vtab = {}
++    for r in train:
++        y = 1 if r[6] > 0 else 0; db = int(r[5]) // 10000
++        _add_count(vid, r[2], y); _add_count(auth, r[3], y); _add_count(tab, r[4], y); _add_count(dur, db, y); _add_count(atab, (r[3], r[4]), y); _add_count(vtab, (r[2], r[4]), y)
++    out = np.zeros(len(splits[split]), dtype=np.float64)
++    for i, r in enumerate(splits[split]):
++        db = int(r[5]) // 10000
++        out[i] = (0.28 * _logit_rate(vid, r[2], g, 30.0) + 0.24 * _logit_rate(auth, r[3], g, 80.0) +
++                  0.20 * _logit_rate(atab, (r[3], r[4]), g, 60.0) + 0.12 * _logit_rate(vtab, (r[2], r[4]), g, 25.0) +
++                  0.10 * _logit_rate(tab, r[4], g, 1000.0) + 0.06 * _logit_rate(dur, db, g, 300.0))
++    return out
++
+ if __name__ == '__main__':
+-    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--rank_gamma', type=float, default=RANK_GAMMA); ap.add_argument('--margin_weight', type=float, default=MARGIN_WEIGHT); ap.add_argument('--deep_weight', type=float, default=DEEP_WEIGHT); a = ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'FM+DeepFM 8x/8x rank+margin blend dw={a.deep_weight}')
++    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--rank_gamma', type=float, default=RANK_GAMMA); ap.add_argument('--margin_weight', type=float, default=MARGIN_WEIGHT); ap.add_argument('--deep_weight', type=float, default=DEEP_WEIGHT); ap.add_argument('--prior_weight', type=float, default=PRIOR_WEIGHT); a = ap.parse_args()
++    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'FM+DeepFM 8x/8x + smoothed prior calibration pw={a.prior_weight}')
+     enc, dim, hist, aux_t = prepare(splits, a.data_dir); X, y, users = enc[a.split]
+     fm_preds = []; deep_preds = []
+     for s in range(8):
+@@ -197,7 +219,9 @@
+         deep_preds.append(m.predict(X, hist[a.split], device=a.device))
+     fm_score = per_user_rank_margin_blend(fm_preds, users, gamma=a.rank_gamma, margin_weight=a.margin_weight)
+     deep_score = per_user_rank_margin_blend(deep_preds, users, gamma=a.rank_gamma, margin_weight=a.margin_weight)
+-    scores = (1.0 - a.deep_weight) * fm_score + a.deep_weight * deep_score
++    model_score = (1.0 - a.deep_weight) * fm_score + a.deep_weight * deep_score
++    prior_score = per_user_rank_margin_blend([prior_raw_scores(splits, a.split)], users, gamma=a.rank_gamma, margin_weight=a.margin_weight)
++    scores = (1.0 - a.prior_weight) * model_score + a.prior_weight * prior_score
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else: print(scores[:10])

@@ -1,0 +1,98 @@
+# iteration 26  (parent: 24)
+# hypothesis: improve 24: node 12's history draft was not refined, and the FM can only store repeat user-video/user-author preferences through a low-rank interaction; add a very weak train-only smoothed history prior blended by within-user rank with the best node-24 ensemble.
+# result: GAUC 0.672484 | nDCG@5 0.538251 | primary 0.605367 | verdict KEPT
+
+--- logs/record-run-3/solutions/024_time_watch_userbalanced.py
++++ logs/record-run-3/solutions/026_history_prior_blend.py
+@@ -1,13 +1,15 @@
+-"""Time FM BPR ensemble with weak user-balanced BPR diversity.
+-
+-Improve node 23: GAUC-weighted training over-represents users with many positives,
+-while nDCG@5 is averaged per user.  Preserve the seven node-17 label-BPR members
+-and watch-confidence member, and add one weak member whose same-user BPR pairs are
+-weighted so each mixed-label user contributes roughly equally.
++"""Node-24 ensemble plus a weak train-only memorized user history prior.
++
++The FM can only represent exact user-item/user-author memory through a low-rank
++interaction.  Add a tiny within-user-rank blend from smoothed train-only
++(user,video), (user,author), (user,tab), item and author long-view rates, so
++repeat exposures and strong personal author/tab preferences can affect the top-5
++without replacing the robust BPR ensemble.
+ """
+ import argparse
+ import csv
+ import datetime as _dt
++import math
+ import os
+ import sys
+ import time
+@@ -224,6 +226,44 @@
+     return out
+ 
+ 
++def _add_stat(d, key, y):
++    p, n = d.get(key, (0.0, 0.0)); d[key] = (p + float(y), n + 1.0)
++
++
++def _logit_stat(d, key, base_p, prior):
++    p, n = d.get(key, (0.0, 0.0))
++    if n <= 0: return 0.0
++    q = (p + prior * base_p) / (n + prior)
++    q = min(max(q, 1e-4), 1.0 - 1e-4)
++    b = min(max(base_p, 1e-4), 1.0 - 1e-4)
++    return math.log(q / (1.0 - q)) - math.log(b / (1.0 - b))
++
++
++def build_history_prior(splits, split):
++    uv, ua, ut, ud, vv, aa, tt = {}, {}, {}, {}, {}, {}, {}
++    train = splits['train']
++    base_p = (sum(float(r[6]) for r in train) + 1.0) / (len(train) + 2.0)
++    for r in train:
++        u, v, a, tab, dur, y = _to_int(r[1]), _to_int(r[2]), _to_int(r[3]), _to_int(r[4]), _to_int(r[5]), _to_int(r[6])
++        db = min(dur // 10000, 60)
++        _add_stat(uv, (u, v), y); _add_stat(ua, (u, a), y); _add_stat(ut, (u, tab), y); _add_stat(ud, (u, db), y)
++        _add_stat(vv, v, y); _add_stat(aa, a, y); _add_stat(tt, tab, y)
++    rows = splits[split]; out = np.zeros(len(rows), dtype=np.float64)
++    for i, r in enumerate(rows):
++        u, v, a, tab, dur = _to_int(r[1]), _to_int(r[2]), _to_int(r[3]), _to_int(r[4]), _to_int(r[5])
++        db = min(dur // 10000, 60)
++        s = 0.0
++        s += 2.0 * _logit_stat(uv, (u, v), base_p, 2.0)
++        s += 1.2 * _logit_stat(ua, (u, a), base_p, 5.0)
++        s += 0.6 * _logit_stat(ut, (u, tab), base_p, 10.0)
++        s += 0.5 * _logit_stat(ud, (u, db), base_p, 10.0)
++        s += 0.35 * _logit_stat(vv, v, base_p, 20.0)
++        s += 0.25 * _logit_stat(aa, a, base_p, 20.0)
++        s += 0.15 * _logit_stat(tt, tab, base_p, 50.0)
++        out[i] = s
++    return out
++
++
+ @torch.no_grad()
+ def ensemble_predict(models, weights, X, users, device='cpu'):
+     pred = np.zeros(len(X), dtype=np.float64); weights = np.asarray(weights, dtype=np.float64)
+@@ -241,14 +281,20 @@
+     a = ap.parse_args(); torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time; ensemble=7label+0.75watchconf+0.75userbal")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time; ensemble=7label+0.75watchconf+0.75userbal+0.35history")
+     models, weights, enc = train_ensemble(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+-    X, y, users = enc[a.split]; scores = ensemble_predict(models, weights, X, users, device=a.device)
++    X, y, users = enc[a.split]
++    base = ensemble_predict(models, weights, X, users, device=a.device)
++    hist = within_user_rank_scores(build_history_prior(splits, a.split), users)
++    scores = (weights.sum() * base + 0.35 * hist) / (weights.sum() + 0.35)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== time_watch_userbalanced (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== history_prior_blend (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+-            Xs, ys, us = enc[sp]; r = evaluate(us, ys, ensemble_predict(models, weights, Xs, us, device=a.device))
++            Xs, ys, us = enc[sp]
++            b = ensemble_predict(models, weights, Xs, us, device=a.device)
++            h = within_user_rank_scores(build_history_prior(splits, sp), us)
++            r = evaluate(us, ys, (weights.sum() * b + 0.35 * h) / (weights.sum() + 0.35))
+             print(f"  {sp:5s} GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

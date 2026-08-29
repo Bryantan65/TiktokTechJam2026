@@ -1,0 +1,156 @@
+# iteration 20  (parent: 19)
+# hypothesis: improve 19: the logistic calibrator only changes coarse offsets; train a LightGBM LambdaRank residual on frozen neural scores plus context/item fields so the post-hoc stage directly optimizes top-5 ranking rather than calibration.
+# result: GAUC 0.671368 | nDCG@5 0.537763 | primary 0.604565 | verdict KEPT
+
+--- logs/record-run-11/solutions/019_calibrated_cwm.py
++++ logs/record-run-11/solutions/020_lambdamart_residual.py
+@@ -1,10 +1,8 @@
+-"""Node 18 plus a post-hoc context calibrator.
+-
+-Train the same DeepFM+CWM ranker as node 18, then freeze it and fit a tiny
+-logistic calibration layer on the train rows using only the frozen score plus
+-coarse context offsets (tab/hour/daypart/duration). These offsets can correct
+-BPR score-scale drift between contexts while still changing rankings within a
+-user when impressions span tabs or duration groups.
++"""Node 19 variant: replace logistic context calibrator with LambdaMART residual ranker.
++
++The neural ranker is node-18 style DeepFM+BPR+time+aux+CWM.  After it is frozen,
++a small LightGBM LambdaRank model is trained on train rows only, using the frozen
++score plus coarse context/item fields, then blended back as a scaled residual.
+ """
+ import argparse, csv, os, sys, time
+ from collections import defaultdict, deque
+@@ -73,25 +71,53 @@
+         return np.concatenate(out)
+ 
+ 
+-class Calibrator(torch.nn.Module):
+-    def __init__(self):
+-        super().__init__()
+-        self.scale_raw = torch.nn.Parameter(torch.zeros(()))
+-        self.bias = torch.nn.Parameter(torch.zeros(()))
+-        self.tab = torch.nn.Parameter(torch.zeros(8))
+-        self.hour = torch.nn.Parameter(torch.zeros(25))
+-        self.part = torch.nn.Parameter(torch.zeros(7))
+-        self.dur = torch.nn.Parameter(torch.zeros(32))
+-    def forward(self, base, cf):
+-        scale = 1.0 + 0.25 * torch.tanh(self.scale_raw)
+-        return scale * base + self.bias + self.tab[cf[:,0]] + self.hour[cf[:,1]] + self.part[cf[:,2]] + self.dur[cf[:,3]]
+-    @torch.no_grad()
+-    def predict_np(self, base, cf, bs=300000, device='cpu'):
+-        self.eval(); out=[]
+-        for i in range(0, len(base), bs):
+-            b=torch.from_numpy(base[i:i+bs].astype(np.float32)).to(device); c=torch.from_numpy(cf[i:i+bs].astype(np.int64)).to(device)
+-            out.append(self(b,c).cpu().numpy())
+-        return np.concatenate(out)
++class LambdaResidual:
++    def __init__(self, seed=0, weight=0.35):
++        self.seed = seed; self.weight = weight; self.model = None; self.scale = 0.0; self.mean = 0.0
++    def fit(self, base, y, users, X, calfeat):
++        import lightgbm as lgb
++        F = make_lgb_features(base, users, X, calfeat)
++        order = np.argsort(users, kind='mergesort')
++        us = np.asarray(users)[order]
++        _, counts = np.unique(us, return_counts=True)
++        Fs = F[order]; ys = y[order].astype(np.int32)
++        self.model = lgb.LGBMRanker(objective='lambdarank', metric='ndcg', eval_at=[5], label_gain=[0, 1],
++                                    n_estimators=90, learning_rate=0.045, num_leaves=31, max_depth=-1,
++                                    min_child_samples=80, subsample=0.85, subsample_freq=1, colsample_bytree=0.90,
++                                    reg_lambda=1.5, random_state=self.seed, n_jobs=2, verbosity=-1)
++        cat = [3,4,5,6,7,8,9,10]
++        self.model.fit(Fs, ys, group=counts.tolist(), categorical_feature=cat)
++        raw = self.model.predict(F, num_iteration=self.model.best_iteration_).astype(np.float32)
++        self.mean = float(raw.mean())
++        sb = float(np.std(base)); sr = float(np.std(raw))
++        self.scale = self.weight * sb / (sr + 1e-6)
++        print(f"LambdaResidual: raw_std={sr:.5f} base_std={sb:.5f} scale={self.scale:.5f}")
++        return self
++    def predict(self, base, users, X, calfeat):
++        if self.model is None: return base
++        F = make_lgb_features(base, users, X, calfeat)
++        raw = self.model.predict(F, num_iteration=self.model.best_iteration_).astype(np.float32)
++        return base + self.scale * (raw - self.mean)
++
++
++def make_lgb_features(base, users, X, calfeat):
++    # [continuous base features, categorical context/item fields]
++    n = len(base); base = base.astype(np.float32)
++    z = np.zeros(n, dtype=np.float32); rk = np.zeros(n, dtype=np.float32)
++    mp = defaultdict(list)
++    for i, u in enumerate(users): mp[u].append(i)
++    for idxs in mp.values():
++        idx = np.asarray(idxs, dtype=np.int64); b = base[idx]; sd = float(b.std())
++        z[idx] = (b - float(b.mean())) / (sd + 1e-6)
++        o = np.argsort(-b, kind='mergesort'); rr = np.empty(len(idx), dtype=np.float32); rr[o] = np.arange(len(idx), dtype=np.float32) / max(len(idx)-1, 1)
++        rk[idx] = rr
++    # X columns: user, video, author, tab, dur_bucket, weekday, hour, daypart after augmentation
++    feats = np.column_stack([
++        base, z, rk,
++        X[:,1].astype(np.int32), X[:,2].astype(np.int32), X[:,3].astype(np.int32), X[:,4].astype(np.int32),
++        calfeat[:,0].astype(np.int32), calfeat[:,1].astype(np.int32), calfeat[:,2].astype(np.int32), calfeat[:,3].astype(np.int32)
++    ]).astype(np.float32)
++    return feats
+ 
+ 
+ def _weekday(x):
+@@ -197,29 +223,6 @@
+             log_pdf=0.5*z*z; surv=torch.clamp(0.5*torch.special.erfc(z/np.sqrt(2.0)), min=1e-7)
+             losses.append((torch.where(cens > 0.5, -torch.log(surv), log_pdf)*cmask).sum()/den)
+     return None if not losses else sum(losses)/len(losses)
+-
+-
+-def fit_calibrator(base_tr, ytr, cf_tr, base_va, yva, uva, cf_va, seed=0, device='cpu', verbose=True):
+-    cal = Calibrator().to(device)
+-    params_decay = [cal.tab, cal.hour, cal.part, cal.dur]
+-    opt = torch.optim.Adam([{'params': params_decay, 'weight_decay': 1e-3}, {'params': [cal.scale_raw, cal.bias], 'weight_decay': 0.0}], lr=0.05)
+-    b_t=torch.from_numpy(base_tr.astype(np.float32)); y_t=torch.from_numpy(ytr.astype(np.float32)); cf_t=torch.from_numpy(cf_tr.astype(np.int64))
+-    rng=np.random.default_rng(seed + 17); bs=65536
+-    best = evaluate(uva, yva, base_va)['primary']; best_state = {k:v.detach().clone() for k,v in cal.state_dict().items()}; bad=0
+-    if verbose: print(f"  calibrator epoch  0 | valid primary {best:.5f}")
+-    for ep in range(1, 16):
+-        idx=rng.permutation(len(ytr)); losses=[]; cal.train()
+-        for i in range(0, len(idx), bs):
+-            sel=torch.from_numpy(idx[i:i+bs]); xb=b_t[sel].to(device); yb=y_t[sel].to(device); cb=cf_t[sel].to(device)
+-            opt.zero_grad(set_to_none=True); loss=torch.nn.functional.binary_cross_entropy_with_logits(cal(xb, cb), yb)
+-            loss.backward(); opt.step(); losses.append(loss.item())
+-        pred_va=cal.predict_np(base_va, cf_va, device=device); r=evaluate(uva, yva, pred_va)['primary']
+-        if verbose: print(f"  calibrator epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {r:.5f}")
+-        if r > best + 1e-5: best=r; best_state={k:v.detach().clone() for k,v in cal.state_dict().items()}; bad=0
+-        else:
+-            bad += 1
+-            if bad >= 4: break
+-    cal.load_state_dict(best_state); return cal
+ 
+ 
+ def run(splits, data_dir, seed=0, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=True):
+@@ -264,9 +267,9 @@
+                 if verbose: print(f"  early stop at epoch {ep}")
+                 break
+     model.load_state_dict(best_state)
+-    base_tr=model.predict(Xtr,dtr,device=device); base_va=model.predict(Xva,dva,device=device)
+-    calibrator=fit_calibrator(base_tr, ytr, calfeats['train'], base_va, yva, uva, calfeats['valid'], seed=seed, device=device, verbose=verbose)
+-    return model, calibrator, enc, dlogs, calfeats
++    base_tr=model.predict(Xtr,dtr,device=device)
++    resid=LambdaResidual(seed=seed, weight=0.35).fit(base_tr, ytr, utr, Xtr, calfeats['train'])
++    return model, resid, enc, dlogs, calfeats
+ 
+ 
+ if __name__ == '__main__':
+@@ -277,12 +280,12 @@
+         splits=load_dev(a.data_dir); target='valid'
+     else:
+         splits=load(a.data_dir); target=a.split
+-    print({k:len(v) for k,v in splits.items()}, f"fields={FIELDS}+time aux+CWM+calibrator")
+-    model, cal, enc, dlogs, calfeats = run(splits, a.data_dir, seed=a.seed, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=a.out is None)
+-    X,y,u=enc[target]; base=model.predict(X, dlogs[target], device=a.device); scores=cal.predict_np(base, calfeats[target], device=a.device)
++    print({k:len(v) for k,v in splits.items()}, f"fields={FIELDS}+time aux+CWM+LambdaMART-residual")
++    model, resid, enc, dlogs, calfeats = run(splits, a.data_dir, seed=a.seed, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=a.out is None)
++    X,y,u=enc[target]; base=model.predict(X, dlogs[target], device=a.device); scores=resid.predict(base, u, X, calfeats[target])
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+         for sp in ('valid','test'):
+-            Xs,ys,us=enc[sp]; b=model.predict(Xs,dlogs[sp],device=a.device); r=evaluate(us,ys,cal.predict_np(b, calfeats[sp],device=a.device)); print(sp, r)
+-
++            Xs,ys,us=enc[sp]; b=model.predict(Xs,dlogs[sp],device=a.device); r=evaluate(us,ys,resid.predict(b,us,Xs,calfeats[sp])); print(sp, r)
++

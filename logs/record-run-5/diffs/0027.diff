@@ -1,0 +1,58 @@
+# iteration 27  (parent: 26)
+# hypothesis: improve 26: the 33% weekday+hour member improved node 15 and reduced variance, so test whether a stronger 67% simple-time share gives more diversity or starts losing the tab-hour signal. This keeps three members and changes only the ensemble composition.
+# result: GAUC 0.672172 | nDCG@5 0.53847 | primary 0.605321 | verdict KEPT
+
+--- logs/record-run-5/solutions/026_mixed_tabhour_simple_time_ensemble.py
++++ logs/record-run-5/solutions/027_mixed_more_simple_time_ensemble.py
+@@ -1,9 +1,8 @@
+-"""Mixed 3-model BPR FM ensemble: two tab-hour time models plus one simpler time model.
+-
+-Node 15's tab-hour cross is the best single solution, but node 13 without the
+-cross was nearly as strong. This keeps the same total number of trained members
+-and replaces one tab-hour member with a weekday+hour member to add a 33% diverse
+-vote without the unreadable low-weight ensemble pattern.
++"""Mixed 3-model BPR FM ensemble: one tab-hour time model plus two simpler time models.
++
++Node 26 improved node 15 by replacing one of three tab-hour members with a
++weekday+hour member. This tests whether the diversity optimum is a larger simple
++weekday+hour share, while keeping the same training recipe and three members.
+ """
+ import argparse
+ import csv
+@@ -197,7 +196,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | mixed_bpr {np.mean(losses):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | mixed_more_simple_bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -222,7 +221,7 @@
+     members = []
+     plan = [
+         ('tabhour1/3', enc_full, dim_full, seed),
+-        ('tabhour2/3', enc_full, dim_full, seed + 1009),
++        ('simple2/3', enc_simple, dim_simple, seed + 1009),
+         ('simple3/3', enc_simple, dim_simple, seed + 2018),
+     ]
+     for tag, enc_i, dim_i, s in plan:
+@@ -259,7 +258,7 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+mixed two ['weekday','hour','tab_hour'] and one ['weekday','hour']")
++          f"fields={FIELDS}+mixed one ['weekday','hour','tab_hour'] and two ['weekday','hour']")
+ 
+     members = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                   neg_k=a.neg_k, seed=a.seed, device=a.device,
+@@ -271,8 +270,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== mixed_tabhour_simple_time_ensemble (seed={a.seed}, device={a.device}) ===")
+-        # Use users/labels from any encoding; row order is identical.
++        print(f"\n=== mixed_more_simple_time_ensemble (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             _, ys, us = members[0][1][sp]
+             r = evaluate(us, ys, predict_mixed(members, sp, device=a.device))

@@ -1,0 +1,78 @@
+# iteration 28  (parent: 25)
+# hypothesis: draft model: add a DeepFM high-order interaction tower to the current best FM+history+aux model, following Guo et al. 2017 (https://www.ijcai.org/proceedings/2017/0239.pdf), and test it standalone in the same 8x rank+margin calibrated ensemble so its signal is readable.
+# result: GAUC 0.671489 | nDCG@5 0.537803 | primary 0.604645 | verdict KEPT
+
+--- logs/record-run-6/solutions/025_rank_margin_blend.py
++++ logs/record-run-6/solutions/028_deepfm_rank_margin.py
+@@ -109,15 +109,19 @@
+     return feats
+ 
+ class Model(torch.nn.Module):
+-    def __init__(self, dim, hdim, adim, k=16, seed=0):
++    def __init__(self, dim, nfields, hdim, adim, k=16, seed=0):
+         super().__init__(); rng = np.random.default_rng(seed)
++        self.nfields = nfields; self.k = k
+         self.V = torch.nn.Parameter(torch.from_numpy(rng.normal(0, .01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim)); self.b = torch.nn.Parameter(torch.zeros(()))
+         self.H = torch.nn.Linear(hdim, 1); torch.nn.init.zeros_(self.H.weight); torch.nn.init.zeros_(self.H.bias)
++        self.deep = torch.nn.Sequential(torch.nn.Linear(nfields * k + hdim, 64), torch.nn.ReLU(), torch.nn.Dropout(0.10), torch.nn.Linear(64, 32), torch.nn.ReLU(), torch.nn.Linear(32, 1))
++        torch.nn.init.zeros_(self.deep[-1].weight); torch.nn.init.zeros_(self.deep[-1].bias)
+         self.aux = torch.nn.Sequential(torch.nn.Linear(k + hdim, 32), torch.nn.ReLU(), torch.nn.Linear(32, adim))
+     def forward(self, X, H, aux=False):
+         E = self.V[X]; S = E.sum(1); inter = .5 * ((S*S).sum(1) - (E*E).sum((1,2)))
+-        main = self.b + self.W[X].sum(1) + inter + self.H(H).squeeze(1)
++        deep_in = torch.cat([E.reshape(E.shape[0], self.nfields * self.k), H], 1)
++        main = self.b + self.W[X].sum(1) + inter + self.H(H).squeeze(1) + self.deep(deep_in).squeeze(1)
+         if aux: return main, self.aux(torch.cat([S, H], 1))
+         return main
+     @torch.no_grad()
+@@ -134,8 +138,8 @@
+ 
+ def train_one(enc, dim, hist, aux_t, seed=0, k=16, lr=.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False):
+     torch.manual_seed(seed); Xtr,ytr,_ = enc['train']; Xva,yva,uva = enc['valid']; Htr,Hva = hist['train'],hist['valid']; Atr = aux_t['train']
+-    m = Model(dim, Htr.shape[1], Atr.shape[1], k, seed).to(device)
+-    opt = torch.optim.Adam([{'params':[m.V,m.W],'weight_decay':l2},{'params':[m.b],'weight_decay':0.0},{'params':m.H.parameters(),'weight_decay':1e-5},{'params':m.aux.parameters(),'weight_decay':1e-5}], lr=lr)
++    m = Model(dim, Xtr.shape[1], Htr.shape[1], Atr.shape[1], k, seed).to(device)
++    opt = torch.optim.Adam([{'params':[m.V,m.W],'weight_decay':l2},{'params':[m.b],'weight_decay':0.0},{'params':m.H.parameters(),'weight_decay':1e-5},{'params':m.deep.parameters(),'weight_decay':1e-5},{'params':m.aux.parameters(),'weight_decay':1e-5}], lr=lr)
+     bce = torch.nn.BCEWithLogitsLoss(); Xtr_t = torch.from_numpy(Xtr.astype(np.int64)); Htr_t = torch.from_numpy(Htr.astype(np.float32)); ytr_t = torch.from_numpy(np.asarray(ytr, dtype=np.float32)); Atr_t = torch.from_numpy(Atr.astype(np.float32))
+     rng = np.random.default_rng(seed); best = -1.; state = None; bad = 0
+     for ep in range(1, epochs+1):
+@@ -154,12 +158,8 @@
+ 
+ def per_user_rank_margin_blend(preds, users, gamma=RANK_GAMMA, margin_weight=MARGIN_WEIGHT):
+     P = np.vstack(preds).astype(np.float64)
+-    meanp = P.mean(axis=0)
+-    users = np.asarray(users)
+-    out = np.zeros(P.shape[1], dtype=np.float64)
+-    order = np.argsort(users, kind='mergesort')
+-    su = users[order]
+-    start = 0
++    meanp = P.mean(axis=0); users = np.asarray(users); out = np.zeros(P.shape[1], dtype=np.float64)
++    order = np.argsort(users, kind='mergesort'); su = users[order]; start = 0
+     while start < len(order):
+         end = start + 1
+         while end < len(order) and su[end] == su[start]: end += 1
+@@ -170,12 +170,10 @@
+             acc = np.zeros(n, dtype=np.float64)
+             for mi in range(P.shape[0]):
+                 vals = P[mi, idx]
+-                r = np.empty(n, dtype=np.float64)
+-                r[np.argsort(vals, kind='mergesort')] = np.arange(n, dtype=np.float64)
++                r = np.empty(n, dtype=np.float64); r[np.argsort(vals, kind='mergesort')] = np.arange(n, dtype=np.float64)
+                 acc += (r / (n - 1.0)) ** gamma
+             rank_score = acc / P.shape[0]
+-            z = meanp[idx]
+-            z = (z - z.mean()) / (z.std() + 1e-6)
++            z = meanp[idx]; z = (z - z.mean()) / (z.std() + 1e-6)
+             margin_score = 1.0 / (1.0 + np.exp(-z))
+             out[idx] = (1.0 - margin_weight) * rank_score + margin_weight * margin_score
+         start = end
+@@ -183,7 +181,7 @@
+ 
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--rank_gamma', type=float, default=RANK_GAMMA); ap.add_argument('--margin_weight', type=float, default=MARGIN_WEIGHT); a = ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'fields+coarse_time; 8x rank+margin blend gamma={a.rank_gamma} mw={a.margin_weight}')
++    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'DeepFM 8x rank+margin blend gamma={a.rank_gamma} mw={a.margin_weight}')
+     enc, dim, hist, aux_t = prepare(splits, a.data_dir); X, y, users = enc[a.split]; preds = []
+     for s in range(8):
+         m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None))

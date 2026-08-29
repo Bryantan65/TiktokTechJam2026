@@ -1,0 +1,131 @@
+# iteration 9  (parent: 8)
+# hypothesis: improve 8: node 8 shows temporal signal; add half-hour plus coarser daypart/weekend buckets so FM can learn both fine and shared time effects rather than only 24 isolated hours.
+# result: GAUC 0.671023 | nDCG@5 0.53757 | primary 0.604297 | verdict KEPT
+
+--- logs/record-run-2/solutions/008_time_features_two_bpr_bce.py
++++ logs/record-run-2/solutions/009_time_richer_buckets.py
+@@ -1,10 +1,9 @@
+-"""Two-BPR+BCE FM ensemble with temporal context features.
+-
+-Extends node 7 by appending day-of-week and hour-of-day categorical fields to
+-the starter-kit encoded [user, video, author, tab, dur_bucket] features. Hour is
+-read from the raw standard log CSVs and aligned back to data.load() rows by a
+-FIFO key on the tuple fields; if the raw files are unavailable, the model still
+-uses day-of-week from the tuple date.
++"""Two-BPR+BCE FM ensemble with richer temporal context buckets.
++
++Refines node 8: keep hour/day-of-week and also append half-hour, 4-hour
++part-of-day, and weekend indicators. The extra coarse+fine temporal fields let
++FM interactions share signal across neighboring hours while retaining the useful
++hour context from node 8.
+ """
+ import argparse
+ import csv
+@@ -45,13 +44,6 @@
+         return 0
+ 
+ 
+-def dur_bucket(duration_ms):
+-    # Same coarse duration context as starter-kit FM uses; only for raw-row
+-    # alignment fallback diagnostics, not appended as a new feature.
+-    d = _as_int(duration_ms)
+-    return min(d // 10000, 30)
+-
+-
+ def raw_key_from_csv(row):
+     return (_as_int(_get(row, ['date'])),
+             _as_int(_get(row, ['user_id', 'userId', 'user'])),
+@@ -66,7 +58,7 @@
+             _as_int(r[4]), _as_int(r[5]))
+ 
+ 
+-def read_hour_lookup(data_dir):
++def read_hourmin_lookup(data_dir):
+     files = [
+         'log_standard_4_08_to_4_21_pure.csv',
+         'log_standard_4_22_to_5_08_pure.csv',
+@@ -81,45 +73,55 @@
+             rdr = csv.DictReader(f)
+             for row in rdr:
+                 hm = _as_int(_get(row, ['hourmin', 'hour_min', 'time', 'timestamp']), -1)
+-                if hm >= 0:
+-                    hour = max(0, min(23, hm // 100))
+-                else:
+-                    hour = 0
+-                q[raw_key_from_csv(row)].append(hour)
++                if hm < 0:
++                    hm = 0
++                q[raw_key_from_csv(row)].append(hm)
+                 nread += 1
+     return q, nread
+ 
+ 
+ def append_time_features(splits, enc, dim, data_dir, verbose=True):
+-    hour_lookup, nread = read_hour_lookup(data_dir)
++    hm_lookup, nread = read_hourmin_lookup(data_dir)
+     if verbose:
+-        print(f"read raw hour rows={nread:,d}; appending dow/hour fields")
+-
+-    # Reserve compact categorical IDs after the starter-kit feature space.
+-    # hour: 24 categories, dow: 7 categories. Unknown/missing hour maps to 0.
++        print(f"read raw hourmin rows={nread:,d}; appending rich time fields")
++
++    # hour(24), halfhour(48), 4-hour daypart(6), dow(7), weekend(2)
+     hour_offset = dim
+-    dow_offset = dim + 24
++    half_offset = hour_offset + 24
++    part_offset = half_offset + 48
++    dow_offset = part_offset + 6
++    weekend_offset = dow_offset + 7
++    new_dim = weekend_offset + 2
++
+     new_enc = {}
+     matched = 0
+     total = 0
+     for sp, rows in splits.items():
+         X, y, users = enc[sp]
+-        extra = np.zeros((len(rows), 2), dtype=np.int64)
++        extra = np.zeros((len(rows), 5), dtype=np.int64)
+         for i, r in enumerate(rows):
+             k = key_from_tuple(r)
+-            if hour_lookup and hour_lookup.get(k):
+-                h = hour_lookup[k].popleft()
++            if hm_lookup and hm_lookup.get(k):
++                hm = hm_lookup[k].popleft()
+                 matched += 1
+             else:
+-                h = 0
+-            d = date_to_dow(r[0])
+-            extra[i, 0] = hour_offset + h
+-            extra[i, 1] = dow_offset + d
++                hm = 0
++            hour = max(0, min(23, hm // 100))
++            minute = max(0, min(59, hm % 100))
++            half = hour * 2 + (1 if minute >= 30 else 0)
++            part = hour // 4
++            dow = date_to_dow(r[0])
++            weekend = 1 if dow >= 5 else 0
++            extra[i, 0] = hour_offset + hour
++            extra[i, 1] = half_offset + half
++            extra[i, 2] = part_offset + part
++            extra[i, 3] = dow_offset + dow
++            extra[i, 4] = weekend_offset + weekend
+         total += len(rows)
+         new_enc[sp] = (np.concatenate([X.astype(np.int64), extra], axis=1), y, users)
+     if verbose:
+-        print(f"hour matched {matched:,d}/{total:,d}; new dim={dim + 31}; fields={FIELDS}+['hour','dow']")
+-    return new_enc, dim + 31
++        print(f"hourmin matched {matched:,d}/{total:,d}; new dim={new_dim}; fields={FIELDS}+time5")
++    return new_enc, new_dim
+ 
+ 
+ class TorchFM(torch.nn.Module):
+@@ -329,7 +331,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== time_two_bpr_bce_ensemble (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== rich_time_two_bpr_bce_ensemble (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs))

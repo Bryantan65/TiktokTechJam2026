@@ -1,0 +1,93 @@
+# iteration 3  (parent: 2)
+# hypothesis: improve 2: BPR helped, so replace one-vs-one pairs with a sampled within-user softmax where each positive competes against 4 same-user negatives. This should better target top-of-list separation and nDCG while preserving the ranking objective.
+# result: GAUC 0.670099 | nDCG@5 0.536874 | primary 0.603486 | verdict noise
+
+--- logs/record-run-4/solutions/002_bpr_fm.py
++++ logs/record-run-4/solutions/003_sampled_softmax_fm.py
+@@ -1,9 +1,10 @@
+-"""FM trained with within-user BPR pairwise ranking loss.
++"""FM trained with a sampled within-user softmax ranking loss.
+ 
+-This keeps the baseline feature representation and FM architecture, but replaces
+-pointwise BCE with pairs (positive row, negative row) drawn from the same user.
+-The objective directly optimizes score_pos > score_neg, which matches GAUC and
+-nDCG's within-user ranking nature better than calibrated logloss.
++This refines the BPR experiment: instead of one positive-vs-one-negative pair,
++each training example is one positive row competing against several negatives
++shown to the same user. Cross-entropy over [positive, sampled negatives] is a
++small listwise/rank-softmax objective and should put more pressure on top-of-list
++separation than independent random pairs.
+ """
+ import argparse
+ import os
+@@ -62,18 +63,16 @@
+         neg = idx[y[idx] <= 0.5]
+         if len(pos) and len(neg):
+             pos_chunks.append(pos.astype(np.int64, copy=False))
+-            # store one object-array entry per positive; this avoids dict lookup in training
+-            neg_pools.extend([neg.astype(np.int64, copy=False)] * len(pos))
++            neg = neg.astype(np.int64, copy=False)
++            neg_pools.extend([neg] * len(pos))
+         i = j
+     if not pos_chunks:
+-        raise RuntimeError('no users with both positive and negative rows for BPR')
+-    pos_idx = np.concatenate(pos_chunks)
+-    neg_pools = np.asarray(neg_pools, dtype=object)
+-    return pos_idx, neg_pools
++        raise RuntimeError('no users with both positive and negative rows')
++    return np.concatenate(pos_chunks), np.asarray(neg_pools, dtype=object)
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True):
++def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096, patience=4,
++        neg_k=4, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -95,25 +94,28 @@
+         losses = []
+         for i in range(0, len(perm), bs):
+             psel = perm[i:i + bs]
++            bsz = len(psel)
+             pidx = pos_idx[psel]
+-            # one random negative from the same user's displayed negatives for each positive
+-            nidx = np.empty(len(psel), dtype=np.int64)
++            nidx = np.empty((bsz, neg_k), dtype=np.int64)
+             for t, pool in enumerate(neg_pools[psel]):
+-                nidx[t] = pool[rng.integers(len(pool))]
++                # sample with replacement; users with one negative still work.
++                nidx[t] = pool[rng.integers(len(pool), size=neg_k)]
+ 
+             xp = Xtr_t[torch.from_numpy(pidx)].to(device)
+-            xn = Xtr_t[torch.from_numpy(nidx)].to(device)
++            xn_flat = Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
+             opt.zero_grad(set_to_none=True)
+-            sp = model(xp)
+-            sn = model(xn)
+-            loss = torch.nn.functional.softplus(sn - sp).mean()
++            sp = model(xp).view(bsz, 1)
++            sn = model(xn_flat).view(bsz, neg_k)
++            logits = torch.cat([sp, sn], dim=1)
++            target = torch.zeros(bsz, dtype=torch.long, device=device)
++            loss = torch.nn.functional.cross_entropy(logits, target)
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | sampled_softmax {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -158,7 +160,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== sampled_softmax_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

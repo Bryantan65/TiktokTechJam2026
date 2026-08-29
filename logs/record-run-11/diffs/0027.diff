@@ -1,0 +1,111 @@
+# iteration 27  (parent: 25)
+# hypothesis: improve 25: node 25 only ensembles seed variance of node20; node23's history residual was close but different, so blend history-aware residual rankings at 40% within each seed before the three-seed average to test complementarity at readable weight.
+# result: GAUC 0.671346 | nDCG@5 0.537961 | primary 0.604654 | verdict KEPT
+
+--- logs/record-run-11/solutions/025_node20_seed_ensemble.py
++++ logs/record-run-11/solutions/027_seed_ensemble_hist_blend.py
+@@ -1,23 +1,27 @@
+-"""Full-strength ensemble of independent node-20 rankers.
++"""Three-seed ensemble blending node20 and history-aware residuals.
+ 
+-Rather than adding a weak low-weight member, train three complete node-20 models
+-with different seeds and average their within-user standardized scores.  The
+-metric is per-user ranking, so per-user centering/scaling makes the combination
+-focus on ranking disagreements and removes seed-to-seed score-scale wobble.
++Node25 reduced variance by averaging three independent node20 rankers.  Node23's
++history/target-encoding residual was slightly weaker standalone but uses different
++collaborative-memory features, so here each neural seed trains both residuals on
++the same frozen base model and blends their per-user standardized rankings at a
++readable 40% history weight before averaging seeds.
+ """
+ import argparse
+ import importlib.util
+ import os
+-import sys
+ from collections import defaultdict
+ import numpy as np
+ import torch
+ 
+ HERE = os.path.dirname(os.path.abspath(__file__))
+-PARENT = os.path.join(HERE, '020_lambdamart_residual.py')
+-spec = importlib.util.spec_from_file_location('node20', PARENT)
+-m = importlib.util.module_from_spec(spec)
+-spec.loader.exec_module(m)
++P20 = os.path.join(HERE, '020_lambdamart_residual.py')
++P23 = os.path.join(HERE, '023_hist_lambdamart.py')
++s20 = importlib.util.spec_from_file_location('node20', P20)
++m20 = importlib.util.module_from_spec(s20)
++s20.loader.exec_module(m20)
++s23 = importlib.util.spec_from_file_location('node23', P23)
++m23 = importlib.util.module_from_spec(s23)
++s23.loader.exec_module(m23)
+ 
+ 
+ def user_z(scores, users):
+@@ -37,16 +41,23 @@
+     return out
+ 
+ 
+-def predict_one(splits, data_dir, target, seed, k, lr, epochs, device):
++def predict_one(splits, data_dir, target, seed, k, lr, epochs, device, hist_weight=0.40):
+     torch.manual_seed(int(seed))
+     np.random.seed(int(seed) % (2**32 - 1))
+-    model, resid, enc, dlogs, calfeats = m.run(
++    model, resid20, enc, dlogs, calfeats = m20.run(
+         splits, data_dir, seed=int(seed), k=k, lr=lr, epochs=epochs, device=device, verbose=False
+     )
++    Xtr, ytr, utr = enc['train']
++    base_tr = model.predict(Xtr, dlogs['train'], device=device)
++    resid_hist = m23.HistLambdaResidual(seed=int(seed), weight=0.45).fit(
++        base_tr, ytr, utr, Xtr, calfeats['train'])
++
+     X, y, u = enc[target]
+     base = model.predict(X, dlogs[target], device=device)
+-    scores = resid.predict(base, u, X, calfeats[target]).astype(np.float32)
+-    return user_z(scores, u), u
++    s20 = resid20.predict(base, u, X, calfeats[target]).astype(np.float32)
++    sh = resid_hist.predict(base, u, X, calfeats[target]).astype(np.float32)
++    blended = (1.0 - hist_weight) * user_z(s20, u) + hist_weight * user_z(sh, u)
++    return user_z(blended, u), u
+ 
+ 
+ if __name__ == '__main__':
+@@ -59,6 +70,7 @@
+     ap.add_argument('--epochs', type=int, default=40)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
++    ap.add_argument('--hist_weight', type=float, default=0.40)
+     a = ap.parse_args()
+ 
+     print(f"loading {a.data_dir} ...")
+@@ -67,27 +79,21 @@
+         splits = load_dev(a.data_dir)
+         target = 'valid'
+     else:
+-        splits = m.load(a.data_dir)
++        splits = m20.load(a.data_dir)
+         target = a.split
+-    print({k: len(v) for k, v in splits.items()}, "node20 x3 seed ensemble, per-user z average")
++    print({k: len(v) for k, v in splits.items()}, f"node20 x3 + hist residual blend w={a.hist_weight}")
+ 
+-    # Non-overlapping internal seeds for each harness seed; this preserves seed dependence
+-    # while making each submitted prediction a real ensemble.
+     internal = [int(a.seed) * 100 + 11, int(a.seed) * 100 + 37, int(a.seed) * 100 + 73]
+     preds = []
+-    users_ref = None
+     for j, s in enumerate(internal, 1):
+         print(f"ensemble member {j}/3 seed={s}")
+-        p, users = predict_one(splits, a.data_dir, target, s, a.k, a.lr, a.epochs, a.device)
++        p, _users = predict_one(splits, a.data_dir, target, s, a.k, a.lr, a.epochs, a.device, hist_weight=a.hist_weight)
+         preds.append(p)
+-        if users_ref is None:
+-            users_ref = users
+     scores = np.mean(np.stack(preds, axis=0), axis=0).astype(np.float64)
+ 
+     if a.out:
+         np.save(a.out, scores)
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        # Do not compute metrics in harness mode.  This branch is for local smoke checks only.
+         print(scores[:10])
+ 

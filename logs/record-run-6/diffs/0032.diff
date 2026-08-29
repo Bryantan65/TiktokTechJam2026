@@ -1,0 +1,111 @@
+# iteration 32  (parent: 31)
+# hypothesis: debug 31: the first BCE+BPR mix timed out because it sorted each minibatch for all ensemble members; precompute train positives/negatives by user, sample only 512 global same-user pairs per batch, and apply BPR only to DeepFM members so the ranking-loss signal is readable but cheap.
+# result: GAUC 0.671208 | nDCG@5 0.53757 | primary 0.604389 | verdict KEPT
+
+--- logs/record-run-6/solutions/031_deepfm_bce_bpr_mix.py
++++ logs/record-run-6/solutions/032_debug_bpr_fast_deep_only.py
+@@ -11,8 +11,8 @@
+ RANK_GAMMA = 2.0
+ MARGIN_WEIGHT = 0.30
+ DEEP_WEIGHT = 0.65
+-BPR_WEIGHT = 0.03
+-MAX_BPR_PAIRS = 4096
++BPR_WEIGHT = 0.02
++BPR_PAIRS_PER_BATCH = 512
+ 
+ def to_int(x, default=0):
+     try: return int(float(x))
+@@ -137,36 +137,31 @@
+             out.append(self(xb, hb).cpu().numpy())
+         return np.concatenate(out)
+ 
+-def make_bpr_pairs(users_b, y_b, rng, max_pairs=MAX_BPR_PAIRS):
+-    users_b = np.asarray(users_b); y_b = np.asarray(y_b)
+-    order = np.argsort(users_b, kind='mergesort'); su = users_b[order]
+-    pos_all = []; neg_all = []; start = 0
+-    while start < len(order):
+-        end = start + 1
+-        while end < len(order) and su[end] == su[start]: end += 1
+-        idx = order[start:end]; yy = y_b[idx]
+-        pos = idx[yy > 0.5]; neg = idx[yy <= 0.5]
+-        if len(pos) and len(neg):
+-            m = min(len(pos), len(neg), 4)
+-            if len(pos) > m: pos = rng.choice(pos, size=m, replace=False)
+-            if len(neg) > m: neg = rng.choice(neg, size=m, replace=False)
+-            if len(pos) != len(neg):
+-                mm = min(len(pos), len(neg)); pos = pos[:mm]; neg = neg[:mm]
+-            pos_all.append(pos); neg_all.append(neg)
+-            if sum(len(x) for x in pos_all) >= max_pairs: break
+-        start = end
+-    if not pos_all:
+-        return None, None
+-    p = np.concatenate(pos_all)[:max_pairs]; n = np.concatenate(neg_all)[:max_pairs]
+-    return p.astype(np.int64), n.astype(np.int64)
++def build_user_index(users, y):
++    pos, neg = defaultdict(list), defaultdict(list)
++    for i, (u, yy) in enumerate(zip(users, y)):
++        (pos if yy > 0.5 else neg)[int(u)].append(i)
++    both = [u for u in pos.keys() if u in neg]
++    pos = {u: np.asarray(pos[u], dtype=np.int64) for u in both}
++    neg = {u: np.asarray(neg[u], dtype=np.int64) for u in both}
++    return np.asarray(both, dtype=np.int64), pos, neg
++
++def sample_bpr_pairs(both_users, pos_by_u, neg_by_u, rng, n_pairs):
++    if len(both_users) == 0: return None, None
++    us = rng.choice(both_users, size=n_pairs, replace=True)
++    pp = np.empty(n_pairs, dtype=np.int64); nn = np.empty(n_pairs, dtype=np.int64)
++    for i, u in enumerate(us):
++        p = pos_by_u[int(u)]; q = neg_by_u[int(u)]
++        pp[i] = p[rng.integers(len(p))]; nn[i] = q[rng.integers(len(q))]
++    return pp, nn
+ 
+ def prepare(splits, data_dir):
+     enc0, _ = encode(splits); enc, dim = add_time_fields(enc0, splits, data_dir)
+     return enc, dim, make_history_features(splits), read_aux_targets(data_dir, splits)
+ 
+-def train_one(enc, dim, hist, aux_t, seed=0, k=16, lr=.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False, use_deep=True, bpr_weight=BPR_WEIGHT):
++def train_one(enc, dim, hist, aux_t, seed=0, k=16, lr=.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False, use_deep=True, bpr_weight=0.0):
+     torch.manual_seed(seed); Xtr,ytr,utr = enc['train']; Xva,yva,uva = enc['valid']; Htr,Hva = hist['train'],hist['valid']; Atr = aux_t['train']
+-    ytr_np = np.asarray(ytr, dtype=np.float32); utr_np = np.asarray(utr)
++    ytr_np = np.asarray(ytr, dtype=np.float32); both_users, pos_by_u, neg_by_u = build_user_index(utr, ytr_np)
+     m = Model(dim, Xtr.shape[1], Htr.shape[1], Atr.shape[1], k, seed, use_deep=use_deep).to(device)
+     groups = [{'params':[m.V,m.W],'weight_decay':l2},{'params':[m.b],'weight_decay':0.0},{'params':m.H.parameters(),'weight_decay':1e-5},{'params':m.aux.parameters(),'weight_decay':1e-5}]
+     if use_deep: groups.append({'params':m.deep.parameters(),'weight_decay':1e-5})
+@@ -176,17 +171,18 @@
+     for ep in range(1, epochs+1):
+         idx = rng.permutation(len(ytr)); m.train(); losses = []; t0 = time.time()
+         for i in range(0, len(idx), bs):
+-            sel_np = idx[i:i+bs]; sel = torch.from_numpy(sel_np)
++            sel = torch.from_numpy(idx[i:i+bs])
+             xb = Xtr_t[sel].to(device); hb = Htr_t[sel].to(device); yb = ytr_t[sel].to(device); ab = Atr_t[sel].to(device)
+             opt.zero_grad(set_to_none=True); main, aux = m(xb, hb, aux=True); loss = bce(main, yb) + .08 * bce(aux, ab)
+             if bpr_weight > 0:
+-                pp, nn = make_bpr_pairs(utr_np[sel_np], ytr_np[sel_np], rng)
++                pp, nn = sample_bpr_pairs(both_users, pos_by_u, neg_by_u, rng, BPR_PAIRS_PER_BATCH)
+                 if pp is not None:
+-                    pt = torch.from_numpy(pp).to(device); nt = torch.from_numpy(nn).to(device)
+-                    loss = loss + bpr_weight * (-torch.nn.functional.logsigmoid(main[pt] - main[nt]).mean())
++                    pidx = torch.from_numpy(pp).to(device); nidx = torch.from_numpy(nn).to(device)
++                    sp = m(Xtr_t[pidx].to(device), Htr_t[pidx].to(device)); sn = m(Xtr_t[nidx].to(device), Htr_t[nidx].to(device))
++                    loss = loss + bpr_weight * (-torch.nn.functional.logsigmoid(sp - sn).mean())
+             loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, m.predict(Xva, Hva, device=device))
+-        if verbose: print(f'seed {seed} deep {use_deep} ep {ep} loss {np.mean(losses):.4f} valid {va["primary"]:.4f} {time.time()-t0:.1f}s')
++        if verbose: print(f'seed {seed} deep {use_deep} bpr {bpr_weight} ep {ep} loss {np.mean(losses):.4f} valid {va["primary"]:.4f} {time.time()-t0:.1f}s')
+         if va['primary'] > best + 1e-5:
+             best = va['primary']; bad = 0; state = {kk: vv.detach().clone() for kk, vv in m.state_dict().items()}
+         else:
+@@ -219,11 +215,11 @@
+ 
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--rank_gamma', type=float, default=RANK_GAMMA); ap.add_argument('--margin_weight', type=float, default=MARGIN_WEIGHT); ap.add_argument('--deep_weight', type=float, default=DEEP_WEIGHT); ap.add_argument('--bpr_weight', type=float, default=BPR_WEIGHT); a = ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'FM+DeepFM 8x/8x BCE+BPR rank+margin blend dw={a.deep_weight} bw={a.bpr_weight}')
++    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'FM+DeepFM 8x/8x fast deep-only BPR rank+margin blend dw={a.deep_weight} bw={a.bpr_weight}')
+     enc, dim, hist, aux_t = prepare(splits, a.data_dir); X, y, users = enc[a.split]
+     fm_preds = []; deep_preds = []
+     for s in range(8):
+-        m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None), use_deep=False, bpr_weight=a.bpr_weight)
++        m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None), use_deep=False, bpr_weight=0.0)
+         fm_preds.append(m.predict(X, hist[a.split], device=a.device))
+     for s in range(8):
+         m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None), use_deep=True, bpr_weight=a.bpr_weight)

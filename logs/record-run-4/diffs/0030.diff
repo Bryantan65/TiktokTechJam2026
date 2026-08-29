@@ -1,0 +1,61 @@
+# iteration 30  (parent: 27)
+# hypothesis: improve 27: with training-time changes saturated, use a label-free target-split exposure-frequency residual: repeated same user-video/author impressions in the requested split may reflect recommender persistence and can only affect within-user ordering.
+# result: GAUC 0.671429 | nDCG@5 0.537531 | primary 0.60448 | verdict KEPT
+
+--- logs/record-run-4/solutions/027_author_tab_history.py
++++ logs/record-run-4/solutions/030_target_frequency.py
+@@ -1,4 +1,4 @@
+-"""Sampled-softmax multitask FM plus time and recent history; add author-by-tab user history residual."""
++"""Sampled-softmax multitask FM plus time/history; add label-free target-split exposure frequency residual."""
+ import argparse, csv, datetime as _dt, os, sys, time
+ from collections import defaultdict, deque
+ import numpy as np
+@@ -126,6 +126,20 @@
+         out[i]=np.float32(np.clip(adj,-1.,1.))
+     return out
+ 
++def target_frequency_adjust(rows):
++    """Unlabelled transductive exposure-frequency signal inside the requested split."""
++    uv=defaultdict(int); ua=defaultdict(int); uat=defaultdict(int)
++    for r in rows:
++        u=_to_int(r[1]); v=_to_int(r[2]); a=_to_int(r[3]); t=_to_int(r[4])
++        uv[(u,v)] += 1; ua[(u,a)] += 1; uat[(u,a,t)] += 1
++    out=np.zeros(len(rows),dtype=np.float32)
++    for i,r in enumerate(rows):
++        u=_to_int(r[1]); v=_to_int(r[2]); a=_to_int(r[3]); t=_to_int(r[4])
++        # tiny monotone boosts: production repeatedly exposing a target/author to a user is weak evidence of relevance.
++        adj = 0.050*np.log1p(max(0, uv[(u,v)]-1)) + 0.012*np.log1p(max(0, ua[(u,a)]-1)) + 0.010*np.log1p(max(0, uat[(u,a,t)]-1))
++        out[i]=np.float32(min(adj,0.10))
++    return out
++
+ def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096, patience=4, neg_k=16, aux_weight=0.05, seed=0, device='cpu', verbose=True):
+     enc,aux,matched,dim=encode_with_time_aux(splits,data_dir); Xtr,ytr,utr=enc['train']; Xva,yva,uva=enc['valid']
+     valid_rows=matched['train']; prev=aux['train'][valid_rows].mean(0) if valid_rows.any() else np.zeros(len(AUX_NAMES)); keep_aux=np.where((prev>0.001)&(prev<0.999))[0]
+@@ -139,7 +153,7 @@
+         perm=rng.permutation(len(pos_idx)); t0=time.time(); model.train(); losses=[]
+         for i in range(0,len(perm),bs):
+             psel=perm[i:i+bs]; bsz=len(psel); pidx=pos_idx[psel]; nidx=np.empty((bsz,neg_k),dtype=np.int64)
+-            for t,pool in enumerate(neg_pools[psel]): nidx[t]=pool[rng.integers(len(pool),size=neg_k)]
++            for j,pool in enumerate(neg_pools[psel]): nidx[j]=pool[rng.integers(len(pool),size=neg_k)]
+             cand_idx=np.concatenate([pidx.reshape(-1,1),nidx],axis=1); xp=Xtr_t[torch.from_numpy(pidx)].to(device); xn=Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
+             opt.zero_grad(set_to_none=True); logits=torch.cat([model(xp).view(bsz,1), model(xn).view(bsz,neg_k)], dim=1); loss=torch.nn.functional.cross_entropy(logits, torch.zeros(bsz,dtype=torch.long,device=device))
+             if aux_weight>0.0 and len(keep_aux):
+@@ -160,14 +174,14 @@
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test']); ap.add_argument('--out',default=None)
+     ap.add_argument('--k',type=int,default=16); ap.add_argument('--lr',type=float,default=0.001); ap.add_argument('--epochs',type=int,default=40); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+-    torch.manual_seed(a.seed); print(f"loading {a.data_dir} ..."); splits=load(a.data_dir); print({k_:len(v) for k_,v in splits.items()}, f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} author_tab_history neg16")
++    torch.manual_seed(a.seed); print(f"loading {a.data_dir} ..."); splits=load(a.data_dir); print({k_:len(v) for k_,v in splits.items()}, f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} target_frequency")
+     model,enc,hist=run(splits,a.data_dir,k=a.k,lr=a.lr,epochs=a.epochs,seed=a.seed,device=a.device,verbose=a.out is None)
+-    X,y,users=enc[a.split]; scores=model.predict(X,device=a.device)+history_adjust(splits[a.split],hist)
++    X,y,users=enc[a.split]; scores=model.predict(X,device=a.device)+history_adjust(splits[a.split],hist)+target_frequency_adjust(splits[a.split])
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== author_tab_history_neg16 (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== target_frequency_neg16 (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid','test'):
+-            Xs,ys,us=enc[sp]; pred=model.predict(Xs,device=a.device)+history_adjust(splits[sp],hist); r=evaluate(us,ys,pred)
++            Xs,ys,us=enc[sp]; pred=model.predict(Xs,device=a.device)+history_adjust(splits[sp],hist)+target_frequency_adjust(splits[sp]); r=evaluate(us,ys,pred)
+             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

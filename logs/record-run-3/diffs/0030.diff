@@ -1,0 +1,126 @@
+# iteration 30  (parent: 27)
+# hypothesis: improve 27: with convergence imminent, refine the current best by adding a very weak empirical-Bayes train-only target-rate rank member (video/author/user-item/user-author/tab-hour), aiming to capture memorised repeat preference not represented by the neural DeepFM member.
+# result: GAUC 0.672467 | nDCG@5 0.538409 | primary 0.605438 | verdict KEPT
+
+--- logs/record-run-3/solutions/027_deepfm_member.py
++++ logs/record-run-3/solutions/030_targetrate_member.py
+@@ -1,8 +1,10 @@
+-"""Node-24 ensemble plus one weak DeepFM BPR member.
+-
+-Draft direction 5: preserve the strong FM BPR/time/watch/user-balanced ensemble,
+-and add a small DeepFM member trained with the same within-user BPR objective to
+-contribute higher-order feature interactions without letting capacity dominate.
++"""Node-27 ensemble plus a weak train-only target-rate member.
++
++This keeps the best DeepFM/time/watch/user-balanced ensemble and adds a very
++small empirical-Bayes member based only on train labels (video, author,
++user-author, user-video and tab-hour rates).  The goal is to add a high-bias
++memorisation signal complementary to parametric FM interactions without letting
++noisy counts dominate the rank ensemble.
+ """
+ import argparse
+ import csv
+@@ -169,7 +171,46 @@
+     enc0, _ = encode(splits)
+     time_meta, play_meta = aligned_raw_features(data_dir, splits)
+     enc, dim = augment_encoded(enc0, time_meta)
+-    return enc, dim, play_meta
++    return enc, dim, play_meta, time_meta
++
++
++def _logit(p):
++    p = min(max(float(p), 1e-5), 1 - 1e-5)
++    return np.log(p / (1.0 - p))
++
++
++class TargetRateMember:
++    def __init__(self, splits, time_meta):
++        self.global_mean = float(np.mean([r[6] for r in splits['train']]))
++        self.maps = []
++        specs = [
++            (lambda r, tf: _to_int(r[2]), 30.0, 0.60),                        # video
++            (lambda r, tf: _to_int(r[3]), 60.0, 0.55),                        # author
++            (lambda r, tf: (_to_int(r[1]), _to_int(r[3])), 8.0, 0.90),         # user-author
++            (lambda r, tf: (_to_int(r[1]), _to_int(r[2])), 3.0, 0.35),         # user-video repeats
++            (lambda r, tf: (_to_int(r[3]), _to_int(r[4])), 25.0, 0.35),        # author-tab
++            (lambda r, tf: (_to_int(r[2]), _to_int(r[4])), 10.0, 0.25),        # video-tab
++            (lambda r, tf: (_to_int(r[4]), int(tf[0])), 80.0, 0.20),           # tab-hour
++        ]
++        train_tf = time_meta['train']
++        for key_fn, alpha, wt in specs:
++            cnt = defaultdict(lambda: [0.0, 0.0])
++            for r, tf in zip(splits['train'], train_tf):
++                c = cnt[key_fn(r, tf)]; c[0] += float(r[6]); c[1] += 1.0
++            mp = {k: _logit((s + alpha * self.global_mean) / (n + alpha)) for k, (s, n) in cnt.items()}
++            self.maps.append((key_fn, mp, wt))
++        self.default = _logit(self.global_mean)
++
++    def score_rows(self, rows, tf_arr):
++        out = np.zeros(len(rows), dtype=np.float64)
++        wsum = 0.0
++        for key_fn, mp, wt in self.maps:
++            vals = np.fromiter((mp.get(key_fn(r, tf), self.default) for r, tf in zip(rows, tf_arr)), dtype=np.float64, count=len(rows))
++            out += wt * vals; wsum += wt
++        return out / max(wsum, 1e-9)
++
++    def score_all(self, splits, time_meta):
++        return {sp: self.score_rows(rows, time_meta[sp]) for sp, rows in splits.items()}
+ 
+ 
+ def make_user_pairs(y, users, user_balanced=False):
+@@ -233,7 +274,7 @@
+ 
+ 
+ def train_ensemble(splits, data_dir, k=16, lr=0.001, epochs=40, seed=0, device='cpu', verbose=True):
+-    enc, dim, play_meta = encode_with_raw(data_dir, splits)
++    enc, dim, play_meta, time_meta = encode_with_raw(data_dir, splits)
+     seeds = [seed, seed+1009, seed+2027, seed+3037, seed+4051, seed+5059, seed+6073]
+     models, weights = [], []
+     for j, s in enumerate(seeds):
+@@ -244,7 +285,9 @@
+     models.append(train_one(enc, dim, user_balanced=True, k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag="userbal1/1")); weights.append(0.75)
+     s = seed + 9091; torch.manual_seed(s)
+     models.append(train_one(enc, dim, model_kind='deepfm', k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag="deepfm1/1")); weights.append(0.50)
+-    return models, np.asarray(weights, dtype=np.float64), enc
++    trm = TargetRateMember(splits, time_meta)
++    target_scores = trm.score_all(splits, time_meta)
++    return models, np.asarray(weights, dtype=np.float64), enc, target_scores
+ 
+ 
+ def within_user_rank_scores(scores, users):
+@@ -260,10 +303,13 @@
+ 
+ 
+ @torch.no_grad()
+-def ensemble_predict(models, weights, X, users, device='cpu'):
++def ensemble_predict(models, weights, X, users, device='cpu', target_scores=None, target_weight=0.20):
+     pred = np.zeros(len(X), dtype=np.float64); weights = np.asarray(weights, dtype=np.float64)
+     for m, w in zip(models, weights): pred += w * within_user_rank_scores(m.predict(X, device=device), users)
+-    return pred / weights.sum()
++    total = float(weights.sum())
++    if target_scores is not None and target_weight > 0:
++        pred += target_weight * within_user_rank_scores(target_scores, users); total += target_weight
++    return pred / total
+ 
+ 
+ if __name__ == '__main__':
+@@ -276,14 +322,14 @@
+     a = ap.parse_args(); torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time; ensemble=7label+0.75watchconf+0.75userbal+0.50deepfm")
+-    models, weights, enc = train_ensemble(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+-    X, y, users = enc[a.split]; scores = ensemble_predict(models, weights, X, users, device=a.device)
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time; ensemble=7label+0.75watchconf+0.75userbal+0.50deepfm+0.20targetrate")
++    models, weights, enc, target_scores = train_ensemble(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
++    X, y, users = enc[a.split]; scores = ensemble_predict(models, weights, X, users, device=a.device, target_scores=target_scores[a.split])
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== deepfm_member (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== targetrate_member (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+-            Xs, ys, us = enc[sp]; r = evaluate(us, ys, ensemble_predict(models, weights, Xs, us, device=a.device))
++            Xs, ys, us = enc[sp]; r = evaluate(us, ys, ensemble_predict(models, weights, Xs, us, device=a.device, target_scores=target_scores[sp]))
+             print(f"  {sp:5s} GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

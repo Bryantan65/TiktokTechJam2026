@@ -1,0 +1,188 @@
+# iteration 34  (parent: 26)
+# hypothesis: draft transductive candidate-set prior from 26: use only the unlabeled target candidate list to rank repeated videos/authors/tags/music within each user, testing whether the logging policy's candidate composition contains implicit preference signal (transductive LTR/candidate-set context; web search summary on transductive learning in ranking).
+# result: GAUC 0.665517 | nDCG@5 0.534538 | primary 0.600027 | verdict noise
+
+--- logs/record-run-12/solutions/027_behavior_prior.py
++++ logs/record-run-12/solutions/035_candidate_set_prior.py
+@@ -1,5 +1,12 @@
+-"""Best cached content-FM/DeepFM ensemble plus train-only user-history target priors."""
+-import argparse, csv, os, sys, time
++"""Cached best ensemble plus unlabeled target candidate-set co-occurrence prior.
++
++The base is node 26 reconstructed from cached content-FM, BCE, DeepFM members and
++train-only behavior prior.  This draft adds a transductive (label-free) prior:
++within each target user's candidate set, videos/authors/tags/music/tabs/duration
++buckets that appear repeatedly get a higher score, because the logging policy's
++candidate composition itself is an implicit user-interest signal.
++"""
++import argparse, csv, os, sys
+ import numpy as np
+ import torch
+ import torch.nn.functional as F
+@@ -8,16 +15,16 @@
+ from data import load, encode, FIELDS
+ from evaluate import evaluate
+ 
+-CONTENT_FIELDS = ['music_id', 'tag', 'video_type', 'upload_type', 'server_width', 'server_height', 'music_type']
++CONTENT_FIELDS=['music_id','tag','video_type','upload_type','server_width','server_height','music_type']
+ 
+ class TorchFM(torch.nn.Module):
+-    def __init__(self, dim, k=16, seed=0):
++    def __init__(self,dim,k=16,seed=0):
+         super().__init__(); rng=np.random.default_rng(seed)
+         self.V=torch.nn.Parameter(torch.from_numpy(rng.normal(0,0.01,(dim,k)).astype(np.float32)))
+         self.W=torch.nn.Parameter(torch.zeros(dim,dtype=torch.float32)); self.b=torch.nn.Parameter(torch.zeros((),dtype=torch.float32))
+     def forward(self,X):
+         E=self.V[X]; S=E.sum(1)
+-        return self.b + self.W[X].sum(1) + 0.5*((S*S).sum(1)-(E*E).sum((1,2)))
++        return self.b+self.W[X].sum(1)+0.5*((S*S).sum(1)-(E*E).sum((1,2)))
+     @torch.no_grad()
+     def predict(self,X,bs=200000,device='cpu'):
+         self.eval(); out=[]
+@@ -25,7 +32,7 @@
+         return np.concatenate(out)
+ 
+ class DeepFM(torch.nn.Module):
+-    def __init__(self, dim, n_fields, k=8, seed=0):
++    def __init__(self,dim,n_fields,k=8,seed=0):
+         super().__init__(); rng=np.random.default_rng(seed)
+         self.V=torch.nn.Parameter(torch.from_numpy(rng.normal(0,0.01,(dim,k)).astype(np.float32)))
+         self.W=torch.nn.Parameter(torch.zeros(dim,dtype=torch.float32)); self.b=torch.nn.Parameter(torch.zeros((),dtype=torch.float32))
+@@ -33,8 +40,8 @@
+         self.mlp=torch.nn.Sequential(torch.nn.Linear(n_fields*k,64),torch.nn.ReLU(),torch.nn.Dropout(0.10),torch.nn.Linear(64,32),torch.nn.ReLU(),torch.nn.Linear(32,1))
+     def forward(self,X):
+         E=self.V[X]; S=E.sum(1)
+-        fm=self.b + self.W[X].sum(1) + 0.5*((S*S).sum(1)-(E*E).sum((1,2)))
+-        return fm + self.mlp(self.D(X).reshape(X.shape[0],-1)).squeeze(1)
++        fm=self.b+self.W[X].sum(1)+0.5*((S*S).sum(1)-(E*E).sum((1,2)))
++        return fm+self.mlp(self.D(X).reshape(X.shape[0],-1)).squeeze(1)
+     @torch.no_grad()
+     def predict(self,X,bs=65536,device='cpu'):
+         self.eval(); out=[]
+@@ -50,12 +57,12 @@
+     if not os.path.isfile(path): return mp
+     with open(path,newline='',encoding='utf-8') as f:
+         rdr=csv.DictReader(f); names=rdr.fieldnames or []
+-        vid_col='video_id' if 'video_id' in names else ('item_id' if 'item_id' in names else None)
+-        if vid_col is None: return mp
+-        for rec in rdr: mp[norm_val(rec.get(vid_col))]=tuple(norm_val(rec.get(c)) for c in CONTENT_FIELDS)
++        vc='video_id' if 'video_id' in names else ('item_id' if 'item_id' in names else None)
++        if vc is None: return mp
++        for rec in rdr: mp[norm_val(rec.get(vc))]=tuple(norm_val(rec.get(c)) for c in CONTENT_FIELDS)
+     print('loaded video content rows',len(mp)); return mp
+ 
+-def append_content_features(splits, enc, base_dim, data_dir):
++def append_content_features(splits,enc,base_dim,data_dir):
+     content=load_video_content(data_dir); allrows=[]
+     for sp in ['train','valid','test']:
+         if sp in splits: allrows.extend(splits[sp])
+@@ -168,22 +175,15 @@
+     if os.path.isfile(path): print('loading cached',path); return np.load(path).astype(np.float64)
+     print('training',name,'seed',seed); model=train_fn(enc,dim,seed=seed,device=device,verbose=verbose); p=model.predict(Xtar,device=device).astype(np.float64); np.save(path,p); return p
+ 
+-def train_video_counts(splits, target):
++def train_video_counts(splits,target):
+     cnt={}
+     for r in splits['train']:
+         v=norm_val(r[2]); cnt[v]=cnt.get(v,0)+1
+     return np.array([cnt.get(norm_val(r[2]),0) for r in splits[target]],dtype=np.float64)
+ 
+-def make_behavior_prior(splits, target, content):
+-    y=np.array([r[6] for r in splits['train']],dtype=np.float64); global_mean=float(y.mean())
+-    specs=[
+-        ('uv', lambda r: (norm_val(r[1]), norm_val(r[2])), 5.0, 1.6),
+-        ('ua', lambda r: (norm_val(r[1]), norm_val(r[3])), 12.0, 1.3),
+-        ('utag', lambda r: (norm_val(r[1]), content.get(norm_val(r[2]),('__MISS__',)*7)[1]), 15.0, 1.0),
+-        ('umusic', lambda r: (norm_val(r[1]), content.get(norm_val(r[2]),('__MISS__',)*7)[0]), 12.0, 0.8),
+-        ('utab', lambda r: (norm_val(r[1]), norm_val(r[4])), 20.0, 0.45),
+-        ('udur', lambda r: (norm_val(r[1]), str(int(float(r[5])//10000))), 25.0, 0.35),
+-    ]
++def make_behavior_prior(splits,target,content):
++    y=np.array([r[6] for r in splits['train']],dtype=np.float64); gm=float(y.mean())
++    specs=[('uv',lambda r:(norm_val(r[1]),norm_val(r[2])),5.0,1.6),('ua',lambda r:(norm_val(r[1]),norm_val(r[3])),12.0,1.3),('utag',lambda r:(norm_val(r[1]),content.get(norm_val(r[2]),('__MISS__',)*7)[1]),15.0,1.0),('umusic',lambda r:(norm_val(r[1]),content.get(norm_val(r[2]),('__MISS__',)*7)[0]),12.0,0.8),('utab',lambda r:(norm_val(r[1]),norm_val(r[4])),20.0,0.45),('udur',lambda r:(norm_val(r[1]),str(int(float(r[5])//10000))),25.0,0.35)]
+     maps=[]
+     for name,fn,alpha,wt in specs:
+         d={}
+@@ -192,14 +192,47 @@
+         maps.append((name,fn,alpha,wt,d)); print('behavior map',name,'keys',len(d))
+     raw=np.empty(len(splits[target]),dtype=np.float64); strength=np.empty(len(splits[target]),dtype=np.float64)
+     for i,r in enumerate(splits[target]):
+-        num=0.0; den=0.0; st=0.0
++        num=den=st=0.0
+         for name,fn,alpha,wt,d in maps:
+-            n,s=d.get(fn(r),(0,0.0)); rate=(s+alpha*global_mean)/(n+alpha)
+-            shrink=n/(n+alpha)
+-            num += wt*shrink*rate; den += wt*shrink; st += wt*shrink
+-        raw[i]=global_mean if den<=0 else num/den
+-        strength[i]=st
++            n,s=d.get(fn(r),(0,0.0)); rate=(s+alpha*gm)/(n+alpha); shrink=n/(n+alpha)
++            num+=wt*shrink*rate; den+=wt*shrink; st+=wt*shrink
++        raw[i]=gm if den<=0 else num/den; strength[i]=st
+     print('behavior prior mean/std/coverage/strength',float(raw.mean()),float(raw.std()),float((strength>0).mean()),float(strength.mean()))
++    return raw
++
++def make_candidate_prior(rows,content):
++    n=len(rows); raw=np.zeros(n,dtype=np.float64); order=sorted(range(n), key=lambda i: norm_val(rows[i][1])); s=0
++    cover_users=0; avg_m=0.0
++    while s<n:
++        e=s+1; u=norm_val(rows[order[s]][1])
++        while e<n and norm_val(rows[order[e]][1])==u: e+=1
++        idx=order[s:e]; m=len(idx); avg_m+=m
++        if m>1:
++            cover_users+=1
++            feats=[]
++            for i in idx:
++                r=rows[i]; vals=content.get(norm_val(r[2]),('__MISS__',)*7)
++                dur=str(int(float(r[5])//10000))
++                feats.append((norm_val(r[2]),norm_val(r[3]),vals[1],vals[0],norm_val(r[4]),dur,vals[2]))
++            weights=[2.2,1.4,0.9,0.65,0.35,0.25,0.20]
++            # Count feature multiplicity within this user's candidate list only.  Use log1p(count-1)
++            # so singleton features are neutral and repeated candidate structure drives the prior.
++            cnts=[]
++            for j in range(len(weights)):
++                d={}
++                for f in feats:
++                    key=f[j]; d[key]=d.get(key,0)+1
++                cnts.append(d)
++            valscore=[]
++            for f in feats:
++                sc=0.0
++                for j,w in enumerate(weights):
++                    c=cnts[j].get(f[j],0)
++                    if c>1: sc += w*np.log1p(c-1)
++                valscore.append(sc)
++            raw[np.asarray(idx,dtype=np.int64)]=np.asarray(valscore,dtype=np.float64)
++        s=e
++    print('candidate prior users',cover_users,'rows',n,'mean/std/nonzero',float(raw.mean()),float(raw.std()),float((raw!=0).mean()))
+     return raw
+ 
+ if __name__=='__main__':
+@@ -210,7 +243,7 @@
+         splits=load_dev(a.data_dir); target='valid'
+     else:
+         splits=load(a.data_dir); target=a.split
+-    print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+{CONTENT_FIELDS}')
++    print({k:len(v) for k,v in splits.items()},f'fields={FIELDS}+{CONTENT_FIELDS}')
+     enc0,dim0=encode(splits); enc,dim,content=append_content_features(splits,enc0,dim0,a.data_dir); Xtar,_,utar=enc[target]; verbose=(a.out is None)
+     bags=[]
+     for s in (0,1,2):
+@@ -223,13 +256,13 @@
+         dp=get_preds('024','deepfm_content_bpr_v1',train_deep_bpr,enc,dim,Xtar,s,a.device,verbose)
+         deep_bags.append(percentile_rank_by_user(dp,utar))
+     deep=np.mean(deep_bags,axis=0)
+-    vc=train_video_counts(splits,target)
+-    w=0.20 + 0.25/(1.0 + vc/5.0)
+-    base=(1.0-w)*fm_base + w*deep
++    vc=train_video_counts(splits,target); w=0.20+0.25/(1.0+vc/5.0)
++    base=(1.0-w)*fm_base+w*deep
+     prior=percentile_rank_by_user(make_behavior_prior(splits,target,content),utar)
+-    # Train-only personalized history is sparse/noisy, so use it as a small nDCG-oriented reranker.
+-    scores=0.88*base + 0.12*prior
+-    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'behavior blend 0.12')
++    node26=0.88*base+0.12*prior
++    cand=percentile_rank_by_user(make_candidate_prior(splits[target],content),utar)
++    scores=0.75*node26+0.25*cand
++    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'behavior 0.12 candidate-set blend 0.25')
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,} predictions')
+     else: print('done')

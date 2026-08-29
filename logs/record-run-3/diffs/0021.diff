@@ -1,0 +1,203 @@
+# iteration 21  (parent: 20)
+# hypothesis: improve 20: the gentle multi-task model is close but not better than the plain time model, so use it only as ensemble diversity: five node-17-style BPR time members plus two gentle auxiliary members. This tries to capture the occasional high nDCG/GAUC auxiliary seeds without letting auxiliary regularization dominate the ensemble.
+# result: GAUC 0.671791 | nDCG@5 0.537921 | primary 0.604856 | verdict KEPT
+
+--- logs/record-run-3/solutions/020_multitask_gentle_playtime.py
++++ logs/record-run-3/solutions/021_time_aux_diverse_ensemble.py
+@@ -1,11 +1,9 @@
+-"""BPR7 time-context FM with gentler auxiliary multi-task regularization.
+-
+-Improves node 18: the first auxiliary draft likely over-weighted very rare binary
+-tasks via pos_weight and forced all tasks through the same FM interaction scalar.
+-This version uses a much smaller auxiliary coefficient, adds play-time ratio as
+-a dense engagement task, and lets each auxiliary head read the summed embedding
+-vector through task-specific linear heads while leaving the ranking head and
+-prediction path unchanged.
++"""Diverse seven-member time-context ensemble: five plain BPR FM + two gentle-aux BPR FM.
++
++Improves node 20 by using the auxiliary formulation only as ensemble diversity
++rather than replacing every strong plain BPR member.  Prediction remains an
++average of within-user ranks, with the same temporal features and no auxiliary
++features used at inference.
+ """
+ import argparse
+ import csv
+@@ -26,34 +24,19 @@
+ AUX_BIN_COLS = ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_hate', 'is_profile_enter']
+ 
+ 
+-class MultiTaskFM(torch.nn.Module):
+-    def __init__(self, dim, k=16, n_aux_bin=7, seed=0):
++class TorchFM(torch.nn.Module):
++    def __init__(self, dim, k=16, seed=0):
+         super().__init__()
+         rng = np.random.default_rng(seed)
+         self.V = torch.nn.Parameter(torch.from_numpy(rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+-        # Auxiliary heads consume the shared summed embedding, a less restrictive
+-        # signal than reusing one scalar FM interaction for every task.
+-        self.A_bin = torch.nn.Parameter(torch.from_numpy(rng.normal(0, 0.01, (n_aux_bin, k)).astype(np.float32)))
+-        self.c_bin = torch.nn.Parameter(torch.zeros(n_aux_bin, dtype=torch.float32))
+-        self.a_play = torch.nn.Parameter(torch.from_numpy(rng.normal(0, 0.01, (k,)).astype(np.float32)))
+-        self.c_play = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+-
+-    def embed_sum(self, X):
+-        return self.V[X].sum(1)
+ 
+     def forward(self, X):
+         E = self.V[X]
+         S = E.sum(1)
+         inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
+         return self.b + self.W[X].sum(1) + inter
+-
+-    def aux_logits(self, X):
+-        S = self.embed_sum(X)
+-        bin_logits = S @ self.A_bin.t() + self.c_bin.unsqueeze(0)
+-        play_logit = S @ self.a_play + self.c_play
+-        return bin_logits, play_logit
+ 
+     @torch.no_grad()
+     def predict(self, X, bs=200000, device='cpu'):
+@@ -63,6 +46,20 @@
+             xb = torch.from_numpy(X[i:i+bs].astype(np.int64)).to(device)
+             out.append(self(xb).cpu().numpy())
+         return np.concatenate(out)
++
++
++class AuxFM(TorchFM):
++    def __init__(self, dim, k=16, n_aux_bin=7, seed=0):
++        super().__init__(dim, k=k, seed=seed)
++        rng = np.random.default_rng(seed + 17)
++        self.A_bin = torch.nn.Parameter(torch.from_numpy(rng.normal(0, 0.01, (n_aux_bin, k)).astype(np.float32)))
++        self.c_bin = torch.nn.Parameter(torch.zeros(n_aux_bin, dtype=torch.float32))
++        self.a_play = torch.nn.Parameter(torch.from_numpy(rng.normal(0, 0.01, (k,)).astype(np.float32)))
++        self.c_play = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
++
++    def aux_logits(self, X):
++        S = self.V[X].sum(1)
++        return S @ self.A_bin.t() + self.c_bin.unsqueeze(0), S @ self.a_play + self.c_play
+ 
+ 
+ def _pick(rec, names, default=None):
+@@ -128,7 +125,6 @@
+                 hourmin = _pick(rec, ['hourmin', 'hour_min', 'time', 'request_time'], 0)
+                 aux_bin = tuple(float(_to_int(_pick(rec, [c], 0))) for c in AUX_BIN_COLS)
+                 play = _to_float(_pick(rec, ['play_time_ms'], 0.0), 0.0)
+-                # Dense target in [0,1]; cap repeated/looped play to avoid extreme gradients.
+                 play_ratio = min(max(play / max(float(dur), 1000.0), 0.0), 1.0)
+                 lookup[(date, user, video, tab, dur, y)].append((_time_feats(date, hourmin, tab), aux_bin, play_ratio))
+                 n += 1
+@@ -152,9 +148,7 @@
+             else:
+                 miss += 1
+                 tarr[i] = _time_feats(date, 0, tab)
+-        time_meta[sp] = tarr
+-        aux_bin_meta[sp] = barr
+-        play_meta[sp] = parr
++        time_meta[sp] = tarr; aux_bin_meta[sp] = barr; play_meta[sp] = parr
+     print(f"raw alignment: exact={exact} missing={miss} raw={nraw} aux={AUX_BIN_COLS}+play_ratio headers={headers}")
+     return time_meta, aux_bin_meta, play_meta
+ 
+@@ -212,9 +206,41 @@
+     return pos_all[perm], neg_all[perm]
+ 
+ 
+-def train_one(enc, dim, aux_bin_train, play_train, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, seed=0, device='cpu', verbose=False, tag='', aux_weight=0.004):
++def train_one_plain(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, seed=0, device='cpu', verbose=False, tag=''):
+     Xtr, ytr, utr = enc['train']; Xva, yva, uva = enc['valid']
+-    model = MultiTaskFM(dim, k=k, n_aux_bin=aux_bin_train.shape[1], seed=seed).to(device)
++    model = TorchFM(dim, k=k, seed=seed).to(device)
++    opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2}, {'params': [model.b], 'weight_decay': 0.0}], lr=lr, betas=(0.9, 0.999), eps=1e-8)
++    Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
++    pos_lists, neg_lists, n_pos = make_user_pairs(ytr, utr)
++    rng = np.random.default_rng(seed)
++    best, best_state, bad = -1.0, None, 0
++    if verbose: print(f"{tag} plain BPR users={len(pos_lists):,d} positives={n_pos:,d}")
++    for ep in range(1, epochs + 1):
++        pos_idx, neg_idx = sample_epoch_pairs(pos_lists, neg_lists, n_pos, rng)
++        t0 = time.time(); model.train(); losses = []
++        for i in range(0, n_pos, bs):
++            xp = Xtr_t[torch.from_numpy(pos_idx[i:i+bs])].to(device)
++            xn = Xtr_t[torch.from_numpy(neg_idx[i:i+bs])].to(device)
++            opt.zero_grad(set_to_none=True)
++            loss = torch.nn.functional.softplus(-(model(xp) - model(xn))).mean()
++            loss.backward(); opt.step(); losses.append(loss.item())
++        va = evaluate(uva, yva, model.predict(Xva, device=device))
++        if verbose: print(f"  {tag} epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
++        if va['primary'] > best + 1e-5:
++            best, bad = va['primary'], 0
++            best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
++        else:
++            bad += 1
++            if bad >= patience:
++                if verbose: print(f"  {tag} early stop at epoch {ep}")
++                break
++    model.load_state_dict(best_state)
++    return model
++
++
++def train_one_aux(enc, dim, aux_bin_train, play_train, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, seed=0, device='cpu', verbose=False, tag='', aux_weight=0.004):
++    Xtr, ytr, utr = enc['train']; Xva, yva, uva = enc['valid']
++    model = AuxFM(dim, k=k, n_aux_bin=aux_bin_train.shape[1], seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W, model.A_bin, model.a_play], 'weight_decay': l2}, {'params': [model.b, model.c_bin, model.c_play], 'weight_decay': 0.0}], lr=lr, betas=(0.9, 0.999), eps=1e-8)
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     aux_t = torch.from_numpy(aux_bin_train.astype(np.float32))
+@@ -222,9 +248,7 @@
+     pos_lists, neg_lists, n_pos = make_user_pairs(ytr, utr)
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+-    if verbose:
+-        rates = aux_bin_train.mean(axis=0)
+-        print(f"{tag} BPR+gentle-aux users={len(pos_lists):,d} positives={n_pos:,d} aux_rates={rates} play_mean={play_train.mean():.4f}")
++    if verbose: print(f"{tag} aux BPR users={len(pos_lists):,d} positives={n_pos:,d}")
+     for ep in range(1, epochs + 1):
+         pos_idx, neg_idx = sample_epoch_pairs(pos_lists, neg_lists, n_pos, rng)
+         t0 = time.time(); model.train(); losses = []
+@@ -244,8 +268,7 @@
+             loss = bpr + aux_weight * (aux_bin + aux_play)
+             loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+-        if verbose:
+-            print(f"  {tag} epoch {ep:2d} | loss {np.mean(losses):.4f} | valid GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
++        if verbose: print(f"  {tag} epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -260,11 +283,15 @@
+ 
+ def train_ensemble(splits, data_dir, k=16, lr=0.001, epochs=40, seed=0, device='cpu', verbose=True):
+     enc, dim, aux_bin_meta, play_meta = encode_with_raw(data_dir, splits)
+-    seeds = [seed, seed+1009, seed+2027, seed+3037, seed+4051, seed+5059, seed+6073]
++    base_seeds = [seed, seed+1009, seed+2027, seed+3037, seed+4051]
++    aux_seeds = [seed+5059, seed+6073]
+     models = []
+-    for j, s in enumerate(seeds):
++    for j, s in enumerate(base_seeds):
+         torch.manual_seed(s)
+-        models.append(train_one(enc, dim, aux_bin_meta['train'], play_meta['train'], k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag=f"m{j+1}/7"))
++        models.append(train_one_plain(enc, dim, k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag=f"plain{j+1}/5"))
++    for j, s in enumerate(aux_seeds):
++        torch.manual_seed(s)
++        models.append(train_one_aux(enc, dim, aux_bin_meta['train'], play_meta['train'], k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag=f"aux{j+1}/2"))
+     return models, enc
+ 
+ 
+@@ -309,7 +336,7 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time aux={AUX_BIN_COLS}+play_ratio")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time; ensemble=5plain+2aux")
+     models, enc = train_ensemble(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[a.split]
+     scores = ensemble_predict(models, X, users, device=a.device)
+@@ -317,7 +344,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== multitask_gentle_playtime (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== time_aux_diverse_ensemble (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, ensemble_predict(models, Xs, us, device=a.device))

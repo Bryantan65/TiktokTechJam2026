@@ -1,0 +1,145 @@
+# iteration 6  (parent: 2)
+# hypothesis: improve 2: BPR is the only node with signal; initialize it from a 7-epoch BCE FM warmup, then reset checkpoint selection so the saved model must come from BPR fine-tuning rather than the warmup. This tests whether BPR needs pointwise structure first instead of relearning it from scratch.
+# result: GAUC 0.665784 | nDCG@5 0.534593 | primary 0.600189 | verdict noise
+
+--- logs/record-run-3/solutions/002_bpr_fm.py
++++ logs/record-run-3/solutions/006_bce_warm_bpr_fm.py
+@@ -1,9 +1,10 @@
+-"""FM trained with within-user BPR pairwise ranking loss.
++"""FM with pointwise BCE warmup followed by within-user BPR fine-tuning.
+ 
+-This keeps the baseline FM architecture and data fields, but replaces pointwise
+-BCE with Bayesian Personalized Ranking pairs: for each training user that has at
+-least one positive and one negative impression, compare that user's positive
+-rows against sampled negative rows from the same user.
++The BPR draft improved ranking from scratch but may be spending early epochs just
++learning the coarse pointwise structure that the baseline already captures.  This
++script first trains the same FM with BCE for a fixed short warmup, then resets
++checkpoint selection and fine-tunes only with same-user BPR pairs so the saved
++model is always a BPR-tuned model rather than a warmup no-op.
+ """
+ import argparse
+ import os
+@@ -45,7 +46,6 @@
+ 
+ 
+ def make_user_pairs(y, users):
+-    """Return users' positive/negative row arrays for BPR sampling."""
+     y = np.asarray(y)
+     users = np.asarray(users)
+     order = np.argsort(users, kind='mergesort')
+@@ -67,7 +67,6 @@
+ 
+ 
+ def sample_epoch_pairs(pos_lists, neg_lists, n_pos, rng):
+-    """For every positive row, sample one same-user negative row."""
+     pos_all = np.empty(n_pos, dtype=np.int64)
+     neg_all = np.empty(n_pos, dtype=np.int64)
+     off = 0
+@@ -80,8 +79,8 @@
+     return pos_all[perm], neg_all[perm]
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True):
++def run(splits, k=16, lr=0.001, l2=1e-6, warm_epochs=7, bpr_epochs=30,
++        bs=8192, patience=4, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, _ = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -92,14 +91,39 @@
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
++    ytr_t = torch.from_numpy(ytr.astype(np.float32))
++    rng = np.random.default_rng(seed)
++
++    # Phase 1: short BCE warmup.  No checkpoint is kept from this phase.
++    n = len(Xtr)
++    for ep in range(1, warm_epochs + 1):
++        t0 = time.time()
++        model.train()
++        losses = []
++        perm = rng.permutation(n)
++        for i in range(0, n, bs):
++            idx_np = perm[i:i + bs]
++            idx = torch.from_numpy(idx_np)
++            xb = Xtr_t[idx].to(device)
++            yb = ytr_t[idx].to(device)
++            opt.zero_grad(set_to_none=True)
++            loss = torch.nn.functional.binary_cross_entropy_with_logits(model(xb), yb)
++            loss.backward()
++            opt.step()
++            losses.append(loss.item())
++        if verbose:
++            va = evaluate(uva, yva, model.predict(Xva, device=device))
++            print(f"  warm {ep:2d} | bce {np.mean(losses):.4f} | valid "
++                  f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
++                  f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
++
++    # Phase 2: BPR fine-tune.  Reset checkpointing so output cannot be warmup.
+     pos_lists, neg_lists, n_pos = make_user_pairs(ytr, enc['train'][2])
+     if verbose:
+-        print(f"BPR users={len(pos_lists):,d} positives paired/epoch={n_pos:,d}")
++        print(f"BPR fine-tune users={len(pos_lists):,d} positives paired/epoch={n_pos:,d}")
+ 
+-    rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+-
+-    for ep in range(1, epochs + 1):
++    for ep in range(1, bpr_epochs + 1):
+         pos_idx, neg_idx = sample_epoch_pairs(pos_lists, neg_lists, n_pos, rng)
+         t0 = time.time()
+         model.train()
+@@ -119,7 +143,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  bpr  {ep:2d} | bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -130,10 +154,11 @@
+             bad += 1
+             if bad >= patience:
+                 if verbose:
+-                    print(f"  early stop at epoch {ep}")
++                    print(f"  early stop at BPR epoch {ep}")
+                 break
+ 
+-    model.load_state_dict(best_state)
++    if best_state is not None:
++        model.load_state_dict(best_state)
+     return model, enc
+ 
+ 
+@@ -144,7 +169,7 @@
+     ap.add_argument('--out', default=None)
+     ap.add_argument('--k', type=int, default=16)
+     ap.add_argument('--lr', type=float, default=0.001)
+-    ap.add_argument('--epochs', type=int, default=40)
++    ap.add_argument('--epochs', type=int, default=30, help='BPR fine-tune epochs')
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+@@ -154,8 +179,8 @@
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
++    model, enc = run(splits, k=a.k, lr=a.lr, bpr_epochs=a.epochs,
++                     seed=a.seed, device=a.device, verbose=a.out is None)
+ 
+     X, y, users = enc[a.split]
+     scores = model.predict(X, device=a.device)
+@@ -164,7 +189,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bce_warm_bpr_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

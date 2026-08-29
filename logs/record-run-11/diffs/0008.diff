@@ -1,0 +1,106 @@
+# iteration 8  (parent: 7)
+# hypothesis: debug 7: the large drop likely came from always training on top-scoring negatives, including ambiguous false negatives; use only a small fraction of semi-hard negatives below the positive score and otherwise fall back to node 5's uniform sampling.
+# result: GAUC 0.66981 | nDCG@5 0.536835 | primary 0.603322 | verdict noise
+
+--- logs/record-run-11/solutions/007_hardneg_hybrid.py
++++ logs/record-run-11/solutions/008_semihard_hybrid.py
+@@ -1,10 +1,11 @@
+-"""FM with BPR+BCE using same-user hard negative sampling.
+-
+-Refines node 5.  Instead of pairing each positive with a uniformly sampled
+-same-user negative, each BPR epoch scores the train rows with the current model
+-and, for every positive, samples a few same-user negative candidates then uses
+-the highest-scoring one.  This should focus updates on mistakes that affect the
+-within-user top of the ranking while retaining node 5's balanced BCE anchor.
++"""FM with BPR+BCE using tempered semi-hard same-user negatives.
++
++Debugs node 7.  The hard-negative draft picked mostly the current top-scoring
++negative for every positive, which can repeatedly punish ambiguous/false
++negatives and collapse the model.  This version keeps node 5's uniform BPR as
++the base, but for a small fraction of pairs chooses a semi-hard negative: among
++a few same-user candidates, use the highest scoring one that is still below the
++positive score, otherwise fall back to a uniform negative.
+ """
+ import argparse
+ import os
+@@ -61,24 +62,33 @@
+     return groups
+ 
+ 
+-def make_pairs(groups, rng, train_scores=None, hard_k=8, hard_frac=0.75):
+-    """Sample same-user pairs, usually choosing the hardest of hard_k negatives."""
++def make_pairs(groups, rng, train_scores=None, semi_k=4, semi_frac=0.25):
++    """Sample same-user pairs with lightly tempered semi-hard negatives."""
+     left, right = [], []
+     order_groups = np.arange(len(groups))
+     rng.shuffle(order_groups)
+     for gi in order_groups:
+         ps, ns = groups[gi]
+         m = len(ps)
+-        if train_scores is None or hard_k <= 1:
+-            chosen = rng.choice(ns, size=m, replace=True)
+-        else:
+-            use_hard = rng.random(m) < hard_frac
+-            chosen = rng.choice(ns, size=m, replace=True)
+-            hh = int(use_hard.sum())
++        chosen = rng.choice(ns, size=m, replace=True)
++        if train_scores is not None and semi_k > 1 and semi_frac > 0:
++            mask = rng.random(m) < semi_frac
++            hh = int(mask.sum())
+             if hh > 0:
+-                cand = rng.choice(ns, size=(hh, hard_k), replace=True)
+-                best = np.argmax(train_scores[cand], axis=1)
+-                chosen[use_hard] = cand[np.arange(hh), best]
++                psel = ps[mask]
++                cand = rng.choice(ns, size=(hh, semi_k), replace=True)
++                cs = train_scores[cand]
++                pscores = train_scores[psel]
++                ok = cs < pscores[:, None]
++                # Select the hardest candidate that is still below the positive.
++                masked = np.where(ok, cs, -np.inf)
++                any_ok = ok.any(axis=1)
++                if any_ok.any():
++                    rows = np.where(any_ok)[0]
++                    cols = np.argmax(masked[rows], axis=1)
++                    tmp = chosen[mask]
++                    tmp[rows] = cand[rows, cols]
++                    chosen[mask] = tmp
+         left.append(ps)
+         right.append(chosen.astype(np.int64, copy=False))
+     p = np.concatenate(left)
+@@ -89,7 +99,7 @@
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+         seed=0, device='cpu', verbose=True, bce_warmup=1, bce_weight=0.15,
+-        hard_k=8, hard_frac=0.75):
++        semi_k=4, semi_frac=0.25):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -124,7 +134,7 @@
+         else:
+             train_scores = model.predict(Xtr, device=device)
+             pidx, nidx = make_pairs(groups, rng, train_scores=train_scores,
+-                                    hard_k=hard_k, hard_frac=hard_frac)
++                                    semi_k=semi_k, semi_frac=semi_frac)
+             for i in range(0, len(pidx), bs):
+                 ps = torch.from_numpy(pidx[i:i + bs])
+                 ns = torch.from_numpy(nidx[i:i + bs])
+@@ -143,7 +153,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            phase = 'bce' if ep <= bce_warmup else 'hard_bpr_hybrid'
++            phase = 'bce' if ep <= bce_warmup else 'semihard_hybrid'
+             print(f"  epoch {ep:2d} {phase} | loss {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+@@ -193,7 +203,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== hardneg_hybrid (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== semihard_hybrid (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

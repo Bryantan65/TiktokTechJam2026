@@ -1,0 +1,80 @@
+# iteration 28  (parent: 26)
+# hypothesis: improve 26: keep node 26's effective 12% history-prior weight, but split one third of it to a 7-day half-life recency-weighted prior so recent user preferences can affect ranking without changing the strong base ensemble.
+# result: GAUC 0.672351 | nDCG@5 0.53791 | primary 0.60513 | verdict KEPT
+
+--- logs/record-run-12/solutions/027_behavior_prior.py
++++ logs/record-run-12/solutions/029_recency_behavior_prior.py
+@@ -1,5 +1,5 @@
+-"""Best cached content-FM/DeepFM ensemble plus train-only user-history target priors."""
+-import argparse, csv, os, sys, time
++"""Best cached content-FM/DeepFM ensemble plus standard and recency-weighted user-history priors."""
++import argparse, csv, os, sys, datetime
+ import numpy as np
+ import torch
+ import torch.nn.functional as F
+@@ -174,8 +174,18 @@
+         v=norm_val(r[2]); cnt[v]=cnt.get(v,0)+1
+     return np.array([cnt.get(norm_val(r[2]),0) for r in splits[target]],dtype=np.float64)
+ 
+-def make_behavior_prior(splits, target, content):
++def date_to_ord(x):
++    s=str(int(x));
++    try: return datetime.date(int(s[:4]),int(s[4:6]),int(s[6:8])).toordinal()
++    except Exception: return 0
++
++def make_behavior_prior(splits, target, content, recency=False):
+     y=np.array([r[6] for r in splits['train']],dtype=np.float64); global_mean=float(y.mean())
++    if recency:
++        days=np.array([date_to_ord(r[0]) for r in splits['train']],dtype=np.float64); mx=float(days.max()) if len(days) else 0.0
++        row_w=np.power(0.5, np.maximum(0.0, mx-days)/7.0)
++    else:
++        row_w=np.ones(len(splits['train']),dtype=np.float64)
+     specs=[
+         ('uv', lambda r: (norm_val(r[1]), norm_val(r[2])), 5.0, 1.6),
+         ('ua', lambda r: (norm_val(r[1]), norm_val(r[3])), 12.0, 1.3),
+@@ -187,19 +197,17 @@
+     maps=[]
+     for name,fn,alpha,wt in specs:
+         d={}
+-        for r in splits['train']:
+-            k=fn(r); n,s=d.get(k,(0,0.0)); d[k]=(n+1,s+float(r[6]))
+-        maps.append((name,fn,alpha,wt,d)); print('behavior map',name,'keys',len(d))
++        for ii,r in enumerate(splits['train']):
++            k=fn(r); n,s=d.get(k,(0.0,0.0)); w=float(row_w[ii]); d[k]=(n+w,s+w*float(r[6]))
++        maps.append((name,fn,alpha,wt,d)); print('behavior map',('recency_' if recency else '')+name,'keys',len(d))
+     raw=np.empty(len(splits[target]),dtype=np.float64); strength=np.empty(len(splits[target]),dtype=np.float64)
+     for i,r in enumerate(splits[target]):
+         num=0.0; den=0.0; st=0.0
+         for name,fn,alpha,wt,d in maps:
+-            n,s=d.get(fn(r),(0,0.0)); rate=(s+alpha*global_mean)/(n+alpha)
+-            shrink=n/(n+alpha)
++            n,s=d.get(fn(r),(0.0,0.0)); rate=(s+alpha*global_mean)/(n+alpha); shrink=n/(n+alpha)
+             num += wt*shrink*rate; den += wt*shrink; st += wt*shrink
+-        raw[i]=global_mean if den<=0 else num/den
+-        strength[i]=st
+-    print('behavior prior mean/std/coverage/strength',float(raw.mean()),float(raw.std()),float((strength>0).mean()),float(strength.mean()))
++        raw[i]=global_mean if den<=0 else num/den; strength[i]=st
++    print(('recency ' if recency else '')+'behavior prior mean/std/coverage/strength',float(raw.mean()),float(raw.std()),float((strength>0).mean()),float(strength.mean()))
+     return raw
+ 
+ if __name__=='__main__':
+@@ -223,13 +231,13 @@
+         dp=get_preds('024','deepfm_content_bpr_v1',train_deep_bpr,enc,dim,Xtar,s,a.device,verbose)
+         deep_bags.append(percentile_rank_by_user(dp,utar))
+     deep=np.mean(deep_bags,axis=0)
+-    vc=train_video_counts(splits,target)
+-    w=0.20 + 0.25/(1.0 + vc/5.0)
++    vc=train_video_counts(splits,target); w=0.20 + 0.25/(1.0 + vc/5.0)
+     base=(1.0-w)*fm_base + w*deep
+-    prior=percentile_rank_by_user(make_behavior_prior(splits,target,content),utar)
+-    # Train-only personalized history is sparse/noisy, so use it as a small nDCG-oriented reranker.
+-    scores=0.88*base + 0.12*prior
+-    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'behavior blend 0.12')
++    prior_std=percentile_rank_by_user(make_behavior_prior(splits,target,content,recency=False),utar)
++    prior_rec=percentile_rank_by_user(make_behavior_prior(splits,target,content,recency=True),utar)
++    # Stay close to node 26's useful 12% history blend, but reserve part for recent train behavior.
++    scores=0.88*base + 0.08*prior_std + 0.04*prior_rec
++    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'behavior blends std=0.08 recency=0.04')
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,} predictions')
+     else: print('done')

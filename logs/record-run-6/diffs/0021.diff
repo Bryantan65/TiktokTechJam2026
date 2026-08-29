@@ -1,0 +1,63 @@
+# iteration 21  (parent: 20)
+# hypothesis: debug 20: the raw watch logits dominated/warped the ranking, so test whether the watch head has any usable ordering after per-user rank normalization and only a 20% readable blend with the incumbent ranks.
+# result: GAUC 0.667711 | nDCG@5 0.536964 | primary 0.602338 | verdict noise
+
+--- logs/record-run-6/solutions/020_watch_aux_score.py
++++ logs/record-run-6/solutions/021_debug_watch_rankblend.py
+@@ -8,7 +8,7 @@
+ from evaluate import evaluate
+ 
+ AUX_NAMES = ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']
+-WATCH_BETA = 0.35
++WATCH_ALPHA = 0.20
+ 
+ def to_int(x, default=0):
+     try: return int(float(x))
+@@ -120,18 +120,16 @@
+         if aux: return main, self.aux(torch.cat([S, H], 1))
+         return main
+     @torch.no_grad()
+-    def predict(self, X, H, bs=200000, device='cpu', watch_beta=0.0):
+-        self.eval(); out = []
++    def predict(self, X, H, bs=200000, device='cpu', return_watch=False):
++        self.eval(); outs = []; wouts = []
+         for i in range(0, len(X), bs):
+             xb = torch.from_numpy(X[i:i+bs].astype(np.int64)).to(device); hb = torch.from_numpy(H[i:i+bs].astype(np.float32)).to(device)
+-            if watch_beta == 0.0:
+-                score = self(xb, hb)
++            if return_watch:
++                main, aux = self(xb, hb, aux=True); outs.append(main.cpu().numpy()); wouts.append(aux[:, 5:8].mean(1).cpu().numpy())
+             else:
+-                main, aux = self(xb, hb, aux=True)
+-                watch_logit = aux[:, 5:8].mean(1)
+-                score = main + watch_beta * watch_logit
+-            out.append(score.cpu().numpy())
+-        return np.concatenate(out)
++                outs.append(self(xb, hb).cpu().numpy())
++        if return_watch: return np.concatenate(outs), np.concatenate(wouts)
++        return np.concatenate(outs)
+ 
+ def prepare(splits, data_dir):
+     enc0, _ = encode(splits); enc, dim = add_time_fields(enc0, splits, data_dir)
+@@ -182,13 +180,16 @@
+     return out
+ 
+ if __name__ == '__main__':
+-    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--watch_beta', type=float, default=WATCH_BETA); a = ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'fields+coarse_time; 8x rank ensemble; watch_beta={a.watch_beta}')
+-    enc, dim, hist, aux_t = prepare(splits, a.data_dir); X, y, users = enc[a.split]; preds = []
++    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--watch_alpha', type=float, default=WATCH_ALPHA); a = ap.parse_args()
++    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'fields+coarse_time; 8x rank ensemble; watch-rank alpha={a.watch_alpha}')
++    enc, dim, hist, aux_t = prepare(splits, a.data_dir); X, y, users = enc[a.split]; main_preds = []; watch_preds = []
+     for s in range(8):
+         m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None))
+-        preds.append(m.predict(X, hist[a.split], device=a.device, watch_beta=a.watch_beta))
+-    scores = per_user_rank_average(preds, users)
++        main, watch = m.predict(X, hist[a.split], device=a.device, return_watch=True)
++        main_preds.append(main); watch_preds.append(watch)
++    main_scores = per_user_rank_average(main_preds, users)
++    watch_scores = per_user_rank_average(watch_preds, users)
++    scores = (1.0 - a.watch_alpha) * main_scores + a.watch_alpha * watch_scores
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else: print(scores[:10])

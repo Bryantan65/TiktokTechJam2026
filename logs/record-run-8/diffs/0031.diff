@@ -1,0 +1,30 @@
+# iteration 31  (parent: 24)
+# hypothesis: debug 24: node 24 may overfit train labels because global video/author/tab target encodings were not leave-one-out; apply leave-one-out to all aggregate rates so the residual ranker trains on leakage-free history features.
+# result: GAUC 0.671414 | nDCG@5 0.537956 | primary 0.604685 | verdict KEPT
+
+--- logs/record-run-8/solutions/024_lgb_user_pref_residual.py
++++ logs/record-run-8/solutions/031_lgb_allloo_history.py
+@@ -145,10 +145,11 @@
+     X=np.zeros((len(rows),21),np.float32)
+     for i,r in enumerate(rows):
+         y=float(r[6]) if loo else 0.0; _,gkeys,ukeys=keys_for(r); vals=[]
+-        # global item/context priors: keep parent behaviour (no leave-one-out)
++        # Unlike node 24, apply leave-one-out to the global item/context target encodings too.
+         for k,key in zip(gnames,gkeys):
+-            c=cnts[k].get(key,0); s=sums[k].get(key,0.0); vals += [np.log1p(c),(s+20*gc)/(c+20)]
+-        # personalized preferences: leave-one-out on train to avoid directly revealing this row's label
++            c=cnts[k].get(key,0); s=sums[k].get(key,0.0)
++            if loo: c=max(0,c-1); s=max(0.0,s-y)
++            vals += [np.log1p(c),(s+20*gc)/(c+20)]
+         for k,key in zip(unames,ukeys):
+             c=cnts[k].get(key,0); s=sums[k].get(key,0.0)
+             if loo: c=max(0,c-1); s=max(0.0,s-y)
+@@ -203,7 +204,7 @@
+         splits=load_dev(a.data_dir); target='valid'
+     else:
+         splits=load(a.data_dir); target=a.split
+-    print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}, lgb_user_pref_residual fm_weight={a.fm_weight}')
++    print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}, lgb_allloo_history fm_weight={a.fm_weight}')
+     fms,model,pack,tmap,enc=train_all(splits,a.data_dir,seed=a.seed,device=a.device,verbose=(a.out is None),n_models=a.n_models)
+     X,y,u=enc[target]; scores=predict(fms,model,pack,tmap,X,splits[target],u,target,device=a.device,fm_weight=a.fm_weight)
+     if a.out:

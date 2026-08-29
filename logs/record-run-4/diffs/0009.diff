@@ -1,0 +1,244 @@
+# iteration 9  (parent: 7)
+# hypothesis: draft multi-task: following MMoE-style shared representation for related recommender feedback tasks (https://research.google/pubs/modeling-task-relationships-in-multi-task-learning-with-multi-gate-mixture-of-experts/), add small auxiliary BCE heads for click/like/follow/comment/forward/profile/hate while preserving node 7's dominant sampled-softmax long_view loss.
+# result: GAUC 0.671186 | nDCG@5 0.537519 | primary 0.604353 | verdict KEPT
+
+--- logs/record-run-4/solutions/007_time_features_softmax8.py
++++ logs/record-run-4/solutions/009_multitask_aux_time_softmax.py
+@@ -1,7 +1,8 @@
+-"""Sampled-softmax FM with raw-log time context features.
+-
+-Adds hour-of-day and day-of-week categorical fields read from the original log CSVs
+-while keeping the best listwise same-user sampled softmax objective.
++"""Sampled-softmax FM with time features and auxiliary feedback tasks.
++
++Builds on the best time-aware listwise FM: train long_view with within-user
++sampled softmax, and add small BCE losses for raw feedback columns (click/like/
++follow/comment/forward/profile/hate) using separate heads sharing FM embeddings.
+ """
+ import argparse
+ import csv
+@@ -20,20 +21,36 @@
+ from evaluate import evaluate                  # noqa: E402
+ 
+ 
+-class TorchFM(torch.nn.Module):
+-    def __init__(self, dim, k=16, seed=0):
++AUX_NAMES = ('is_click', 'is_like', 'is_follow', 'is_comment',
++             'is_forward', 'is_profile_enter', 'is_hate')
++
++
++class MultiTaskFM(torch.nn.Module):
++    def __init__(self, dim, k=16, n_aux=0, seed=0):
+         super().__init__()
+         rng = np.random.default_rng(seed)
+         self.V = torch.nn.Parameter(torch.from_numpy(
+             rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+-
+-    def forward(self, X):
++        self.n_aux = int(n_aux)
++        if self.n_aux:
++            self.W_aux = torch.nn.Parameter(torch.zeros(self.n_aux, dim, dtype=torch.float32))
++            self.b_aux = torch.nn.Parameter(torch.zeros(self.n_aux, dtype=torch.float32))
++
++    def _inter(self, X):
+         E = self.V[X]
+         S = E.sum(1)
+-        inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
++        return 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
++
++    def forward(self, X):
++        inter = self._inter(X)
+         return self.b + self.W[X].sum(1) + inter
++
++    def aux_forward(self, X):
++        inter = self._inter(X).view(-1, 1)
++        lin = self.W_aux[:, X].sum(2).t()
++        return self.b_aux.view(1, -1) + lin + inter
+ 
+     @torch.no_grad()
+     def predict(self, X, bs=200_000, device='cpu'):
+@@ -68,8 +85,7 @@
+         return 0
+ 
+ 
+-def _raw_time_maps(data_dir):
+-    """Build queues mapping each raw row identity to (hour, dow, hour_tab)."""
++def _raw_maps(data_dir):
+     names = ['log_standard_4_08_to_4_21_pure.csv',
+              'log_standard_4_22_to_5_08_pure.csv']
+     full = defaultdict(deque)
+@@ -86,48 +102,60 @@
+                 video = _to_int(_get(r, 'video_id', 'item_id', 'photo_id'))
+                 author = _to_int(_get(r, 'author_id'))
+                 tab = _to_int(_get(r, 'tab'))
++                tab_clip = max(0, min(tab, 7))
+                 dur = _to_int(_get(r, 'duration_ms', 'duration'))
+-                # The starter-kit binary target for KuaiRand-Pure is long_view.
+-                lab = _to_int(_get(r, 'long_view', 'label', 'is_click'))
++                lab = _to_int(_get(r, 'long_view', 'label'))
+                 hm = _to_int(_get(r, 'hourmin', 'hour_min', 'time'))
+                 hour = (hm // 100) % 24 if hm >= 100 else hm % 24
+                 dow = _dow_from_date(date)
+-                htab = hour * 8 + max(0, min(tab, 7))
++                htab = hour * 8 + tab_clip
+                 extra = (hour, dow, htab)
++                aux = tuple(float(_to_int(_get(r, n), 0)) for n in AUX_NAMES)
++                val = (extra, aux)
+                 k_full = (date, user, video, author, tab, dur, lab)
+                 k_nodur = (date, user, video, author, tab, lab)
+-                full[k_full].append(extra)
+-                nodur[k_nodur].append(extra)
++                full[k_full].append(val)
++                nodur[k_nodur].append(val)
+     return full, nodur
+ 
+ 
+-def encode_with_time(splits, data_dir):
+-    """Use starter-kit encoding for base fields, then append time fields."""
++def encode_with_time_aux(splits, data_dir):
+     enc, dim = encode(splits)
+-    full, nodur = _raw_time_maps(data_dir)
+-    offsets = np.array([dim, dim + 24, dim + 24 + 7], dtype=np.int64)
+-    extra_dim = 24 + 7 + 24 * 8
++    full, nodur = _raw_maps(data_dir)
++    sizes = np.array([24, 7, 24 * 8], dtype=np.int64)
++    offsets = dim + np.concatenate([[0], np.cumsum(sizes)[:-1]]).astype(np.int64)
+     out = {}
++    aux_out = {}
++    matched = {}
+     for sp, rows in splits.items():
+         Xb, y, users = enc[sp]
+-        extra = np.zeros((len(rows), 3), dtype=np.int64)
++        extra = np.zeros((len(rows), len(sizes)), dtype=np.int64)
++        aux = np.zeros((len(rows), len(AUX_NAMES)), dtype=np.float32)
++        ok = np.zeros(len(rows), dtype=bool)
+         for i, row in enumerate(rows):
+             date, user, video, author, tab, dur, lab = row
+             k_full = (_to_int(date), _to_int(user), _to_int(video),
+                       _to_int(author), _to_int(tab), _to_int(dur), _to_int(lab))
+             q = full.get(k_full)
+             if q:
+-                extra[i] = q.popleft()
++                e, a = q.popleft()
++                extra[i] = e
++                aux[i] = a
++                ok[i] = True
+                 continue
+             k_nodur = (_to_int(date), _to_int(user), _to_int(video),
+                        _to_int(author), _to_int(tab), _to_int(lab))
+             q = nodur.get(k_nodur)
+             if q:
+-                extra[i] = q.popleft()
+-            # else leave zeros: safe fallback if raw CSV columns differ.
++                e, a = q.popleft()
++                extra[i] = e
++                aux[i] = a
++                ok[i] = True
+         Xt = np.concatenate([Xb.astype(np.int64), extra + offsets], axis=1)
+         out[sp] = (Xt, y, users)
+-    return out, dim + extra_dim
++        aux_out[sp] = aux
++        matched[sp] = ok
++    return out, aux_out, matched, int(dim + sizes.sum())
+ 
+ 
+ def make_pair_sampler(y, users):
+@@ -135,8 +163,7 @@
+     users = np.asarray(users)
+     order = np.argsort(users, kind='mergesort')
+     us = users[order]
+-    pos_chunks = []
+-    neg_pools = []
++    pos_chunks, neg_pools = [], []
+     i = 0
+     while i < len(order):
+         j = i + 1
+@@ -156,17 +183,29 @@
+ 
+ 
+ def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096,
+-        patience=4, neg_k=8, seed=0, device='cpu', verbose=True):
+-    enc, dim = encode_with_time(splits, data_dir)
++        patience=4, neg_k=8, aux_weight=0.05, seed=0, device='cpu', verbose=True):
++    enc, aux, matched, dim = encode_with_time_aux(splits, data_dir)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+-    model = TorchFM(dim, k=k, seed=seed).to(device)
+-    opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+-                            {'params': [model.b], 'weight_decay': 0.0}],
+-                           lr=lr, betas=(0.9, 0.999), eps=1e-8)
++    # Drop degenerate/unmatched auxiliary tasks so constant columns cannot swamp ranking.
++    valid_rows = matched['train']
++    prev = aux['train'][valid_rows].mean(0) if valid_rows.any() else np.zeros(len(AUX_NAMES))
++    keep_aux = np.where((prev > 0.001) & (prev < 0.999))[0]
++    if len(keep_aux) == 0:
++        aux_weight = 0.0
++    aux_tr = aux['train'][:, keep_aux] if len(keep_aux) else np.zeros((len(Xtr), 0), dtype=np.float32)
++
++    model = MultiTaskFM(dim, k=k, n_aux=len(keep_aux), seed=seed).to(device)
++    params = [{'params': [model.V, model.W], 'weight_decay': l2},
++              {'params': [model.b], 'weight_decay': 0.0}]
++    if len(keep_aux):
++        params.append({'params': [model.W_aux], 'weight_decay': l2})
++        params.append({'params': [model.b_aux], 'weight_decay': 0.0})
++    opt = torch.optim.Adam(params, lr=lr, betas=(0.9, 0.999), eps=1e-8)
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
++    aux_t = torch.from_numpy(aux_tr.astype(np.float32))
+     pos_idx, neg_pools = make_pair_sampler(ytr, utr)
+     rng = np.random.default_rng(seed)
+ 
+@@ -183,6 +222,7 @@
+             nidx = np.empty((bsz, neg_k), dtype=np.int64)
+             for t, pool in enumerate(neg_pools[psel]):
+                 nidx[t] = pool[rng.integers(len(pool), size=neg_k)]
++            cand_idx = np.concatenate([pidx.reshape(-1, 1), nidx], axis=1)
+ 
+             xp = Xtr_t[torch.from_numpy(pidx)].to(device)
+             xn = Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
+@@ -192,13 +232,22 @@
+             logits = torch.cat([sp, sn], dim=1)
+             target = torch.zeros(bsz, dtype=torch.long, device=device)
+             loss = torch.nn.functional.cross_entropy(logits, target)
++
++            if aux_weight > 0.0 and len(keep_aux):
++                xc = Xtr_t[torch.from_numpy(cand_idx.reshape(-1))].to(device)
++                ya = aux_t[torch.from_numpy(cand_idx.reshape(-1))].to(device)
++                aux_logits = model.aux_forward(xc)
++                aux_loss = torch.nn.functional.binary_cross_entropy_with_logits(aux_logits, ya)
++                loss = loss + aux_weight * aux_loss
++
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | softmax8+time {np.mean(losses):.4f} | valid "
++            kept = ','.join(AUX_NAMES[i] for i in keep_aux)
++            print(f"  epoch {ep:2d} | mt-softmax {np.mean(losses):.4f} aux=[{kept}] | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+@@ -230,7 +279,8 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+hour,dow,hour_tab")
++    print({k_: len(v) for k_, v in splits.items()},
++          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES}")
+ 
+     model, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                      seed=a.seed, device=a.device, verbose=a.out is None)
+@@ -241,7 +291,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== time_features_softmax8 (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== multitask_aux_time_softmax (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

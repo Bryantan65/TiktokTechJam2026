@@ -1,0 +1,46 @@
+# iteration 33  (parent: 29)
+# hypothesis: improve 29: DeepFM's gain is real but the ensemble is already averaging 8 seeds, so remove the 0.10 dropout from the deep tower to reduce underfitting while keeping the exact 65% FM/DeepFM rank+margin blend.
+# result: GAUC 0.671657 | nDCG@5 0.537925 | primary 0.604791 | verdict KEPT
+
+--- logs/record-run-6/solutions/029_blend_fm_deepfm.py
++++ logs/record-run-6/solutions/033_deepfm_nodropout_blend.py
+@@ -116,7 +116,7 @@
+         self.V = torch.nn.Parameter(torch.from_numpy(rng.normal(0, .01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim)); self.b = torch.nn.Parameter(torch.zeros(()))
+         self.H = torch.nn.Linear(hdim, 1); torch.nn.init.zeros_(self.H.weight); torch.nn.init.zeros_(self.H.bias)
+-        self.deep = torch.nn.Sequential(torch.nn.Linear(nfields * k + hdim, 64), torch.nn.ReLU(), torch.nn.Dropout(0.10), torch.nn.Linear(64, 32), torch.nn.ReLU(), torch.nn.Linear(32, 1))
++        self.deep = torch.nn.Sequential(torch.nn.Linear(nfields * k + hdim, 64), torch.nn.ReLU(), torch.nn.Linear(64, 32), torch.nn.ReLU(), torch.nn.Linear(32, 1))
+         torch.nn.init.zeros_(self.deep[-1].weight); torch.nn.init.zeros_(self.deep[-1].bias)
+         self.aux = torch.nn.Sequential(torch.nn.Linear(k + hdim, 32), torch.nn.ReLU(), torch.nn.Linear(32, adim))
+     def forward(self, X, H, aux=False):
+@@ -140,7 +140,7 @@
+     return enc, dim, make_history_features(splits), read_aux_targets(data_dir, splits)
+ 
+ def train_one(enc, dim, hist, aux_t, seed=0, k=16, lr=.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False, use_deep=True):
+-    torch.manual_seed(seed); Xtr,ytr,_ = enc['train']; Xva,yva,uva = enc['valid']; Htr,Hva = hist['train'],hist['valid']; Atr = aux_t['train']
++    torch.manual_seed(seed); Xtr,ytr,utr = enc['train']; Xva,yva,uva = enc['valid']; Htr,Hva = hist['train'],hist['valid']; Atr = aux_t['train']
+     m = Model(dim, Xtr.shape[1], Htr.shape[1], Atr.shape[1], k, seed, use_deep=use_deep).to(device)
+     groups = [{'params':[m.V,m.W],'weight_decay':l2},{'params':[m.b],'weight_decay':0.0},{'params':m.H.parameters(),'weight_decay':1e-5},{'params':m.aux.parameters(),'weight_decay':1e-5}]
+     if use_deep: groups.append({'params':m.deep.parameters(),'weight_decay':1e-5})
+@@ -150,8 +150,10 @@
+     for ep in range(1, epochs+1):
+         idx = rng.permutation(len(ytr)); m.train(); losses = []; t0 = time.time()
+         for i in range(0, len(idx), bs):
+-            sel = torch.from_numpy(idx[i:i+bs]); xb = Xtr_t[sel].to(device); hb = Htr_t[sel].to(device); yb = ytr_t[sel].to(device); ab = Atr_t[sel].to(device)
+-            opt.zero_grad(set_to_none=True); main, aux = m(xb, hb, aux=True); loss = bce(main, yb) + .08 * bce(aux, ab); loss.backward(); opt.step(); losses.append(loss.item())
++            sel = torch.from_numpy(idx[i:i+bs])
++            xb = Xtr_t[sel].to(device); hb = Htr_t[sel].to(device); yb = ytr_t[sel].to(device); ab = Atr_t[sel].to(device)
++            opt.zero_grad(set_to_none=True); main, aux = m(xb, hb, aux=True); loss = bce(main, yb) + .08 * bce(aux, ab)
++            loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, m.predict(Xva, Hva, device=device))
+         if verbose: print(f'seed {seed} deep {use_deep} ep {ep} loss {np.mean(losses):.4f} valid {va["primary"]:.4f} {time.time()-t0:.1f}s')
+         if va['primary'] > best + 1e-5:
+@@ -186,7 +188,7 @@
+ 
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--rank_gamma', type=float, default=RANK_GAMMA); ap.add_argument('--margin_weight', type=float, default=MARGIN_WEIGHT); ap.add_argument('--deep_weight', type=float, default=DEEP_WEIGHT); a = ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'FM+DeepFM 8x/8x rank+margin blend dw={a.deep_weight}')
++    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'FM+DeepFM-no-dropout 8x/8x rank+margin blend dw={a.deep_weight}')
+     enc, dim, hist, aux_t = prepare(splits, a.data_dir); X, y, users = enc[a.split]
+     fm_preds = []; deep_preds = []
+     for s in range(8):

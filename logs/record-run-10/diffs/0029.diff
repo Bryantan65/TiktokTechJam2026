@@ -1,0 +1,210 @@
+# iteration 29  (parent: 24)
+# hypothesis: improve 24: replace hand blend with a readable learned combiner trained only on a temporal train-holdout; use base-model per-user ranks/z-scores and blend the combiner 50/50 with node 24's anchor to reduce overfit.
+# result: GAUC 0.670587 | nDCG@5 0.536722 | primary 0.603654 | verdict KEPT
+
+--- logs/record-run-10/solutions/024_dual_ranker_4way.py
++++ logs/record-run-10/solutions/029_holdout_stacked_blend.py
+@@ -1,8 +1,10 @@
+-"""Four-way rank blend: BPR FM + XE_NDCG LightGBM + LambdaRank LightGBM + BCE FM.
+-
+-Copy of node 22, adding back the node-19 lambdarank tree as a second tree
+-ranker.  All members get readable weight (>=20%) except none are hidden: BPR
+-0.40, XE_NDCG 0.20, LambdaRank 0.20, BCE 0.20.
++"""Temporal holdout stacking on top of node 24's four members.
++
++Train node-24 base models on an early slice of train, predict the last two train
++calendar days, and fit a tiny LightGBM ranker that combines only per-user base
++ranks/scores.  Then train the usual node-24 base models on all train and apply
++that learned combiner to valid/test.  This tests learned combination rather than
++another hand-set 4-way rank average.
+ """
+ import argparse
+ import csv
+@@ -17,8 +19,8 @@
+ import lightgbm as lgb
+ 
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'kuairand-starter-kit'))
+-from data import load, FIELDS                         # noqa: E402
+-from evaluate import evaluate                         # noqa: E402
++from data import load, FIELDS
++from evaluate import evaluate
+ 
+ EXT_FIELDS = FIELDS + ['dow', 'hour', 'tod4']
+ 
+@@ -126,14 +128,12 @@
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+     def forward(self, X):
+         E = self.V[X]; S = E.sum(1)
+-        inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
+-        return self.b + self.W[X].sum(1) + inter
++        return self.b + self.W[X].sum(1) + 0.5 * ((S * S).sum(1) - (E * E).sum((1, 2)))
+     @torch.no_grad()
+     def predict(self, X, bs=200000, device='cpu'):
+         self.eval(); out = []
+         for i in range(0, len(X), bs):
+-            xb = torch.from_numpy(X[i:i+bs].astype(np.int64)).to(device)
+-            out.append(self(xb).cpu().numpy())
++            out.append(self(torch.from_numpy(X[i:i+bs].astype(np.int64)).to(device)).cpu().numpy())
+         return np.concatenate(out)
+ 
+ 
+@@ -146,8 +146,7 @@
+     for ep in range(1, epochs + 1):
+         t0 = time.time(); order = rng.permutation(len(ytr)); model.train(); losses = []
+         for i in range(0, len(order), bs):
+-            idx = torch.from_numpy(order[i:i+bs])
+-            xb = Xt[idx].to(device); yb = yt[idx].to(device)
++            idx = torch.from_numpy(order[i:i+bs]); xb = Xt[idx].to(device); yb = yt[idx].to(device)
+             opt.zero_grad(set_to_none=True); loss = F.binary_cross_entropy_with_logits(model(xb), yb)
+             loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+@@ -216,12 +215,12 @@
+         e = s + 1
+         while e < len(us) and us[e] == us[s]: e += 1
+         group.append(e - s); s = e
+-    return X[order], y[order], group
++    return X[order], y[order], group, order
+ 
+ 
+ def train_lgb_ranker(rawcat, enc, objective='rank_xendcg', seed=0, verbose=True):
+-    Xtr, ytr, gtr = user_sorted(rawcat['train'], enc['train'][1], enc['train'][2])
+-    Xva, yva, gva = user_sorted(rawcat['valid'], enc['valid'][1], enc['valid'][2])
++    Xtr, ytr, gtr, _ = user_sorted(rawcat['train'], enc['train'][1], enc['train'][2])
++    Xva, yva, gva, _ = user_sorted(rawcat['valid'], enc['valid'][1], enc['valid'][2])
+     dtrain = lgb.Dataset(Xtr, label=ytr.astype(np.int32), group=gtr, categorical_feature=list(range(len(EXT_FIELDS))), free_raw_data=False)
+     dvalid = lgb.Dataset(Xva, label=yva.astype(np.int32), group=gva, categorical_feature=list(range(len(EXT_FIELDS))), reference=dtrain, free_raw_data=False)
+     params = {
+@@ -237,25 +236,35 @@
+     return lgb.train(params, dtrain, num_boost_round=300, valid_sets=[dvalid], valid_names=['valid'], callbacks=callbacks)
+ 
+ 
+-def multi_rank_blend(scores, weights, users):
+-    users = np.asarray(users); out = np.zeros(len(users), dtype=np.float64)
++def per_user_rank_and_z(scores, users):
++    scores = np.asarray(scores, dtype=np.float64); users = np.asarray(users)
++    out_r = np.zeros(len(users), dtype=np.float32); out_z = np.zeros(len(users), dtype=np.float32)
+     order = np.argsort(users, kind='mergesort'); s = 0
+     while s < len(users):
+         e = s + 1; u = users[order[s]]
+         while e < len(users) and users[order[e]] == u: e += 1
+-        idx = order[s:e]; n = len(idx)
++        idx = order[s:e]; n = len(idx); vals = scores[idx]
+         if n > 1:
+-            acc = np.zeros(n, dtype=np.float64)
+-            for sc, w in zip(scores, weights):
+-                r = np.empty(n, dtype=np.float64)
+-                r[np.argsort(sc[idx], kind='mergesort')] = np.linspace(0.0, 1.0, n)
+-                acc += w * r
+-            out[idx] = acc
++            r = np.empty(n, dtype=np.float32); r[np.argsort(vals, kind='mergesort')] = np.linspace(0.0, 1.0, n, dtype=np.float32)
++            out_r[idx] = r
++            sd = float(vals.std())
++            if sd > 1e-12: out_z[idx] = ((vals - vals.mean()) / sd).astype(np.float32)
+         s = e
+-    return out
+-
+-
+-def run(splits, data_dir, k=16, lr=0.001, epochs=40, seed=0, device='cpu', verbose=True):
++    return out_r, out_z
++
++
++def stack_features(score_list, users):
++    feats = []
++    for sc in score_list:
++        r, z = per_user_rank_and_z(sc, users)
++        feats.append(r); feats.append(z)
++    # include the original node-24 hand blend as an anchor feature
++    anchor = 0.40 * feats[0] + 0.20 * feats[2] + 0.20 * feats[4] + 0.20 * feats[6]
++    feats.append(anchor.astype(np.float32))
++    return np.column_stack(feats).astype(np.float32)
++
++
++def train_base(splits, data_dir, seed, k, lr, epochs, device, verbose):
+     hour_lookup = make_hour_lookup(splits, data_dir)
+     enc, rawcat, dim = encode_ext(splits, hour_lookup)
+     bpr = train_bpr(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed, device=device, verbose=verbose)
+@@ -263,6 +272,47 @@
+     xendcg = train_lgb_ranker(rawcat, enc, objective='rank_xendcg', seed=seed + 1009, verbose=verbose)
+     lambdarank = train_lgb_ranker(rawcat, enc, objective='lambdarank', seed=seed + 2003, verbose=verbose)
+     return bpr, bce, xendcg, lambdarank, enc, rawcat
++
++
++def predict_base(models, enc, rawcat, split, device):
++    bpr, bce, xendcg, lambdarank = models
++    X, y, users = enc[split]
++    return [bpr.predict(X, device=device),
++            xendcg.predict(rawcat[split], num_iteration=xendcg.best_iteration),
++            lambdarank.predict(rawcat[split], num_iteration=lambdarank.best_iteration),
++            bce.predict(X, device=device)], y, users
++
++
++def train_combiner(Fh, yh, uh, seed=0):
++    Xs, ys, gs, order = user_sorted(Fh, yh, uh)
++    # Use early stopping on the same temporal holdout only to limit trees in this tiny combiner;
++    # it sees no official valid/test labels.
++    dtrain = lgb.Dataset(Xs, label=ys.astype(np.int32), group=gs, free_raw_data=False)
++    params = {
++        'objective': 'rank_xendcg', 'metric': 'ndcg', 'ndcg_eval_at': [5], 'label_gain': [0, 1],
++        'learning_rate': 0.03, 'num_leaves': 15, 'min_data_in_leaf': 150,
++        'feature_fraction': 1.0, 'bagging_fraction': 0.9, 'bagging_freq': 1,
++        'lambda_l2': 5.0, 'verbosity': -1, 'num_threads': 4,
++        'seed': int(seed), 'feature_fraction_seed': int(seed)+31, 'bagging_seed': int(seed)+37,
++        'data_random_seed': int(seed)+41, 'force_col_wise': True,
++    }
++    return lgb.train(params, dtrain, num_boost_round=80)
++
++
++def temporal_stack_split(full_splits):
++    train_rows = list(full_splits['train'])
++    dates = sorted({int(r[0]) for r in train_rows})
++    cut_dates = set(dates[-2:]) if len(dates) >= 4 else {dates[-1]}
++    early = [r for r in train_rows if int(r[0]) not in cut_dates]
++    hold = [r for r in train_rows if int(r[0]) in cut_dates]
++    out = {'train': early, 'valid': hold}
++    print(f"stack split: early={len(early):,d}, holdout={len(hold):,d}, hold_dates={sorted(cut_dates)}")
++    return out
++
++
++def node24_rank_blend(score_list, users):
++    Fm = stack_features(score_list, users)
++    return Fm[:, -1].astype(np.float64)
+ 
+ 
+ if __name__ == '__main__':
+@@ -279,17 +329,26 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 4way bpr/xendcg/lambdarank/bce")
+-    bpr, bce, xendcg, lambdarank, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+-    X, y, users = enc[target]
+-    sbpr = bpr.predict(X, device=a.device)
+-    sbce = bce.predict(X, device=a.device)
+-    sx = xendcg.predict(rawcat[target], num_iteration=xendcg.best_iteration)
+-    sl = lambdarank.predict(rawcat[target], num_iteration=lambdarank.best_iteration)
+-    scores = multi_rank_blend([sbpr, sx, sl, sbce], [0.40, 0.20, 0.20, 0.20], users)
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, temporal stacked node24 combiner")
++
++    # Fit combiner from a train-only temporal holdout.
++    stack_splits = temporal_stack_split(splits)
++    ebpr, ebce, ex, el, eenc, eraw = train_base(stack_splits, a.data_dir, a.seed + 5000, a.k, a.lr, a.epochs, a.device, verbose=False)
++    hscores, hy, hu = predict_base((ebpr, ebce, ex, el), eenc, eraw, 'valid', a.device)
++    Fh = stack_features(hscores, hu)
++    comb = train_combiner(Fh, hy, hu, seed=a.seed + 7000)
++
++    # Train full node-24 base models and apply the learned combiner.
++    bpr, bce, xendcg, lambdarank, enc, rawcat = train_base(splits, a.data_dir, a.seed, a.k, a.lr, a.epochs, a.device, verbose=a.out is None)
++    scores, y, users = predict_base((bpr, bce, xendcg, lambdarank), enc, rawcat, target, a.device)
++    Ft = stack_features(scores, users)
++    pred = comb.predict(Ft, num_iteration=comb.best_iteration if comb.best_iteration else None)
++    # Stable fallback: blend half learned combiner, half original node-24 rank anchor.
++    final = 0.50 * per_user_rank_and_z(pred, users)[0].astype(np.float64) + 0.50 * Ft[:, -1].astype(np.float64)
++
+     if a.out:
+-        np.save(a.out, scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
++        np.save(a.out, final.astype(np.float64)); print(f"wrote {len(final):,d} predictions for split={a.split}")
+     else:
+-        r = evaluate(users, y, scores)
++        r = evaluate(users, y, final)
+         print(f"GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

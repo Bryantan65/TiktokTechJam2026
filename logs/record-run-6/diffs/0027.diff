@@ -1,0 +1,165 @@
+# iteration 27  (parent: 24)
+# hypothesis: improve 24: BPR fine-tune was near-best but not combined with the strongest per-user rank+margin calibration, so blend four BCE checkpoints and their same-user BPR-finetuned variants at full ensemble weight.
+# result: GAUC 0.669492 | nDCG@5 0.537446 | primary 0.603469 | verdict noise
+
+--- logs/record-run-6/solutions/024_bpr_finetune_rankavg.py
++++ logs/record-run-6/solutions/027_bpr_hybrid_rank_margin.py
+@@ -9,7 +9,10 @@
+ 
+ AUX_NAMES = ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']
+ RANK_GAMMA = 2.0
+-N_FM = 8
++MARGIN_WEIGHT = 0.30
++BPR_EPOCHS = 2
++BPR_LR = 3e-4
++BPR_BCE_ANCHOR = 0.15
+ 
+ def to_int(x, default=0):
+     try: return int(float(x))
+@@ -132,30 +135,8 @@
+     enc0, _ = encode(splits); enc, dim = add_time_fields(enc0, splits, data_dir)
+     return enc, dim, make_history_features(splits), read_aux_targets(data_dir, splits)
+ 
+-def make_pair_groups(y, users):
+-    pos = defaultdict(list); neg = defaultdict(list)
+-    yy = np.asarray(y); uu = np.asarray(users)
+-    for i, (u, lab) in enumerate(zip(uu, yy)):
+-        if lab > 0: pos[u].append(i)
+-        else: neg[u].append(i)
+-    groups = []
+-    for u, ps in pos.items():
+-        ns = neg.get(u)
+-        if ns:
+-            groups.append((np.asarray(ps, dtype=np.int64), np.asarray(ns, dtype=np.int64)))
+-    return groups
+-
+-def sample_pairs(groups, rng):
+-    pp = []; nn = []
+-    for ps, ns in groups:
+-        pp.append(ps)
+-        nn.append(rng.choice(ns, size=len(ps), replace=True))
+-    if not pp:
+-        return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64)
+-    return np.concatenate(pp), np.concatenate(nn)
+-
+-def train_one(enc, dim, hist, aux_t, seed=0, k=16, lr=.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False):
+-    torch.manual_seed(seed); Xtr,ytr,utr = enc['train']; Xva,yva,uva = enc['valid']; Htr,Hva = hist['train'],hist['valid']; Atr = aux_t['train']
++def train_bce(enc, dim, hist, aux_t, seed=0, k=16, lr=.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False):
++    torch.manual_seed(seed); Xtr,ytr,_ = enc['train']; Xva,yva,uva = enc['valid']; Htr,Hva = hist['train'],hist['valid']; Atr = aux_t['train']
+     m = Model(dim, Htr.shape[1], Atr.shape[1], k, seed).to(device)
+     opt = torch.optim.Adam([{'params':[m.V,m.W],'weight_decay':l2},{'params':[m.b],'weight_decay':0.0},{'params':m.H.parameters(),'weight_decay':1e-5},{'params':m.aux.parameters(),'weight_decay':1e-5}], lr=lr)
+     bce = torch.nn.BCEWithLogitsLoss(); Xtr_t = torch.from_numpy(Xtr.astype(np.int64)); Htr_t = torch.from_numpy(Htr.astype(np.float32)); ytr_t = torch.from_numpy(np.asarray(ytr, dtype=np.float32)); Atr_t = torch.from_numpy(Atr.astype(np.float32))
+@@ -166,68 +147,72 @@
+             sel = torch.from_numpy(idx[i:i+bs]); xb = Xtr_t[sel].to(device); hb = Htr_t[sel].to(device); yb = ytr_t[sel].to(device); ab = Atr_t[sel].to(device)
+             opt.zero_grad(set_to_none=True); main, aux = m(xb, hb, aux=True); loss = bce(main, yb) + .08 * bce(aux, ab); loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, m.predict(Xva, Hva, device=device))
+-        if verbose: print(f'seed {seed} ep {ep} bce {np.mean(losses):.4f} valid {va["primary"]:.4f} {time.time()-t0:.1f}s')
++        if verbose: print(f'seed {seed} ep {ep} loss {np.mean(losses):.4f} valid {va["primary"]:.4f} {time.time()-t0:.1f}s')
+         if va['primary'] > best + 1e-5:
+             best = va['primary']; bad = 0; state = {kk: vv.detach().clone() for kk, vv in m.state_dict().items()}
+         else:
+             bad += 1
+             if bad >= patience: break
+-    m.load_state_dict(state)
+-
+-    # A small same-user BPR pass: force the final saved model to include the ranking objective,
+-    # but keep a weak BCE anchor on sampled pairs to avoid the large drift seen in pure BPR.
+-    groups = make_pair_groups(ytr, utr)
+-    opt2 = torch.optim.Adam([{'params':[m.V,m.W],'weight_decay':l2},{'params':[m.b],'weight_decay':0.0},{'params':m.H.parameters(),'weight_decay':1e-5}], lr=8e-5)
+-    pair_state = None; pair_best = -1.0
+-    for pe in range(2):
+-        pidx, nidx = sample_pairs(groups, rng)
+-        ordp = rng.permutation(len(pidx)); m.train(); losses = []; t0 = time.time()
+-        for j in range(0, len(ordp), bs):
+-            sel = ordp[j:j+bs]; pi = torch.from_numpy(pidx[sel]); ni = torch.from_numpy(nidx[sel])
+-            xp = Xtr_t[pi].to(device); hp = Htr_t[pi].to(device); xn = Xtr_t[ni].to(device); hn = Htr_t[ni].to(device)
+-            opt2.zero_grad(set_to_none=True)
++    m.load_state_dict(state); return m
++
++def make_pair_arrays(y, users, seed=0):
++    y = np.asarray(y); users = np.asarray(users); pos = defaultdict(list); neg = defaultdict(list)
++    for i, (u, yy) in enumerate(zip(users, y)):
++        if yy > 0: pos[u].append(i)
++        else: neg[u].append(i)
++    rng = np.random.default_rng(seed + 12345); pp = []; nn = []
++    for u in pos:
++        if len(neg.get(u, [])) == 0: continue
++        p = np.asarray(pos[u], dtype=np.int64); n = np.asarray(neg[u], dtype=np.int64)
++        reps = min(len(p) * 3, max(len(p), len(n)))
++        pp.append(rng.choice(p, size=reps, replace=True)); nn.append(rng.choice(n, size=reps, replace=True))
++    return np.concatenate(pp), np.concatenate(nn)
++
++def bpr_finetune(m, enc, hist, seed=0, lr=BPR_LR, epochs=BPR_EPOCHS, bs=8192, device='cpu'):
++    Xtr,ytr,utr = enc['train']; Htr = hist['train']
++    pos, neg = make_pair_arrays(ytr, utr, seed)
++    X = torch.from_numpy(Xtr.astype(np.int64)); H = torch.from_numpy(Htr.astype(np.float32)); Y = torch.from_numpy(np.asarray(ytr, dtype=np.float32))
++    opt = torch.optim.Adam(m.parameters(), lr=lr, weight_decay=1e-6); bce = torch.nn.BCEWithLogitsLoss(); rng = np.random.default_rng(seed + 777)
++    for ep in range(epochs):
++        ordp = rng.permutation(len(pos)); m.train()
++        for i in range(0, len(ordp), bs):
++            ids = ordp[i:i+bs]; pi = torch.from_numpy(pos[ids]); ni = torch.from_numpy(neg[ids]); both = torch.cat([pi, ni])
++            xp = X[pi].to(device); hp = H[pi].to(device); xn = X[ni].to(device); hn = H[ni].to(device)
++            xb = X[both].to(device); hb = H[both].to(device); yb = Y[both].to(device)
++            opt.zero_grad(set_to_none=True)
+             sp = m(xp, hp); sn = m(xn, hn)
+-            loss = torch.nn.functional.softplus(-(sp - sn)).mean() + 0.03 * (bce(sp, torch.ones_like(sp)) + bce(sn, torch.zeros_like(sn)))
+-            loss.backward(); opt2.step(); losses.append(loss.item())
+-        va = evaluate(uva, yva, m.predict(Xva, Hva, device=device))
+-        if verbose: print(f'seed {seed} pair {pe+1} loss {np.mean(losses):.4f} valid {va["primary"]:.4f} {time.time()-t0:.1f}s')
+-        if va['primary'] > pair_best:
+-            pair_best = va['primary']; pair_state = {kk: vv.detach().clone() for kk, vv in m.state_dict().items()}
+-    m.load_state_dict(pair_state)
++            loss = -torch.nn.functional.logsigmoid(sp - sn).mean() + BPR_BCE_ANCHOR * bce(m(xb, hb), yb)
++            loss.backward(); opt.step()
+     return m
+ 
+-def per_user_power_rank_average(preds, users, gamma=RANK_GAMMA):
+-    P = np.vstack(preds).astype(np.float64)
+-    users = np.asarray(users)
+-    out = np.zeros(P.shape[1], dtype=np.float64)
+-    order = np.argsort(users, kind='mergesort')
+-    su = users[order]
+-    start = 0
++def per_user_rank_margin_blend(preds, users, gamma=RANK_GAMMA, margin_weight=MARGIN_WEIGHT):
++    P = np.vstack(preds).astype(np.float64); meanp = P.mean(axis=0); users = np.asarray(users); out = np.zeros(P.shape[1], dtype=np.float64)
++    order = np.argsort(users, kind='mergesort'); su = users[order]; start = 0
+     while start < len(order):
+         end = start + 1
+         while end < len(order) and su[end] == su[start]: end += 1
+         idx = order[start:end]; n = end - start
+-        if n <= 1:
+-            out[idx] = P[:, idx].mean(0)
++        if n <= 1: out[idx] = meanp[idx]
+         else:
+             acc = np.zeros(n, dtype=np.float64)
+             for mi in range(P.shape[0]):
+-                vals = P[mi, idx]
+-                r = np.empty(n, dtype=np.float64)
+-                r[np.argsort(vals, kind='mergesort')] = np.arange(n, dtype=np.float64)
+-                acc += (r / (n - 1.0)) ** gamma
+-            out[idx] = acc / P.shape[0]
++                vals = P[mi, idx]; r = np.empty(n, dtype=np.float64); r[np.argsort(vals, kind='mergesort')] = np.arange(n, dtype=np.float64); acc += (r / (n - 1.0)) ** gamma
++            rank_score = acc / P.shape[0]; z = meanp[idx]; z = (z - z.mean()) / (z.std() + 1e-6); margin_score = 1.0 / (1.0 + np.exp(-z))
++            out[idx] = (1.0 - margin_weight) * rank_score + margin_weight * margin_score
+         start = end
+     return out
+ 
+ if __name__ == '__main__':
+-    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--rank_gamma', type=float, default=RANK_GAMMA); a = ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'fields+coarse_time; {N_FM}x BPR-finetuned power-rank ensemble gamma={a.rank_gamma}')
++    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); a = ap.parse_args()
++    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, '8x BCE+BPR hybrid rank+margin blend')
+     enc, dim, hist, aux_t = prepare(splits, a.data_dir); X, y, users = enc[a.split]; preds = []
+-    for s in range(N_FM):
+-        m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None))
++    for s in range(4):
++        m = train_bce(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None))
+         preds.append(m.predict(X, hist[a.split], device=a.device))
+-    scores = per_user_power_rank_average(preds, users, gamma=a.rank_gamma)
++        mb = Model(dim, hist['train'].shape[1], aux_t['train'].shape[1], a.k, s).to(a.device); mb.load_state_dict({kk: vv.detach().clone() for kk, vv in m.state_dict().items()})
++        mb = bpr_finetune(mb, enc, hist, seed=s, device=a.device)
++        preds.append(mb.predict(X, hist[a.split], device=a.device))
++    scores = per_user_rank_margin_blend(preds, users)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else: print(scores[:10])

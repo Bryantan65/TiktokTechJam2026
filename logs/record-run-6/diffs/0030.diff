@@ -1,0 +1,15 @@
+# iteration 30  (parent: 29)
+# hypothesis: improve 29: the 65% DeepFM blend was a clear gain, so test a stronger 80% DeepFM weight to see whether the high-order tower should dominate while FM remains a top-5 stabilizer.
+# result: GAUC 0.671973 | nDCG@5 0.538023 | primary 0.604998 | verdict KEPT
+
+--- logs/record-run-6/solutions/029_blend_fm_deepfm.py
++++ logs/record-run-6/solutions/030_blend_fm_deepfm_w80.py
+@@ -10,7 +10,7 @@
+ AUX_NAMES = ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']
+ RANK_GAMMA = 2.0
+ MARGIN_WEIGHT = 0.30
+-DEEP_WEIGHT = 0.65
++DEEP_WEIGHT = 0.80
+ 
+ def to_int(x, default=0):
+     try: return int(float(x))

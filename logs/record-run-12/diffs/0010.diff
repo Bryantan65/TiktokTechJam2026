@@ -1,0 +1,40 @@
+# iteration 10  (parent: 8)
+# hypothesis: improve 8: change only the deterministic seed-bag blend weight to 75/25 BPR/BCE, reusing cached unchanged members; 60/40 was worse, so test the other side of the 70/30 optimum cheaply. This should show whether node 8 is near the best fixed blend.
+# result: GAUC 0.670143 | nDCG@5 0.537015 | primary 0.603579 | verdict KEPT
+
+--- logs/record-run-12/solutions/008_bpr_bce_seedbag.py
++++ logs/record-run-12/solutions/010_bpr_bce_seedbag_w75.py
+@@ -1,9 +1,9 @@
+-"""Seed-bagged blend of BPR-FM and pointwise BCE FM.
+-
+-Refines node 7 by keeping the same readable 70/30 per-user z-score blend, but
+-averaging that blend over member seeds 0, 1 and 2.  The base-member code and
+-cache names are unchanged from 007, so cached predictions are reused when
+-available; with an empty cache the script trains the six members standalone.
++"""Seed-bagged BPR/BCE FM blend with 75/25 weight.
++
++Refines node 8 by changing only the deterministic blend weight from 70/30 to
++75/25 (BPR/BCE). Member training code and cache names are identical to
++007/008/009, so cached predictions are reused; with an empty cache it remains
++standalone and trains the six members.
+ """
+ import argparse
+ import os
+@@ -187,8 +187,6 @@
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+ 
+-    # The external seed is intentionally not used for member selection: this is
+-    # a fixed seed-bagged predictor, and the member seeds are recorded here.
+     torch.manual_seed(0)
+     print(f"loading {a.data_dir} ...")
+     if a.split == 'dev':
+@@ -205,7 +203,7 @@
+     for member_seed in (0, 1, 2):
+         bpr = get_member_preds('bpr_anchor_v1', train_bpr_member, enc, dim, Xtar, member_seed, a.device, verbose)
+         bce = get_member_preds('bce_v1', train_bce_member, enc, dim, Xtar, member_seed, a.device, verbose)
+-        blended.append(0.70 * zscore_by_user(bpr, utar) + 0.30 * zscore_by_user(bce, utar))
++        blended.append(0.75 * zscore_by_user(bpr, utar) + 0.25 * zscore_by_user(bce, utar))
+     scores = np.mean(blended, axis=0)
+ 
+     if a.out:

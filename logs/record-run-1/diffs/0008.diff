@@ -1,0 +1,166 @@
+# iteration 8  (parent: 2)
+# hypothesis: Try DeepFM with same-user BPR: the DeepFM paper combines an FM component with a deep component for higher-order feature interactions (https://arxiv.org/abs/1703.04247), which may improve top-5 ranking beyond the low-rank FM without changing the proven pair sampler.
+# result: GAUC 0.669615 | nDCG@5 0.536633 | primary 0.603124 | verdict noise
+
+--- logs/record-run-1/solutions/002_bpr_fm.py
++++ logs/record-run-1/solutions/008_deepfm_bpr.py
+@@ -1,13 +1,12 @@
+-"""FM trained with same-user BPR pairwise ranking loss.
+-
+-This keeps the official FM architecture/features but changes the training objective
+-from pointwise BCE to pairwise ranking.  Each update compares a positive and a
+-negative impression from the same user:
+-
+-    loss = softplus(-(score_pos - score_neg))
+-
+-Users with no within-user label variation cannot affect GAUC/nDCG ranking and are
+-not sampled for BPR pairs.
++"""DeepFM trained with same-user BPR for within-user video ranking.
++
++This keeps the strongest known ingredient (same-user positive-vs-negative BPR)
++but replaces the pure FM scorer with a DeepFM scorer:
++
++    score = FM(x) + deep_scale * MLP(flatten(field_embeddings))
++
++The FM part captures first/second-order sparse interactions, while the small MLP
++can learn higher-order interactions among user/video/author/tab/duration fields.
+ """
+ import argparse
+ import os
+@@ -24,20 +23,39 @@
+ from evaluate import evaluate                  # noqa: E402
+ 
+ 
+-class TorchFM(torch.nn.Module):
+-    def __init__(self, dim, k=16, seed=0):
++class DeepFM(torch.nn.Module):
++    def __init__(self, dim, n_fields, k=16, seed=0, hidden=(64, 32), dropout=0.05):
+         super().__init__()
+         rng = np.random.default_rng(seed)
+         V0 = rng.normal(0, 0.01, (dim, k)).astype(np.float32)
+         self.V = torch.nn.Parameter(torch.from_numpy(V0))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+-
+-    def forward(self, X):
++        layers = []
++        in_dim = int(n_fields * k)
++        for h in hidden:
++            lin = torch.nn.Linear(in_dim, int(h))
++            torch.nn.init.xavier_uniform_(lin.weight)
++            torch.nn.init.zeros_(lin.bias)
++            layers += [lin, torch.nn.ReLU(), torch.nn.Dropout(dropout)]
++            in_dim = int(h)
++        out = torch.nn.Linear(in_dim, 1)
++        torch.nn.init.xavier_uniform_(out.weight, gain=0.1)
++        torch.nn.init.zeros_(out.bias)
++        layers.append(out)
++        self.mlp = torch.nn.Sequential(*layers)
++        self.deep_scale = torch.nn.Parameter(torch.tensor(0.10, dtype=torch.float32))
++
++    def fm_score(self, X):
+         E = self.V[X]
+         S = E.sum(1)
+         inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
+-        return self.b + self.W[X].sum(1) + inter
++        return self.b + self.W[X].sum(1) + inter, E
++
++    def forward(self, X):
++        fm, E = self.fm_score(X)
++        deep = self.mlp(E.reshape(E.shape[0], -1)).squeeze(1)
++        return fm + self.deep_scale * deep
+ 
+     @torch.no_grad()
+     def predict(self, X, bs=200_000, device='cpu'):
+@@ -50,7 +68,6 @@
+ 
+ 
+ def make_pos_user_negpools(y, users):
+-    """Return positive row ids, their users, and same-user negative pools."""
+     pos_by_u = defaultdict(list)
+     neg_by_u = defaultdict(list)
+     for i, (yy, uu) in enumerate(zip(y, users)):
+@@ -68,24 +85,19 @@
+             neg_pools[u] = np.asarray(ns, dtype=np.int64)
+             pos_idx.extend(ps)
+             pos_user.extend([u] * len(ps))
+-
+     return (np.asarray(pos_idx, dtype=np.int64),
+             np.asarray(pos_user, dtype=np.int64),
+             neg_pools)
+ 
+ 
+ def sample_pairs(pos_idx, pos_user, neg_pools, rng, multiplier=2):
+-    """Sample same-user BPR pairs; two negatives per positive by default."""
+     n_base = len(pos_idx)
+     order = rng.permutation(n_base)
+     if multiplier > 1:
+         order = np.tile(order, multiplier)
+         rng.shuffle(order)
+-
+     p = pos_idx[order]
+     n = np.empty_like(p)
+-    # Looping over pairs is cheap relative to model training at this dataset size
+-    # and avoids constructing large padded user-by-negative matrices.
+     for j, u in enumerate(pos_user[order]):
+         pool = neg_pools[int(u)]
+         n[j] = pool[rng.integers(len(pool))]
+@@ -98,10 +110,13 @@
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+-    model = TorchFM(dim, k=k, seed=seed).to(device)
+-    opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+-                            {'params': [model.b], 'weight_decay': 0.0}],
+-                           lr=lr, betas=(0.9, 0.999), eps=1e-8)
++    model = DeepFM(dim, n_fields=Xtr.shape[1], k=k, seed=seed).to(device)
++    # Apply L2 to sparse FM parameters; keep MLP regularized mostly by dropout.
++    opt = torch.optim.Adam([
++        {'params': [model.V, model.W, model.deep_scale], 'weight_decay': l2},
++        {'params': model.mlp.parameters(), 'weight_decay': 1e-7},
++        {'params': [model.b], 'weight_decay': 0.0},
++    ], lr=lr, betas=(0.9, 0.999), eps=1e-8)
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     pos_idx, pos_user, neg_pools = make_pos_user_negpools(ytr, utr)
+@@ -125,15 +140,17 @@
+             diff = model(xp) - model(xn)
+             loss = torch.nn.functional.softplus(-diff).mean()
+             loss.backward()
++            torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+             opt.step()
+             losses.append(loss.item())
+ 
+-        va = evaluate(uva, yva, model.predict(Xva, device=device))
++        va_scores = model.predict(Xva, device=device)
++        va = evaluate(uva, yva, va_scores)
+         if verbose:
+             print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+-                  f"primary {va['primary']:.4f} | pairs {len(pidx):,d} | "
+-                  f"{time.time() - t0:.1f}s")
++                  f"primary {va['primary']:.4f} | scale {float(model.deep_scale.detach().cpu()):.3f} "
++                  f"| pairs {len(pidx):,d} | {time.time() - t0:.1f}s")
+ 
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+@@ -166,8 +183,8 @@
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
++    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs,
++                     seed=a.seed, device=a.device, verbose=a.out is None)
+ 
+     X, y, users = enc[a.split]
+     scores = model.predict(X, device=a.device)
+@@ -176,7 +193,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== deepfm_bpr (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

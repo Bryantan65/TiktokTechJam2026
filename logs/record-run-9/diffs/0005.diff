@@ -1,0 +1,190 @@
+# iteration 5  (parent: 2)
+# hypothesis: improve 2: BPR's one pair at a time may miss the top-5 list structure; train a same-user multi-positive softmax loss over each user's whole impression list to optimize probability mass on positives.
+# result: GAUC 0.660428 | nDCG@5 0.532754 | primary 0.59659 | verdict worse
+
+--- logs/record-run-7/solutions/002_bpr_fm.py
++++ logs/record-run-9/solutions/005_listwise_softmax_fm.py
+@@ -1,9 +1,8 @@
+-"""Factorization Machine trained with a same-user BPR pairwise ranking loss.
++"""FM trained with a same-user listwise softmax loss.
+ 
+-This keeps the baseline FM architecture and encoding, but replaces pointwise BCE
+-with BPR: for each positive impression, sample a negative impression from the
+-same user and maximise log sigmoid(score_pos - score_neg). The metric ranks
+-within user, so cross-user pairs are deliberately not used.
++Instead of sampling one positive/negative pair, each update takes whole mixed-label
++user impression lists and minimizes logsumexp(all items) - logsumexp(positive
++items), directly pushing positives above that user's displayed negatives.
+ """
+ import argparse
+ import os
+@@ -44,30 +43,47 @@
+         return np.concatenate(out)
+ 
+ 
+-def build_pair_pools(y, users):
+-    """Return positive indices whose user has negatives, and per-user negatives."""
+-    pos_by_u = {}
+-    neg_by_u = {}
+-    for i, (yy, uu) in enumerate(zip(y, users)):
+-        if yy > 0.5:
+-            pos_by_u.setdefault(uu, []).append(i)
+-        else:
+-            neg_by_u.setdefault(uu, []).append(i)
++def make_user_groups(ytr, utr):
++    """Build mixed-label per-user row groups for listwise ranking."""
++    y = np.asarray(ytr)
++    u = np.asarray(utr)
++    order = np.argsort(u, kind='stable')
++    us = u[order]
++    split = np.flatnonzero(us[1:] != us[:-1]) + 1
++    chunks = np.split(order, split)
+ 
+-    pos_idx = []
+-    pos_user = []
+-    neg_by_u_arr = {}
+-    for uu, ps in pos_by_u.items():
+-        ns = neg_by_u.get(uu)
+-        if ns:
+-            pos_idx.extend(ps)
+-            pos_user.extend([uu] * len(ps))
+-            neg_by_u_arr[uu] = np.asarray(ns, dtype=np.int64)
+-    return np.asarray(pos_idx, dtype=np.int64), np.asarray(pos_user, dtype=object), neg_by_u_arr
++    groups = []
++    pos_masks = []
++    for rows in chunks:
++        yy = y[rows]
++        npos = int((yy > 0.5).sum())
++        if npos > 0 and npos < len(rows):
++            groups.append(rows.astype(np.int64))
++            pos_masks.append((yy > 0.5).astype(np.bool_))
++    if not groups:
++        raise RuntimeError('no users with both positive and negative rows')
++    return groups, pos_masks
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True):
++def listwise_batch_loss(model, Xtr_t, groups, pos_masks, batch_group_ids, device):
++    row_parts = [groups[int(i)] for i in batch_group_ids]
++    lens = [len(r) for r in row_parts]
++    rows_np = np.concatenate(row_parts)
++    xb = Xtr_t[torch.from_numpy(rows_np)].to(device)
++    scores = model(xb)
++
++    losses = []
++    off = 0
++    for gid, ln in zip(batch_group_ids, lens):
++        s = scores[off:off + ln]
++        pm = torch.from_numpy(pos_masks[int(gid)]).to(device)
++        losses.append(torch.logsumexp(s, dim=0) - torch.logsumexp(s[pm], dim=0))
++        off += ln
++    return torch.stack(losses).mean()
++
++
++def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, group_bs=512,
++        patience=4, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -78,46 +94,26 @@
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
++    groups, pos_masks = make_user_groups(ytr, utr)
+     rng = np.random.default_rng(seed)
+-    pos_idx, pos_user, neg_by_user = build_pair_pools(ytr, utr)
+-    if len(pos_idx) == 0:
+-        raise RuntimeError('no same-user positive/negative pairs found')
++    best, best_state, bad = -1.0, None, 0
+ 
+-    # Match the pointwise baseline's amount of data per epoch approximately.
+-    pairs_per_epoch = len(ytr)
+-    steps_per_epoch = int(np.ceil(pairs_per_epoch / bs))
+-
+-    best, best_state, bad = -1.0, None, 0
+     for ep in range(1, epochs + 1):
++        perm = rng.permutation(len(groups))
+         t0 = time.time()
+         model.train()
+         losses = []
+-        for _ in range(steps_per_epoch):
+-            pick = rng.integers(0, len(pos_idx), size=bs)
+-            pidx_np = pos_idx[pick]
+-            # One sampled negative from the same user for each positive.
+-            nidx_np = np.empty(bs, dtype=np.int64)
+-            for j, uu in enumerate(pos_user[pick]):
+-                ns = neg_by_user[uu]
+-                nidx_np[j] = ns[rng.integers(0, len(ns))]
+-
+-            pidx = torch.from_numpy(pidx_np)
+-            nidx = torch.from_numpy(nidx_np)
+-            xp = Xtr_t[pidx].to(device)
+-            xn = Xtr_t[nidx].to(device)
+-            x = torch.cat([xp, xn], dim=0)
+-
++        for st in range(0, len(perm), group_bs):
++            gids = perm[st:st + group_bs]
+             opt.zero_grad(set_to_none=True)
+-            s = model(x)
+-            sp, sn = s[:len(xp)], s[len(xp):]
+-            loss = torch.nn.functional.softplus(-(sp - sn)).mean()
++            loss = listwise_batch_loss(model, Xtr_t, groups, pos_masks, gids, device)
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | list {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -138,7 +134,7 @@
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser()
+     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+-    ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test', 'dev'])
++    ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test'])
+     ap.add_argument('--out', default=None)
+     ap.add_argument('--k', type=int, default=16)
+     ap.add_argument('--lr', type=float, default=0.001)
+@@ -149,30 +145,23 @@
+ 
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+-    if a.split == 'dev':
+-        from devdata import load as load_dev
+-        splits = load_dev(a.data_dir)
+-        target = 'valid'
+-    else:
+-        splits = load(a.data_dir)
+-        target = a.split
++    splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+     model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+                      device=a.device, verbose=a.out is None)
+ 
+-    X, y, users = enc[target]
++    X, y, users = enc[a.split]
+     scores = model.predict(X, device=a.device)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== listwise_softmax_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+-            if sp in enc:
+-                Xs, ys, us = enc[sp]
+-                r = evaluate(us, ys, model.predict(Xs, device=a.device))
+-                print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+-                      f"| primary {r['primary']:.4f}")
++            Xs, ys, us = enc[sp]
++            r = evaluate(us, ys, model.predict(Xs, device=a.device))
++            print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
++                  f"| primary {r['primary']:.4f}")
+ 

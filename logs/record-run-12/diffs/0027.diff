@@ -1,0 +1,41 @@
+# iteration 27  (parent: 26)
+# hypothesis: improve 26: the history prior helped, but flat 12% may over-trust sparse matches; gate the blend from 4% to 20% by smoothed evidence strength so cold rows stay near node24 and repeated user-content rows get more personalization.
+# result: GAUC 0.672285 | nDCG@5 0.537729 | primary 0.605007 | verdict KEPT
+
+--- logs/record-run-12/solutions/027_behavior_prior.py
++++ logs/record-run-12/solutions/028_behavior_prior_gated.py
+@@ -1,5 +1,5 @@
+-"""Best cached content-FM/DeepFM ensemble plus train-only user-history target priors."""
+-import argparse, csv, os, sys, time
++"""Best cached content-FM/DeepFM ensemble plus gated train-only user-history target priors."""
++import argparse, csv, os, sys
+ import numpy as np
+ import torch
+ import torch.nn.functional as F
+@@ -200,7 +200,7 @@
+         raw[i]=global_mean if den<=0 else num/den
+         strength[i]=st
+     print('behavior prior mean/std/coverage/strength',float(raw.mean()),float(raw.std()),float((strength>0).mean()),float(strength.mean()))
+-    return raw
++    return raw,strength
+ 
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test','dev']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+@@ -226,10 +226,13 @@
+     vc=train_video_counts(splits,target)
+     w=0.20 + 0.25/(1.0 + vc/5.0)
+     base=(1.0-w)*fm_base + w*deep
+-    prior=percentile_rank_by_user(make_behavior_prior(splits,target,content),utar)
+-    # Train-only personalized history is sparse/noisy, so use it as a small nDCG-oriented reranker.
+-    scores=0.88*base + 0.12*prior
+-    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'behavior blend 0.12')
++    prior_raw,strength=make_behavior_prior(splits,target,content)
++    prior=percentile_rank_by_user(prior_raw,utar)
++    # Increase the prior only where train history exists; keep near-cold rows close to node24.
++    gate=np.clip(strength/1.2,0.0,1.0)
++    alpha=0.04 + 0.16*gate
++    scores=(1.0-alpha)*base + alpha*prior
++    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'behavior gated alpha mean/min/max',float(alpha.mean()),float(alpha.min()),float(alpha.max()))
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,} predictions')
+     else: print('done')

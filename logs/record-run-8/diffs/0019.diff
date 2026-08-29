@@ -1,0 +1,155 @@
+# iteration 19  (parent: 18)
+# hypothesis: debug 18: the watch-time join had zero hits because log_standard lacks or differs on author/duration keys; align play_time_ms by the documented preserved raw row order filtered to train dates instead.
+# result: GAUC 0.667249 | nDCG@5 0.536308 | primary 0.601779 | verdict noise
+
+--- logs/record-run-8/solutions/018_watchtime_bpr_blend.py
++++ logs/record-run-8/solutions/019_watchtime_order_debug.py
+@@ -1,16 +1,16 @@
+-"""Add a watch-time pairwise FM member to the FM/LGB rank ensemble.
+-
+-The main label is binary, so the successful BPR model only learns positive >
+-negative.  This draft reads train-only play_time_ms from the raw logs and trains
+-an extra same-user pairwise FM on label + capped watch-ratio, then blends its
+-within-user ranks at 30% with the current residual ensemble.
++"""Debug watch-time alignment: use raw log row order/date instead of keyed join.
++
++The previous watch-time draft had zero alignment because author/duration are not
++reliably present in log_standard rows.  data.load preserves the two raw log files'
++row order, so for train rows we align play_time_ms by selecting raw rows whose
++date is in the train split and consuming them in order.
+ """
+ import argparse
+ import csv
+ import os
+ import sys
+ import time
+-from collections import defaultdict, deque
++from collections import defaultdict
+ 
+ import numpy as np
+ import torch
+@@ -19,13 +19,12 @@
+ 
+ def _add_starter_to_path():
+     here = os.path.abspath(os.path.dirname(__file__))
+-    candidates = [
++    for p in [
+         os.path.join(os.getcwd(), 'kuairand-starter-kit'),
+         os.path.join(here, '..', 'kuairand-starter-kit'),
+         os.path.join(here, '..', '..', 'kuairand-starter-kit'),
+         os.path.join(here, '..', '..', '..', 'kuairand-starter-kit'),
+-    ]
+-    for p in candidates:
++    ]:
+         p = os.path.abspath(p)
+         if os.path.isdir(p):
+             sys.path.insert(0, p)
+@@ -63,57 +62,54 @@
+     return default
+ 
+ 
+-def _row_key_tuple(r):
+-    return (_to_int(r[0]), str(r[1]), str(r[2]), str(r[3]), _to_int(r[4]), _to_int(r[5]))
+-
+-
+-def _row_key_csv(rec):
+-    return (
+-        _to_int(_get(rec, ['date'])),
+-        str(_get(rec, ['user_id', 'userId'])),
+-        str(_get(rec, ['video_id', 'photo_id', 'videoId'])),
+-        str(_get(rec, ['author_id', 'authorId'])),
+-        _to_int(_get(rec, ['tab', 'tab_id'])),
+-        _to_int(_get(rec, ['duration_ms', 'duration', 'video_duration'])),
+-    )
+-
+-
+-def read_train_watch_targets(data_dir, train_rows):
+-    """Return a train-row target using only raw log watch time.
+-
+-    Missing rows fall back to the binary label, so a path/schema mismatch does
+-    not crash the experiment; the printed hit rate diagnoses whether CWM signal
+-    was actually available.
+-    """
+-    files = [
++def _find_raw_logs(data_dir):
++    bases = [data_dir, os.path.join(data_dir, 'data'), os.path.dirname(data_dir)]
++    out = []
++    for base in bases:
++        cand = [
++            os.path.join(base, 'log_standard_4_08_to_4_21_pure.csv'),
++            os.path.join(base, 'log_standard_4_22_to_5_08_pure.csv'),
++        ]
++        if all(os.path.exists(x) for x in cand):
++            return cand
++    return [
+         os.path.join(data_dir, 'log_standard_4_08_to_4_21_pure.csv'),
+         os.path.join(data_dir, 'log_standard_4_22_to_5_08_pure.csv'),
+     ]
+-    raw = defaultdict(deque)
++
++
++def read_train_watch_targets(data_dir, train_rows):
++    train_dates = set(_to_int(r[0]) for r in train_rows)
++    files = _find_raw_logs(data_dir)
++    plays = []
++    date_col_seen = None
++    play_col_seen = None
++    total_raw = 0
+     for fp in files:
+         if not os.path.exists(fp):
+             continue
+         with open(fp, 'r', newline='', encoding='utf-8') as f:
+             reader = csv.DictReader(f)
++            fields = reader.fieldnames or []
++            date_col = next((c for c in ['date', 'upload_date', 'request_date'] if c in fields), None)
++            play_col = next((c for c in ['play_time_ms', 'playtime_ms', 'play_ms', 'play_time', 'watch_time_ms'] if c in fields), None)
++            date_col_seen = date_col_seen or date_col
++            play_col_seen = play_col_seen or play_col
+             for rec in reader:
+-                key = _row_key_csv(rec)
+-                play = _to_float(_get(rec, ['play_time_ms', 'playtime_ms', 'play_ms', 'play_time', 'watch_time_ms']), 0.0)
+-                # Keep raw value only; the binary label comes from data.load so
+-                # we never use validation/test labels or post-action features at prediction time.
+-                raw[key].append(play)
+-    out = np.zeros(len(train_rows), dtype=np.float32)
+-    hits = 0
++                total_raw += 1
++                d = _to_int(rec.get(date_col, 0)) if date_col else None
++                if (date_col is None) or (d in train_dates):
++                    plays.append(_to_float(rec.get(play_col, 0.0)) if play_col else 0.0)
++    n = len(train_rows)
++    out = np.zeros(n, dtype=np.float32)
++    hits = min(n, len(plays))
+     for i, r in enumerate(train_rows):
+         y = float(r[6])
+-        key = _row_key_tuple(r)
+-        play = None
+-        if raw.get(key):
+-            play = raw[key].popleft()
+-            hits += 1
++        play = plays[i] if i < len(plays) else None
+         dur = max(float(r[5]), 1.0)
+         ratio = 0.0 if play is None else min(max(float(play) / dur, 0.0), 2.0)
+         out[i] = y + 0.25 * ratio
+-    print(f"watch-time raw alignment hits={hits:,d}/{len(train_rows):,d}")
++    print(f"watch-time order alignment hits={hits:,d}/{n:,d}; raw_selected={len(plays):,d}; raw_total={total_raw:,d}; date_col={date_col_seen}; play_col={play_col_seen}")
+     return out
+ 
+ 
+@@ -171,7 +167,6 @@
+         m = max(1, len(idx) // 3)
+         neg = idx[order[:m]]
+         pos = idx[order[-m:]]
+-        # Avoid ambiguous equal-target pairs.
+         if wt[pos].mean() > wt[neg].mean() + 1e-6:
+             groups.append((pos.astype(np.int64), neg.astype(np.int64)))
+     return groups
+@@ -425,7 +420,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== watchtime_bpr_blend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== watchtime_order_debug (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

@@ -1,0 +1,86 @@
+# iteration 25  (parent: 24)
+# hypothesis: draft 14: add a learned LambdaRank tabular ranker at a readable 25% blend as a stacking-style diverse member, following the standard stacked/LTR ensemble idea (https://en.wikipedia.org/wiki/Ensemble_learning#Stacking).
+# result: GAUC 0.665251 | nDCG@5 0.535287 | primary 0.600269 | verdict noise
+
+--- logs/record-run-12/solutions/025_deepfm_bag_gate.py
++++ logs/record-run-12/solutions/026_lgbm_rank_ensemble.py
+@@ -1,4 +1,4 @@
+-"""Seed-bagged DeepFM content member with rare-video gated blending."""
++"""Add a LambdaRank/LightGBM tabular ranker as a diverse high-weight ensemble member."""
+ import argparse, csv, os, sys, time
+ import numpy as np
+ import torch
+@@ -174,6 +174,46 @@
+         v=norm_val(r[2]); cnt[v]=cnt.get(v,0)+1
+     return np.array([cnt.get(norm_val(r[2]),0) for r in splits[target]],dtype=np.float64)
+ 
++def group_sort(X,y,u):
++    order=np.argsort(u,kind='mergesort'); us=np.asarray(u)[order]
++    group=[]; s=0
++    while s<len(order):
++        e=s+1
++        while e<len(order) and us[e]==us[s]: e+=1
++        group.append(e-s); s=e
++    return X[order], np.asarray(y)[order].astype(np.float32), group
++
++def add_ctr_features(Xtr,ytr,Xte,dim,cols=(1,2,3,4,5,6,7,8),alpha=30.0):
++    ytr=np.asarray(ytr,dtype=np.float64); g=float(ytr.mean()); train_num=[]; test_num=[]
++    for c in cols:
++        vals=Xtr[:,c].astype(np.int64); cnt=np.bincount(vals,minlength=dim).astype(np.float64); sm=np.bincount(vals,weights=ytr,minlength=dim).astype(np.float64)
++        den=np.maximum(cnt[vals]-1.0+alpha, 1e-6); ctr=(sm[vals]-ytr+alpha*g)/den; lcnt=np.log1p(np.maximum(cnt[vals]-1.0,0.0))
++        v2=Xte[:,c].astype(np.int64); ctr2=(sm[v2]+alpha*g)/(cnt[v2]+alpha); lcnt2=np.log1p(cnt[v2])
++        train_num += [ctr.astype(np.float32), lcnt.astype(np.float32)]; test_num += [ctr2.astype(np.float32), lcnt2.astype(np.float32)]
++    return np.vstack(train_num).T.astype(np.float32), np.vstack(test_num).T.astype(np.float32)
++
++def train_lgbm_ranker(enc,dim,target,seed=0):
++    import lightgbm as lgb
++    Xtr,ytr,utr=enc['train']; Xtar,_,_=enc[target]
++    tr_num,te_num=add_ctr_features(Xtr,ytr,Xtar,dim)
++    # Exclude user_id: it is constant inside ranking groups and mostly encourages memorised splits.
++    Ftr=np.hstack([Xtr[:,1:].astype(np.int32),tr_num]).astype(np.float32)
++    Fte=np.hstack([Xtar[:,1:].astype(np.int32),te_num]).astype(np.float32)
++    Ftr_s,ytr_s,group=group_sort(Ftr,ytr,utr)
++    cat_features=list(range(Xtr.shape[1]-1))
++    params=dict(objective='lambdarank',metric='ndcg',n_estimators=320,learning_rate=0.045,num_leaves=31,
++                min_child_samples=80,subsample=0.85,subsample_freq=1,colsample_bytree=0.85,
++                reg_lambda=2.0,random_state=seed,n_jobs=-1,verbosity=-1,label_gain=[0,1])
++    model=lgb.LGBMRanker(**params)
++    print('training LGBMRanker rows',Ftr_s.shape,'groups',len(group),'features',Ftr_s.shape[1])
++    model.fit(Ftr_s,ytr_s,group=group,categorical_feature=cat_features,eval_at=[5])
++    return model.predict(Fte,num_iteration=model.best_iteration_).astype(np.float64)
++
++def get_lgbm_preds(enc,dim,target,seed):
++    os.makedirs('pred_cache',exist_ok=True); path=os.path.join('pred_cache',f'026_lgbm_rank_ctr_seed{seed}_target{target}_n{len(enc[target][0])}.npy')
++    if os.path.isfile(path): print('loading cached',path); return np.load(path).astype(np.float64)
++    p=train_lgbm_ranker(enc,dim,target,seed=seed); np.save(path,p); return p
++
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test','dev']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+     torch.manual_seed(a.seed); np.random.seed(a.seed)
+@@ -189,18 +229,20 @@
+         bpr=get_preds('018','content_bpr_anchor_v1',train_bpr_member,enc,dim,Xtar,s,a.device,verbose)
+         bce=get_preds('018','content_bce_v1',train_bce_member,enc,dim,Xtar,s,a.device,verbose)
+         bags.append(0.70*percentile_rank_by_user(bpr,utar)+0.30*percentile_rank_by_user(bce,utar))
+-    base=np.mean(bags,axis=0)
++    fm_base=np.mean(bags,axis=0)
+     deep_bags=[]
+     for s in (0,1,2):
+         dp=get_preds('024','deepfm_content_bpr_v1',train_deep_bpr,enc,dim,Xtar,s,a.device,verbose)
+         deep_bags.append(percentile_rank_by_user(dp,utar))
+     deep=np.mean(deep_bags,axis=0)
+-    # Content/deep interactions should matter most where opaque video_id evidence is sparse.
+     vc=train_video_counts(splits,target)
+-    w=0.20 + 0.25/(1.0 + vc/5.0)   # 0.45 for unseen videos, asymptotes to 0.20 for frequent videos
+-    scores=(1.0-w)*base + w*deep
+-    print('deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()))
++    w=0.20 + 0.25/(1.0 + vc/5.0)
++    base=(1.0-w)*fm_base + w*deep
++    lgbm=get_lgbm_preds(enc,dim,target,a.seed)
++    lgbm_rank=percentile_rank_by_user(lgbm,utar)
++    scores=0.75*base + 0.25*lgbm_rank
++    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'lgbm blend 0.25')
+     if a.out:
+-        np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions')
++        np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,} predictions')
+     else: print('done')
+ 

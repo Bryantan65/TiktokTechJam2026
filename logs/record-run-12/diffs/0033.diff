@@ -1,0 +1,43 @@
+# iteration 33  (parent: 32)
+# hypothesis: debug 32: the LambdaRank member crashed from a discount-array off-by-one, so fix rank clipping/discount length and rerun the same 30% top-5 pair-weighted BPR test without changing the mechanism.
+# result: GAUC 0.67199 | nDCG@5 0.537661 | primary 0.604826 | verdict KEPT
+
+--- logs/record-run-12/solutions/033_lambda_ndcg_bpr.py
++++ logs/record-run-12/solutions/034_lambda_ndcg_bpr_fix.py
+@@ -1,4 +1,4 @@
+-"""Best cached content-FM/DeepFM/behavior ensemble plus LambdaRank-style top-5 BPR member."""
++"""Best cached content-FM/DeepFM/behavior ensemble plus LambdaRank-style top-5 BPR member (bugfixed discounts)."""
+ import argparse, csv, os, sys
+ import numpy as np
+ import torch
+@@ -144,7 +144,9 @@
+ 
+ def lambda_epoch_pairs(model,Xtr,groups,seed,ep,device):
+     scores=model.predict(Xtr,bs=200000,device=device); rng=np.random.default_rng(seed+100003*ep)
+-    pi=[]; ni=[]; ww=[]; disc=1.0/np.log2(np.arange(2,256,dtype=np.float64))
++    pi=[]; ni=[]; ww=[]
++    maxr=255
++    disc=1.0/np.log2(np.arange(2,maxr+3,dtype=np.float64))  # ranks 0..255 inclusive
+     hardp=min(0.80,0.15+0.10*ep)
+     for idx,pos,neg in groups:
+         ss=scores[idx]; ordidx=idx[np.argsort(-ss,kind='mergesort')]
+@@ -152,9 +154,8 @@
+         nscore=scores[neg]; hard=neg[np.argsort(-nscore,kind='mergesort')[:min(8,len(neg))]]
+         for p in pos:
+             n=int(hard[rng.integers(0,len(hard))]) if rng.random()<hardp else int(neg[rng.integers(0,len(neg))])
+-            rp=min(rank.get(int(p),255),254); rn=min(rank.get(n,255),254)
++            rp=min(rank.get(int(p),maxr),maxr); rn=min(rank.get(n,maxr),maxr)
+             d=abs(disc[rp]-disc[rn]) if (rp<5 or rn<5) else 0.04
+-            # Emphasise misordered/top-negative pairs while retaining GAUC pressure on all pairs.
+             ww.append(0.25+4.0*d+(1.0 if rn<rp else 0.0)*0.25); pi.append(int(p)); ni.append(n)
+     return np.asarray(pi,dtype=np.int64),np.asarray(ni,dtype=np.int64),np.asarray(ww,dtype=np.float32)
+ 
+@@ -268,7 +269,7 @@
+     node26=0.88*base+0.12*prior
+     lam_bags=[]
+     for s in (0,1,2):
+-        lp=get_preds('033','lambda_ndcg_bpr_v1',train_lambda_ndcg_bpr,enc,dim,Xtar,s,a.device,verbose)
++        lp=get_preds('034','lambda_ndcg_bpr_fix_v1',train_lambda_ndcg_bpr,enc,dim,Xtar,s,a.device,verbose)
+         lam_bags.append(percentile_rank_by_user(lp,utar))
+     lam=np.mean(lam_bags,axis=0)
+     scores=0.70*node26+0.30*lam

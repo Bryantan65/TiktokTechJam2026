@@ -1,0 +1,158 @@
+# iteration 21  (parent: 15)
+# hypothesis: improve 15: time features are the strongest added signal, so weight BPR positives toward recent train days with a 7-day half-life to match the chronological validation distribution. This keeps all data and the node-15 architecture, changing only the loss weights.
+# result: GAUC 0.66866 | nDCG@5 0.537232 | primary 0.602946 | verdict noise
+
+--- logs/record-run-5/solutions/015_bpr_weekday_hour_tabcross_fm.py
++++ logs/record-run-5/solutions/021_recent_weighted_bpr_time_fm.py
+@@ -1,9 +1,9 @@
+-"""3-model multi-negative BPR FM with weekday/hour and tab-hour cross features.
+-
+-Parent 13 is the current best. This refinement keeps the successful reusable
+-weekday and hour features, and adds a compact tab-by-hour categorical cross
+-(5*24 buckets) so the linear/FM model can learn tab-specific diurnal propensities
+-rather than relying only on a low-rank tab-hour interaction.
++"""3-model multi-negative BPR FM with time features and recent-positive weighting.
++
++This refines node 15 by keeping weekday/hour/tab-hour features and weighting
++BPR positive rows toward the most recent training dates. Since validation is
++chronologically after training and time features helped, recent interactions may
++better match the next-day ranking distribution while retaining all data.
+ """
+ import argparse
+ import csv
+@@ -50,6 +50,10 @@
+ 
+ def yyyymmdd_to_weekday(d):
+     return datetime.strptime(str(int(d)), '%Y%m%d').weekday()  # Monday=0
++
++
++def yyyymmdd_to_ordinal(d):
++    return datetime.strptime(str(int(d)), '%Y%m%d').toordinal()
+ 
+ 
+ def parse_hour(hourmin):
+@@ -106,9 +110,11 @@
+     for sp, rows in splits.items():
+         X, y, u = enc[sp]
+         feats = np.empty((len(rows), 3), dtype=np.int64)
++        dates = np.empty(len(rows), dtype=np.int32)
+         for i, row in enumerate(rows):
+             # tuple: date, user_id, video_id, author_id, tab, duration_ms, label
+             tab = int(row[4])
++            dates[i] = int(row[0])
+             key = (int(row[0]), int(row[1]), int(row[2]), tab, int(row[5]))
+             if raw_time.get(key):
+                 dow, hour = raw_time[key].popleft()
+@@ -124,13 +130,18 @@
+             feats[i, 1] = off_hour + hour
+             feats[i, 2] = off_tab_hour + tab_bucket * 24 + hour
+         X2 = np.concatenate([X.astype(np.int64), feats], axis=1)
+-        out[sp] = (X2, y, u)
++        out[sp] = (X2, y, u, dates)
+     if missing:
+         print(f"warning: {missing} rows missing raw hourmin; used hour=0 fallback")
+     return out, final_dim
+ 
+ 
+-def make_user_pair_pools(y, users):
++def make_user_pair_pools(y, users, dates, half_life_days=7.0):
++    ords = np.asarray([yyyymmdd_to_ordinal(d) for d in dates], dtype=np.float32)
++    max_ord = float(ords.max())
++    # Exponential recency with half-life, then normalized on positive rows below.
++    row_w = np.exp(-np.log(2.0) * (max_ord - ords) / float(half_life_days)).astype(np.float32)
++
+     by_user = {}
+     for i, (uu, yy) in enumerate(zip(users, y)):
+         if uu not in by_user:
+@@ -139,22 +150,28 @@
+ 
+     pos_rows = []
+     neg_pools = []
++    pos_weights = []
+     for negs, poss in by_user.values():
+         if len(poss) and len(negs):
+             neg_arr = np.asarray(negs, dtype=np.int64)
+             for p in poss:
+                 pos_rows.append(p)
+                 neg_pools.append(neg_arr)
+-    return np.asarray(pos_rows, dtype=np.int64), neg_pools
++                pos_weights.append(row_w[p])
++    pos_weights = np.asarray(pos_weights, dtype=np.float32)
++    if len(pos_weights):
++        pos_weights = pos_weights / max(float(pos_weights.mean()), 1e-12)
++        pos_weights = np.clip(pos_weights, 0.35, 2.25).astype(np.float32)
++    return np.asarray(pos_rows, dtype=np.int64), neg_pools, pos_weights
+ 
+ 
+ def train_one(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
+               patience=4, neg_k=4, seed=0, device='cpu', verbose=True,
+               tag='m'):
+-    Xtr, ytr, utr = enc['train']
+-    Xva, yva, uva = enc['valid']
+-
+-    pos_rows, neg_pools = make_user_pair_pools(ytr, utr)
++    Xtr, ytr, utr, dtr = enc['train']
++    Xva, yva, uva, _ = enc['valid']
++
++    pos_rows, neg_pools, pos_weights = make_user_pair_pools(ytr, utr, dtr)
+     if len(pos_rows) == 0:
+         raise RuntimeError('no same-user positive/negative pairs in training data')
+ 
+@@ -164,6 +181,7 @@
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
++    w_t = torch.from_numpy(pos_weights)
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+ 
+@@ -180,18 +198,20 @@
+             sel = order[i:i + bs]
+             xp = Xtr_t[torch.from_numpy(pos_rows[sel])].to(device)
+             xn = Xtr_t[torch.from_numpy(neg_rows[sel].reshape(-1))].to(device)
++            wb = w_t[torch.from_numpy(sel)].to(device).view(-1, 1)
+ 
+             opt.zero_grad(set_to_none=True)
+             sp = model(xp).view(-1, 1)
+             sn = model(xn).view(len(sel), neg_k)
+-            loss = F.softplus(-(sp - sn)).mean()
++            per = F.softplus(-(sp - sn))
++            loss = (per * wb).mean()
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | multineg_bpr_tab_hour {np.mean(losses):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | recent_weight_bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -246,22 +266,22 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+['weekday','hour','tab_hour']")
++          f"fields={FIELDS}+['weekday','hour','tab_hour']; recent-weighted BPR")
+ 
+     models, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                       neg_k=a.neg_k, seed=a.seed, device=a.device,
+                       verbose=a.out is None, n_models=a.n_models)
+ 
+-    X, y, users = enc[a.split]
++    X, y, users, dates = enc[a.split]
+     scores = predict_ensemble(models, X, device=a.device)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_weekday_hour_tabcross_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== recent_weighted_bpr_time_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+-            Xs, ys, us = enc[sp]
++            Xs, ys, us, _ = enc[sp]
+             r = evaluate(us, ys, predict_ensemble(models, Xs, device=a.device))
+             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+                   f"| primary {r['primary']:.4f}")

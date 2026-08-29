@@ -1,0 +1,192 @@
+# iteration 23  (parent: 22)
+# hypothesis: improve 22: train the XENDCG tree member on graded relevance from play_time_ms/duration quartiles for positive train rows, while early-stopping and scoring against the binary valid metric; LightGBM ranking supports graded label_gain (https://lightgbm.readthedocs.io/en/latest/Parameters.html#label_gain), and watch depth may separate the top positives for nDCG@5.
+# result: GAUC 0.669101 | nDCG@5 0.536029 | primary 0.602565 | verdict noise
+
+--- logs/record-run-10/solutions/022_xendcg_3way_blend.py
++++ logs/record-run-10/solutions/023_graded_watch_xendcg.py
+@@ -1,8 +1,9 @@
+-"""Three-way rank blend: BPR FM + XE_NDCG LightGBM ranker + BCE FM.
+-
+-Copy of node 19 with one targeted change: use LightGBM's rank_xendcg
+-objective instead of lambdarank for the tree member, keeping features, FM
+-members, early stopping, and blend weights fixed.
++"""Three-way rank blend with graded watch-time labels for the XE_NDCG tree member.
++
++Copy of node 22 except the LightGBM rank_xendcg member is trained with
++0/1/2/3 relevance grades derived from train play_time_ms / duration among
++positive rows.  The raw watch-time signal is used only as a training target
++for the tree ranker, not as a prediction-time feature.
+ """
+ import argparse
+ import csv
+@@ -31,7 +32,7 @@
+ 
+ 
+ def dur_bucket(ms):
+-    try: ms = int(ms)
++    try: ms = int(float(ms))
+     except Exception: ms = 0
+     if ms < 7000: return 0
+     if ms < 15000: return 1
+@@ -53,37 +54,53 @@
+     return max(0, min(23, h))
+ 
+ 
++def parse_float(v):
++    try:
++        x = float(v)
++        if np.isfinite(x): return x
++    except Exception:
++        pass
++    return 0.0
++
++
+ def raw_log_paths(data_dir):
+     return [os.path.join(data_dir, 'log_standard_4_08_to_4_21_pure.csv'),
+             os.path.join(data_dir, 'log_standard_4_22_to_5_08_pure.csv')]
+ 
+ 
+-def make_hour_lookup(splits, data_dir):
++def make_raw_lookup(splits, data_dir):
+     q = defaultdict(deque); total = 0
+     for path in raw_log_paths(data_dir):
+         if not os.path.exists(path): continue
+         with open(path, 'r', newline='', encoding='utf-8') as f:
+             rdr = csv.DictReader(f); cols = rdr.fieldnames or []
+             hcol = 'hourmin' if 'hourmin' in cols else ('hour' if 'hour' in cols else None)
++            pcol = None
++            for c in ('play_time_ms', 'play_time', 'playtime_ms'):
++                if c in cols:
++                    pcol = c; break
+             dcol = 'date' if 'date' in cols else None
+-            if hcol is None or dcol is None: continue
++            if dcol is None: continue
+             for r in rdr:
+                 key = (norm_int_str(r.get(dcol, '')), norm_int_str(r.get('user_id', '')),
+                        norm_int_str(r.get('video_id', '')), norm_int_str(r.get('tab', '')))
+-                q[key].append(parse_hour(r.get(hcol, 0))); total += 1
+-    out = {}; miss = used = 0
++                h = parse_hour(r.get(hcol, 0)) if hcol is not None else 0
++                p = parse_float(r.get(pcol, 0)) if pcol is not None else 0.0
++                q[key].append((h, p)); total += 1
++    hours = {}; plays = {}; miss = used = 0
+     for name, rows in splits.items():
+-        arr = np.zeros(len(rows), dtype=np.int16)
++        harr = np.zeros(len(rows), dtype=np.int16)
++        parr = np.zeros(len(rows), dtype=np.float32)
+         for i, r in enumerate(rows):
+             key = (norm_int_str(r[0]), norm_int_str(r[1]), norm_int_str(r[2]), norm_int_str(r[4]))
+             dq = q.get(key)
+             if dq:
+-                arr[i] = dq.popleft(); used += 1
++                h, p = dq.popleft(); harr[i] = h; parr[i] = p; used += 1
+             else:
+                 miss += 1
+-        out[name] = arr
+-    print(f"loaded raw hourmin rows={total:,d}; matched={used:,d}; missing={miss:,d}")
+-    return out
++        hours[name] = harr; plays[name] = parr
++    print(f"loaded raw rows={total:,d}; matched={used:,d}; missing={miss:,d}; play_nonzero_train={(plays.get('train', np.array([])) > 0).sum():,d}")
++    return hours, plays
+ 
+ 
+ def row_features(row, hour):
+@@ -91,30 +108,49 @@
+             yyyymmdd_to_dow(row[0]), int(hour), int(hour) // 4)
+ 
+ 
+-def encode_ext(splits, hour_lookup):
++def encode_ext(splits, hours, plays):
+     vocabs = [{} for _ in EXT_FIELDS]
+     for name, rows in splits.items():
+-        for r, h in zip(rows, hour_lookup[name]):
++        for r, h in zip(rows, hours[name]):
+             for j, v in enumerate(row_features(r, h)):
+                 if v not in vocabs[j]: vocabs[j][v] = len(vocabs[j])
+     offsets = np.cumsum([0] + [len(v) for v in vocabs[:-1]], dtype=np.int64)
+     dim = int(offsets[-1] + len(vocabs[-1]))
+-    enc = {}; rawcat = {}
++    enc = {}; rawcat = {}; durs = {}
+     for name, rows in splits.items():
+         X = np.empty((len(rows), len(EXT_FIELDS)), dtype=np.int64)
+         C = np.empty((len(rows), len(EXT_FIELDS)), dtype=np.int32)
+         y = np.empty(len(rows), dtype=np.float32); users = np.empty(len(rows), dtype=object)
+         dur = np.empty(len(rows), dtype=np.float32)
+-        for i, (r, h) in enumerate(zip(rows, hour_lookup[name])):
++        for i, (r, h) in enumerate(zip(rows, hours[name])):
+             vals = row_features(r, h)
+             for j, v in enumerate(vals):
+                 c = vocabs[j][v]; C[i, j] = c; X[i, j] = c + offsets[j]
+             y[i] = float(r[6]); users[i] = r[1]
+-            try: dur[i] = float(r[5])
+-            except Exception: dur[i] = 0.0
++            dur[i] = parse_float(r[5])
+         enc[name] = (X, y, users)
++        durs[name] = dur
+         rawcat[name] = np.column_stack([C, np.log1p(np.maximum(dur, 0.0)).astype(np.float32)]).astype(np.float32)
+-    return enc, rawcat, dim
++
++    grades = {}
++    tr_y = enc['train'][1]; tr_ratio = plays['train'] / np.maximum(durs['train'], 1.0)
++    good = (tr_y > 0.5) & (plays['train'] > 0) & np.isfinite(tr_ratio)
++    if good.sum() >= 100:
++        q1, q2 = np.quantile(tr_ratio[good], [0.60, 0.85])
++    else:
++        q1, q2 = 0.8, 1.2
++    q2 = max(q2, q1 + 1e-6)
++    print(f"watch-grade thresholds ratio q60={q1:.3f} q85={q2:.3f} positives_with_play={int(good.sum()):,d}")
++    for name in splits:
++        y = enc[name][1]
++        ratio = plays[name] / np.maximum(durs[name], 1.0)
++        g = np.zeros(len(y), dtype=np.int32)
++        pos = y > 0.5
++        g[pos] = 1
++        g[pos & (ratio >= q1)] = 2
++        g[pos & (ratio >= q2)] = 3
++        grades[name] = g
++    return enc, rawcat, grades, dim
+ 
+ 
+ class TorchFM(torch.nn.Module):
+@@ -219,13 +255,13 @@
+     return X[order], y[order], group
+ 
+ 
+-def train_lambdarank(rawcat, enc, seed=0, verbose=True):
+-    Xtr, ytr, gtr = user_sorted(rawcat['train'], enc['train'][1], enc['train'][2])
++def train_xendcg(rawcat, enc, grades, seed=0, verbose=True):
++    Xtr, ytr_grade, gtr = user_sorted(rawcat['train'], grades['train'], enc['train'][2])
+     Xva, yva, gva = user_sorted(rawcat['valid'], enc['valid'][1], enc['valid'][2])
+-    dtrain = lgb.Dataset(Xtr, label=ytr.astype(np.int32), group=gtr, categorical_feature=list(range(len(EXT_FIELDS))), free_raw_data=False)
++    dtrain = lgb.Dataset(Xtr, label=ytr_grade.astype(np.int32), group=gtr, categorical_feature=list(range(len(EXT_FIELDS))), free_raw_data=False)
+     dvalid = lgb.Dataset(Xva, label=yva.astype(np.int32), group=gva, categorical_feature=list(range(len(EXT_FIELDS))), reference=dtrain, free_raw_data=False)
+     params = {
+-        'objective': 'rank_xendcg', 'metric': 'ndcg', 'ndcg_eval_at': [5], 'label_gain': [0, 1],
++        'objective': 'rank_xendcg', 'metric': 'ndcg', 'ndcg_eval_at': [5], 'label_gain': [0, 1, 2, 3],
+         'learning_rate': 0.04, 'num_leaves': 63, 'min_data_in_leaf': 80,
+         'feature_fraction': 0.85, 'bagging_fraction': 0.85, 'bagging_freq': 1,
+         'lambda_l2': 1.0, 'max_cat_threshold': 64, 'verbosity': -1, 'num_threads': 4,
+@@ -256,11 +292,11 @@
+ 
+ 
+ def run(splits, data_dir, k=16, lr=0.001, epochs=40, seed=0, device='cpu', verbose=True):
+-    hour_lookup = make_hour_lookup(splits, data_dir)
+-    enc, rawcat, dim = encode_ext(splits, hour_lookup)
++    hours, plays = make_raw_lookup(splits, data_dir)
++    enc, rawcat, grades, dim = encode_ext(splits, hours, plays)
+     bpr = train_bpr(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed, device=device, verbose=verbose)
+     bce = train_bce(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed + 313, device=device, verbose=verbose)
+-    ltr = train_lambdarank(rawcat, enc, seed=seed + 1009, verbose=verbose)
++    ltr = train_xendcg(rawcat, enc, grades, seed=seed + 1009, verbose=verbose)
+     return bpr, bce, ltr, enc, rawcat
+ 
+ 
+@@ -278,7 +314,7 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 3way bpr/xendcg/bce")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 3way bpr/graded-xendcg/bce")
+     bpr, bce, ltr, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[target]
+     sbpr = bpr.predict(X, device=a.device)

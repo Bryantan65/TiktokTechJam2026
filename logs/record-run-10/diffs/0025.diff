@@ -1,0 +1,66 @@
+# iteration 25  (parent: 24)
+# hypothesis: improve 24: the dual-tree blend improved, so average two independently seeded LightGBM models inside each tree slot to reduce variance while keeping the readable 40/20/20/20 mechanism weights unchanged.
+# result: GAUC 0.671317 | nDCG@5 0.537876 | primary 0.604596 | verdict KEPT
+
+--- logs/record-run-10/solutions/024_dual_ranker_4way.py
++++ logs/record-run-10/solutions/025_bagged_tree_slots.py
+@@ -1,8 +1,9 @@
+-"""Four-way rank blend: BPR FM + XE_NDCG LightGBM + LambdaRank LightGBM + BCE FM.
+-
+-Copy of node 22, adding back the node-19 lambdarank tree as a second tree
+-ranker.  All members get readable weight (>=20%) except none are hidden: BPR
+-0.40, XE_NDCG 0.20, LambdaRank 0.20, BCE 0.20.
++"""Four-way rank blend with bagged tree slots.
++
++Improves node 24 by keeping the same external blend weights but averaging two
++independently seeded LightGBM models inside each tree objective slot
++(XE_NDCG and LambdaRank).  This tests whether the successful dual-ranker member
++is variance-limited without hiding a new low-weight mechanism.
+ """
+ import argparse
+ import csv
+@@ -237,6 +238,13 @@
+     return lgb.train(params, dtrain, num_boost_round=300, valid_sets=[dvalid], valid_names=['valid'], callbacks=callbacks)
+ 
+ 
++def pred_lgb_avg(models, X):
++    acc = np.zeros(X.shape[0], dtype=np.float64)
++    for m in models:
++        acc += m.predict(X, num_iteration=m.best_iteration)
++    return acc / max(1, len(models))
++
++
+ def multi_rank_blend(scores, weights, users):
+     users = np.asarray(users); out = np.zeros(len(users), dtype=np.float64)
+     order = np.argsort(users, kind='mergesort'); s = 0
+@@ -260,9 +268,9 @@
+     enc, rawcat, dim = encode_ext(splits, hour_lookup)
+     bpr = train_bpr(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed, device=device, verbose=verbose)
+     bce = train_bce(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed + 313, device=device, verbose=verbose)
+-    xendcg = train_lgb_ranker(rawcat, enc, objective='rank_xendcg', seed=seed + 1009, verbose=verbose)
+-    lambdarank = train_lgb_ranker(rawcat, enc, objective='lambdarank', seed=seed + 2003, verbose=verbose)
+-    return bpr, bce, xendcg, lambdarank, enc, rawcat
++    xendcgs = [train_lgb_ranker(rawcat, enc, objective='rank_xendcg', seed=seed + 1009 + 101*i, verbose=verbose) for i in range(2)]
++    lambdas = [train_lgb_ranker(rawcat, enc, objective='lambdarank', seed=seed + 2003 + 101*i, verbose=verbose) for i in range(2)]
++    return bpr, bce, xendcgs, lambdas, enc, rawcat
+ 
+ 
+ if __name__ == '__main__':
+@@ -279,13 +287,13 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 4way bpr/xendcg/lambdarank/bce")
+-    bpr, bce, xendcg, lambdarank, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 4way bpr/bag-xendcg/bag-lambda/bce")
++    bpr, bce, xendcgs, lambdas, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[target]
+     sbpr = bpr.predict(X, device=a.device)
+     sbce = bce.predict(X, device=a.device)
+-    sx = xendcg.predict(rawcat[target], num_iteration=xendcg.best_iteration)
+-    sl = lambdarank.predict(rawcat[target], num_iteration=lambdarank.best_iteration)
++    sx = pred_lgb_avg(xendcgs, rawcat[target])
++    sl = pred_lgb_avg(lambdas, rawcat[target])
+     scores = multi_rank_blend([sbpr, sx, sl, sbce], [0.40, 0.20, 0.20, 0.20], users)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")

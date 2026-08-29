@@ -1,0 +1,67 @@
+# iteration 24  (parent: 22)
+# hypothesis: improve 22: combine the two strongest tree objectives, rank_xendcg and lambdarank, as separate readable 20% members with BPR/BCE, because nodes 19 and 22 have similar scores but may make different listwise errors.
+# result: GAUC 0.671735 | nDCG@5 0.538126 | primary 0.604931 | verdict KEPT
+
+--- logs/record-run-10/solutions/022_xendcg_3way_blend.py
++++ logs/record-run-10/solutions/024_dual_ranker_4way.py
+@@ -1,8 +1,8 @@
+-"""Three-way rank blend: BPR FM + XE_NDCG LightGBM ranker + BCE FM.
+-
+-Copy of node 19 with one targeted change: use LightGBM's rank_xendcg
+-objective instead of lambdarank for the tree member, keeping features, FM
+-members, early stopping, and blend weights fixed.
++"""Four-way rank blend: BPR FM + XE_NDCG LightGBM + LambdaRank LightGBM + BCE FM.
++
++Copy of node 22, adding back the node-19 lambdarank tree as a second tree
++ranker.  All members get readable weight (>=20%) except none are hidden: BPR
++0.40, XE_NDCG 0.20, LambdaRank 0.20, BCE 0.20.
+ """
+ import argparse
+ import csv
+@@ -219,13 +219,13 @@
+     return X[order], y[order], group
+ 
+ 
+-def train_lambdarank(rawcat, enc, seed=0, verbose=True):
++def train_lgb_ranker(rawcat, enc, objective='rank_xendcg', seed=0, verbose=True):
+     Xtr, ytr, gtr = user_sorted(rawcat['train'], enc['train'][1], enc['train'][2])
+     Xva, yva, gva = user_sorted(rawcat['valid'], enc['valid'][1], enc['valid'][2])
+     dtrain = lgb.Dataset(Xtr, label=ytr.astype(np.int32), group=gtr, categorical_feature=list(range(len(EXT_FIELDS))), free_raw_data=False)
+     dvalid = lgb.Dataset(Xva, label=yva.astype(np.int32), group=gva, categorical_feature=list(range(len(EXT_FIELDS))), reference=dtrain, free_raw_data=False)
+     params = {
+-        'objective': 'rank_xendcg', 'metric': 'ndcg', 'ndcg_eval_at': [5], 'label_gain': [0, 1],
++        'objective': objective, 'metric': 'ndcg', 'ndcg_eval_at': [5], 'label_gain': [0, 1],
+         'learning_rate': 0.04, 'num_leaves': 63, 'min_data_in_leaf': 80,
+         'feature_fraction': 0.85, 'bagging_fraction': 0.85, 'bagging_freq': 1,
+         'lambda_l2': 1.0, 'max_cat_threshold': 64, 'verbosity': -1, 'num_threads': 4,
+@@ -260,8 +260,9 @@
+     enc, rawcat, dim = encode_ext(splits, hour_lookup)
+     bpr = train_bpr(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed, device=device, verbose=verbose)
+     bce = train_bce(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed + 313, device=device, verbose=verbose)
+-    ltr = train_lambdarank(rawcat, enc, seed=seed + 1009, verbose=verbose)
+-    return bpr, bce, ltr, enc, rawcat
++    xendcg = train_lgb_ranker(rawcat, enc, objective='rank_xendcg', seed=seed + 1009, verbose=verbose)
++    lambdarank = train_lgb_ranker(rawcat, enc, objective='lambdarank', seed=seed + 2003, verbose=verbose)
++    return bpr, bce, xendcg, lambdarank, enc, rawcat
+ 
+ 
+ if __name__ == '__main__':
+@@ -278,13 +279,14 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 3way bpr/xendcg/bce")
+-    bpr, bce, ltr, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 4way bpr/xendcg/lambdarank/bce")
++    bpr, bce, xendcg, lambdarank, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[target]
+     sbpr = bpr.predict(X, device=a.device)
+     sbce = bce.predict(X, device=a.device)
+-    sltr = ltr.predict(rawcat[target], num_iteration=ltr.best_iteration)
+-    scores = multi_rank_blend([sbpr, sltr, sbce], [0.50, 0.30, 0.20], users)
++    sx = xendcg.predict(rawcat[target], num_iteration=xendcg.best_iteration)
++    sl = lambdarank.predict(rawcat[target], num_iteration=lambdarank.best_iteration)
++    scores = multi_rank_blend([sbpr, sx, sl, sbce], [0.40, 0.20, 0.20, 0.20], users)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:

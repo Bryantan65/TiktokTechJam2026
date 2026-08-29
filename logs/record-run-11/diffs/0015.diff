@@ -1,0 +1,270 @@
+# iteration 15  (parent: 14)
+# hypothesis: improve 14: the history buckets were too coarse and trained as noisy FM fields; replace them with a smoothed empirical-Bayes target-encoding correction from train-only user/item/history stats, motivated by target encoding smoothing (https://contrib.scikit-learn.org/category_encoders/targetencoder.html).
+# result: GAUC 0.66975 | nDCG@5 0.537187 | primary 0.603469 | verdict noise
+
+--- logs/record-run-11/solutions/014_history_features.py
++++ logs/record-run-11/solutions/015_eb_history_blend.py
+@@ -1,9 +1,9 @@
+-"""FM with ranking loss, time/multitask signals, plus causal user-history features.
+-
+-Adds DIN-inspired candidate-specific user behaviour summaries: whether this user
+-has previously watched/liked this author/video/tab in the training stream.  These
+-are categorical fields used by the same FM scorer; auxiliary heads remain only a
+-training regularizer.
++"""Best FM/ranking/multitask model plus train-only empirical-Bayes history correction.
++
++Refines the failed coarse history buckets by using smoothed target-encoding style
++log-odds from the training stream as a post-hoc within-user ranking correction.
++The FM part is node 13; final predictions are FM score plus a standardized EB
++score built only from train labels.
+ """
+ import argparse
+ import csv
+@@ -78,16 +78,6 @@
+         return datetime.strptime(str(int(yyyymmdd)), '%Y%m%d').weekday()
+     except Exception:
+         return 7
+-
+-
+-def _bucket(c):
+-    if c <= 0:
+-        return 0
+-    if c == 1:
+-        return 1
+-    if c <= 3:
+-        return 2
+-    return 3
+ 
+ 
+ def _read_raw_queues(data_dir):
+@@ -113,8 +103,14 @@
+                     hm = int(float(r['hourmin']))
+                     aux = []
+                     for c in AUX_COLS:
+-                        aux.append(1.0 if c in cols and float(r.get(c, 0.0) or 0.0) > 0 else (np.nan if c not in cols else 0.0))
+-                    play = np.log1p(max(float(r.get(PLAY_COL, '') or 0.0), 0.0)) / 10.0 if PLAY_COL in cols else np.nan
++                        if c in cols:
++                            aux.append(1.0 if float(r.get(c, 0.0) or 0.0) > 0 else 0.0)
++                        else:
++                            aux.append(np.nan)
++                    if PLAY_COL in cols:
++                        play = np.log1p(max(float(r.get(PLAY_COL, '') or 0.0), 0.0)) / 10.0
++                    else:
++                        play = np.nan
+                 except Exception:
+                     continue
+                 q[key].append((hm, tuple(aux), play))
+@@ -125,50 +121,14 @@
+     return q, active, active_idx, has_play
+ 
+ 
+-def _make_hist_features(splits, offsets):
+-    # Six categorical fields, four buckets each:
+-    # previous positive/negative count for same author, same video, same tab.
+-    apos = defaultdict(lambda: defaultdict(int)); aneg = defaultdict(lambda: defaultdict(int))
+-    vpos = defaultdict(lambda: defaultdict(int)); vneg = defaultdict(lambda: defaultdict(int))
+-    tpos = defaultdict(lambda: defaultdict(int)); tneg = defaultdict(lambda: defaultdict(int))
+-
+-    def compute(rows, update):
+-        H = np.empty((len(rows), 6), dtype=np.int64)
+-        for i, row in enumerate(rows):
+-            _date, uid, vid, aid, tab, _dur, lab = row
+-            u, v, a, t = str(uid), str(vid), str(aid), int(tab)
+-            vals = [_bucket(apos[u][a]), _bucket(aneg[u][a]),
+-                    _bucket(vpos[u][v]), _bucket(vneg[u][v]),
+-                    _bucket(tpos[u][t]), _bucket(tneg[u][t])]
+-            for j, val in enumerate(vals):
+-                H[i, j] = offsets[j] + val
+-            if update:
+-                if lab > 0.5:
+-                    apos[u][a] += 1; vpos[u][v] += 1; tpos[u][t] += 1
+-                else:
+-                    aneg[u][a] += 1; vneg[u][v] += 1; tneg[u][t] += 1
+-        return H
+-
+-    out = {}
+-    if 'train' in splits:
+-        out['train'] = compute(splits['train'], update=True)
+-    for sp in ('valid', 'test'):
+-        if sp in splits:
+-            out[sp] = compute(splits[sp], update=False)
+-    return out
+-
+-
+ def augment_features_and_aux(splits, enc, dim, data_dir):
+     raw_q, active, active_idx, has_play = _read_raw_queues(data_dir)
++    new_enc, aux_out, play_out = {}, {}, {}
++    total = matched = 0
+     off_week = dim
+     off_hour = off_week + 8
+     off_part = off_hour + 25
+-    hist_offsets = [off_part + 7 + 4 * j for j in range(6)]
+-    new_dim = off_part + 7 + 24
+-    hist = _make_hist_features(splits, hist_offsets)
+-    new_enc, aux_out, play_out = {}, {}, {}
+-    total = matched = 0
+-    nz_hist = 0
++    new_dim = off_part + 7
+     for sp, (X, y, users) in enc.items():
+         rows = splits[sp]
+         extra = np.empty((len(rows), 3), dtype=np.int64)
+@@ -204,19 +164,20 @@
+                         aux[i, j] = v; mask[i, j] = 1.0
+             if not np.isnan(pval):
+                 play[i] = pval; pmask[i] = 1.0
+-        H = hist[sp]
+-        nz_hist += int(((H - np.asarray(hist_offsets, dtype=np.int64)[None, :]) > 0).any(axis=1).sum())
+-        new_enc[sp] = (np.concatenate([X.astype(np.int64), extra, H], axis=1), y, users)
++        new_enc[sp] = (np.concatenate([X.astype(np.int64), extra], axis=1), y, users)
+         aux_out[sp] = (aux, mask)
+         play_out[sp] = (play, pmask)
+-    print(f"raw matched {matched:,d}/{total:,d} ({matched / max(total,1):.3%}); history_nonzero_rows={nz_hist:,d}; dim {dim}->{new_dim}")
++    print(f"raw matched {matched:,d}/{total:,d} ({matched / max(total,1):.3%}); dim {dim}->{new_dim}; fields={FIELDS}+weekday+hour+daypart")
+     return new_enc, new_dim, aux_out, play_out, active, has_play
+ 
+ 
+ def build_user_groups(users, y):
+     pos_by_u, neg_by_u = defaultdict(list), defaultdict(list)
+     for i, (u, yy) in enumerate(zip(users, y)):
+-        (pos_by_u if yy > 0.5 else neg_by_u)[u].append(i)
++        if yy > 0.5:
++            pos_by_u[u].append(i)
++        else:
++            neg_by_u[u].append(i)
+     groups = []
+     for u in pos_by_u.keys():
+         if u in neg_by_u:
+@@ -233,22 +194,28 @@
+         m = len(ps)
+         chosen = rng.choice(ns, size=m, replace=True)
+         if train_scores is not None and semi_k > 1 and semi_frac > 0:
+-            mask = rng.random(m) < semi_frac; hh = int(mask.sum())
++            mask = rng.random(m) < semi_frac
++            hh = int(mask.sum())
+             if hh > 0:
+                 psel = ps[mask]
+                 cand = rng.choice(ns, size=(hh, semi_k), replace=True)
+-                cs, pscores = train_scores[cand], train_scores[psel]
++                cs = train_scores[cand]
++                pscores = train_scores[psel]
+                 ok = cs < pscores[:, None]
+                 any_ok = ok.any(axis=1)
+                 if any_ok.any():
+                     masked = np.where(ok, cs, -np.inf)
+-                    rows = np.where(any_ok)[0]; cols = np.argmax(masked[rows], axis=1)
+-                    tmp = chosen[mask]; tmp[rows] = cand[rows, cols]; chosen[mask] = tmp
++                    rows = np.where(any_ok)[0]
++                    cols = np.argmax(masked[rows], axis=1)
++                    tmp = chosen[mask]
++                    tmp[rows] = cand[rows, cols]
++                    chosen[mask] = tmp
+         weights = np.ones(m, dtype=np.float32)
+         if train_scores is not None and lambda_alpha > 0:
+             all_idx = np.concatenate([ps, ns])
+             order = np.argsort(-train_scores[all_idx], kind='mergesort')
+-            ranks = np.empty(len(all_idx), dtype=np.int32); ranks[order] = np.arange(1, len(all_idx) + 1, dtype=np.int32)
++            ranks = np.empty(len(all_idx), dtype=np.int32)
++            ranks[order] = np.arange(1, len(all_idx) + 1, dtype=np.int32)
+             local_rank = dict(zip(all_idx.tolist(), ranks.tolist()))
+             rp = np.fromiter((local_rank[int(x)] for x in ps), dtype=np.int32, count=m)
+             rn = np.fromiter((local_rank[int(x)] for x in chosen), dtype=np.int32, count=m)
+@@ -335,7 +302,7 @@
+                 loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} hist_seq | loss {np.mean(losses):.4f} | valid GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
++            print(f"  epoch {ep:2d} fm_node13 | loss {np.mean(losses):.4f} | valid GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -346,6 +313,64 @@
+                 break
+     model.load_state_dict(best_state)
+     return model, enc
++
++
++def _add_stat(d, key, y):
++    c, p = d.get(key, (0, 0.0))
++    d[key] = (c + 1, p + float(y))
++
++
++def _rate(d, key, g, prior):
++    c, p = d.get(key, (0, 0.0))
++    return (p + prior * g) / (c + prior)
++
++
++def _logit(p):
++    p = min(max(float(p), 1e-5), 1.0 - 1e-5)
++    return np.log(p / (1.0 - p))
++
++
++def build_eb_scorer(splits):
++    train = splits['train']
++    g = np.mean([r[6] for r in train])
++    base = _logit(g)
++    stats = {name: {} for name in ['v', 'a', 'at', 'ut', 'ud', 'ua', 'uv']}
++    for date, uid, vid, aid, tab, dur, y in train:
++        u, v, a, t, d = str(uid), str(vid), str(aid), int(tab), int(dur)
++        _add_stat(stats['v'], v, y)
++        _add_stat(stats['a'], a, y)
++        _add_stat(stats['at'], (a, t), y)
++        _add_stat(stats['ut'], (u, t), y)
++        _add_stat(stats['ud'], (u, d), y)
++        _add_stat(stats['ua'], (u, a), y)
++        _add_stat(stats['uv'], (u, v), y)
++    print('EB stats:', {k: len(v) for k, v in stats.items()}, 'global', round(float(g), 5))
++
++    def scores(rows):
++        out = np.empty(len(rows), dtype=np.float32)
++        for i, (_date, uid, vid, aid, tab, dur, _y) in enumerate(rows):
++            u, v, a, t, d = str(uid), str(vid), str(aid), int(tab), int(dur)
++            s = 0.0
++            s += 0.25 * (_logit(_rate(stats['v'], v, g, 30.0)) - base)
++            s += 0.35 * (_logit(_rate(stats['a'], a, g, 80.0)) - base)
++            s += 0.25 * (_logit(_rate(stats['at'], (a, t), g, 50.0)) - base)
++            s += 0.55 * (_logit(_rate(stats['ut'], (u, t), g, 20.0)) - base)
++            s += 0.20 * (_logit(_rate(stats['ud'], (u, d), g, 20.0)) - base)
++            s += 0.40 * (_logit(_rate(stats['ua'], (u, a), g, 4.0)) - base)
++            s += 0.15 * (_logit(_rate(stats['uv'], (u, v), g, 2.0)) - base)
++            out[i] = s
++        return out
++    return scores
++
++
++def blend_scores(fm, eb, alpha=0.30):
++    eb = eb.astype(np.float64)
++    fm = fm.astype(np.float64)
++    es = eb.std()
++    fs = fm.std()
++    if es < 1e-8 or fs < 1e-8:
++        return fm
++    return fm + alpha * fs * ((eb - eb.mean()) / es)
+ 
+ 
+ if __name__ == '__main__':
+@@ -366,17 +391,21 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+weekday+hour+daypart+hist6 aux={AUX_COLS}+{PLAY_COL}")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+weekday+hour+daypart aux={AUX_COLS}+{PLAY_COL} + EB")
+     model, enc = run(splits, data_dir=a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
++    eb_scorer = build_eb_scorer(splits)
+     X, y, users = enc[target]
+-    scores = model.predict(X, device=a.device)
++    fm_scores = model.predict(X, device=a.device)
++    eb_scores = eb_scorer(splits[target])
++    scores = blend_scores(fm_scores, eb_scores, alpha=0.30)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== history_features (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== eb_history_blend (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+-            r = evaluate(us, ys, model.predict(Xs, device=a.device))
++            sc = blend_scores(model.predict(Xs, device=a.device), eb_scorer(splits[sp]), alpha=0.30)
++            r = evaluate(us, ys, sc)
+             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

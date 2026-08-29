@@ -1,0 +1,164 @@
+# iteration 19  (parent: 16)
+# hypothesis: improve 16: node 17 showed stronger all-history weights hurt, so keep node 16's robust blend and add only small exponentially decayed recent author/video/tab residuals. If user behaviour is time-local, this should improve top-5 ranking without overwhelming the base FM.
+# result: GAUC 0.671323 | nDCG@5 0.537636 | primary 0.60448 | verdict KEPT
+
+--- logs/record-run-4/solutions/016_history_stats_blend.py
++++ logs/record-run-4/solutions/019_recent_history.py
+@@ -1,10 +1,4 @@
+-"""Sampled-softmax multitask FM plus simple user-history statistical affinities.
+-
+-The DIN attempt was too high-variance, but the underlying signal may be a small
+-memorized preference for authors/videos/tabs the user has previously watched.
+-This keeps the node-9 model intact and adds a conservative logit-space
+-adjustment from train-only per-user history statistics.
+-"""
++"""Sampled-softmax multitask FM plus all-history and recent user-history affinities."""
+ import argparse
+ import csv
+ import datetime as _dt
+@@ -192,13 +186,32 @@
+     return np.log(p / (1.0 - p))
+ 
+ 
+-def build_history_stats(train_rows):
+-    """Train-only user-conditioned counts for conservative post-fit affinities."""
++def build_history_stats(train_rows, decay=0.97):
++    """Train-only user-conditioned rates, plus lazy exponentially decayed recent rates."""
+     up = defaultdict(float); uc = defaultdict(float)
+     uap = defaultdict(float); uac = defaultdict(float)
+     uvp = defaultdict(float); uvc = defaultdict(float)
+     utp = defaultdict(float); utc = defaultdict(float)
+     gp = 0.0; gc = 0.0
++
++    # Recent counters use per-user impression index as time.  Lazy decay keeps the
++    # effective window around 1/(1-decay) impressions without scanning all keys.
++    t_user = defaultdict(int)
++    final_t = defaultdict(int)
++    ruap = defaultdict(float); ruac = defaultdict(float); rual = {}
++    ruvp = defaultdict(float); ruvc = defaultdict(float); ruvl = {}
++    rutp = defaultdict(float); rutc = defaultdict(float); rutl = {}
++
++    def upd(pdict, cdict, ldict, key, t, lab):
++        last = ldict.get(key)
++        if last is not None:
++            fac = decay ** (t - last)
++            pdict[key] *= fac
++            cdict[key] *= fac
++        pdict[key] += lab
++        cdict[key] += 1.0
++        ldict[key] = t
++
+     for r in train_rows:
+         user = _to_int(r[1]); video = _to_int(r[2]); author = _to_int(r[3])
+         tab = _to_int(r[4]); lab = float(_to_int(r[6]))
+@@ -208,23 +221,37 @@
+         uap[ka] += lab; uac[ka] += 1.0
+         uvp[kv] += lab; uvc[kv] += 1.0
+         utp[kt] += lab; utc[kt] += 1.0
+-    global_rate = gp / max(gc, 1.0)
++
++        t_user[user] += 1
++        t = t_user[user]
++        final_t[user] = t
++        upd(ruap, ruac, rual, ka, t, lab)
++        upd(ruvp, ruvc, ruvl, kv, t, lab)
++        upd(rutp, rutc, rutl, kt, t, lab)
++
++    def finalize(pdict, cdict, ldict):
++        for key, last in list(ldict.items()):
++            user = key[0]
++            fac = decay ** (final_t[user] - last)
++            pdict[key] *= fac
++            cdict[key] *= fac
++
++    finalize(ruap, ruac, rual)
++    finalize(ruvp, ruvc, ruvl)
++    finalize(rutp, rutc, rutl)
+     return {
+-        'global': global_rate,
++        'global': gp / max(gc, 1.0),
+         'up': up, 'uc': uc,
+         'uap': uap, 'uac': uac,
+         'uvp': uvp, 'uvc': uvc,
+         'utp': utp, 'utc': utc,
++        'ruap': ruap, 'ruac': ruac,
++        'ruvp': ruvp, 'ruvc': ruvc,
++        'rutp': rutp, 'rutc': rutc,
+     }
+ 
+ 
+ def history_adjust(rows, stats):
+-    """Small logit adjustments from user-author/video/tab historical rates.
+-
+-    Smoothing to the user's own train rate prevents global activity bias from
+-    acting as a user-side constant, while confidence keeps one-off histories
+-    from dominating the FM logits.
+-    """
+     g = stats['global']
+     out = np.zeros(len(rows), dtype=np.float32)
+     for i, r in enumerate(rows):
+@@ -234,7 +261,6 @@
+         base = _logit(ur)
+         adj = 0.0
+ 
+-        # Same author by the same user: relatively common and should affect ranking.
+         ka = (user, author)
+         ca = stats['uac'].get(ka, 0.0)
+         if ca > 0.0:
+@@ -242,7 +268,6 @@
+             conf = np.sqrt(ca / (ca + 4.0))
+             adj += 0.45 * conf * (_logit(ra) - base)
+ 
+-        # Exact repeated video is rarer; use it, but downweight so duplicates do not overfit.
+         kv = (user, video)
+         cv = stats['uvc'].get(kv, 0.0)
+         if cv > 0.0:
+@@ -250,13 +275,29 @@
+             conf = np.sqrt(cv / (cv + 3.0))
+             adj += 0.30 * conf * (_logit(rv) - base)
+ 
+-        # User-tab preference is a low-variance sequential/context statistic beyond tab main effect.
+         kt = (user, tab)
+         ct = stats['utc'].get(kt, 0.0)
+         if ct > 0.0:
+             rt = (stats['utp'].get(kt, 0.0) + 4.0 * ur) / (ct + 4.0)
+             conf = np.sqrt(ct / (ct + 8.0))
+             adj += 0.20 * conf * (_logit(rt) - base)
++
++        # Small recency residuals: keep node-16's robust all-history signal, but
++        # let the user's most recent train impressions nudge repeated entities.
++        rca = stats['ruac'].get(ka, 0.0)
++        if rca > 0.0:
++            rra = (stats['ruap'].get(ka, 0.0) + 1.5 * ur) / (rca + 1.5)
++            adj += 0.10 * np.sqrt(rca / (rca + 2.0)) * (_logit(rra) - base)
++
++        rcv = stats['ruvc'].get(kv, 0.0)
++        if rcv > 0.0:
++            rrv = (stats['ruvp'].get(kv, 0.0) + 1.0 * ur) / (rcv + 1.0)
++            adj += 0.08 * np.sqrt(rcv / (rcv + 2.0)) * (_logit(rrv) - base)
++
++        rct = stats['rutc'].get(kt, 0.0)
++        if rct > 0.0:
++            rrt = (stats['rutp'].get(kt, 0.0) + 2.5 * ur) / (rct + 2.5)
++            adj += 0.06 * np.sqrt(rct / (rct + 5.0)) * (_logit(rrt) - base)
+ 
+         out[i] = np.float32(np.clip(adj, -1.0, 1.0))
+     return out
+@@ -360,7 +401,7 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} history_stats_blend")
++          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} recent_history")
+ 
+     model, enc, hist = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                            seed=a.seed, device=a.device, verbose=a.out is None)
+@@ -371,7 +412,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== history_stats_blend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== recent_history (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             pred = model.predict(Xs, device=a.device) + history_adjust(splits[sp], hist)

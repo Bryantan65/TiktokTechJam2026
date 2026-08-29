@@ -1,0 +1,120 @@
+# iteration 11  (parent: 10)
+# hypothesis: improve 10: the identical-member ensemble is flattening, so add diversity by blending its within-user ranks with a smoothed video/author/tab/duration prior ranker trained only on train labels. This is a lightweight context-aware prior idea; background search URL: https://dl.acm.org/doi/10.1145/1864708.1864727.
+# result: GAUC 0.671033 | nDCG@5 0.537372 | primary 0.604203 | verdict KEPT
+
+--- logs/record-run-3/solutions/010_bpr_7_rank_ensemble.py
++++ logs/record-run-3/solutions/011_bpr7_prior_blend.py
+@@ -1,9 +1,9 @@
+-"""Seven-member within-user rank ensemble of BPR FMs.
+-
+-Refines 009 by keeping exactly the same BPR training and within-user Borda/rank
+-combiner, but averaging seven independent members instead of five.  This tests
+-whether the node-8 -> node-9 gain was still mostly variance reduction from more
+-BPR rankers rather than a saturated ensemble.
++"""Seven-member BPR FM rank ensemble blended with smoothed feature priors.
++
++Refines 010 by keeping the trained BPR ensemble unchanged and adding a small
++heterogeneous ranker: smoothed train-label logit priors for video, author, tab,
++and duration bucket.  The final score is a within-user rank blend, intended to
++recover simple item/context popularity signals that BPR may under-calibrate.
+ """
+ import argparse
+ import os
+@@ -171,14 +171,62 @@
+     return out
+ 
+ 
++def fit_prior_ranker(enc):
++    Xtr, ytr, _ = enc['train']
++    ytr = ytr.astype(np.float64)
++    dim = int(Xtr.max()) + 1
++    global_rate = float(ytr.mean())
++    eps = 1e-6
++    g_logit = np.log(np.clip(global_rate, eps, 1 - eps) /
++                     np.clip(1 - global_rate, eps, 1 - eps))
++
++    # Encoded columns: user, video, author, tab, duration bucket.  Do not use
++    # user priors: user-only terms cannot affect within-user ranking.
++    specs = [
++        (1, 80.0, 1.00),   # video_id: many sparse ids, heavy smoothing
++        (2, 40.0, 0.65),   # author_id
++        (3, 200.0, 0.55),  # tab: robust context prior
++        (4, 200.0, 0.25),  # duration bucket
++    ]
++    tables = []
++    for col, smooth, weight in specs:
++        ids = Xtr[:, col].astype(np.int64)
++        cnt = np.bincount(ids, minlength=dim).astype(np.float64)
++        sm = np.bincount(ids, weights=ytr, minlength=dim).astype(np.float64)
++        rate = (sm + smooth * global_rate) / (cnt + smooth)
++        logit = np.log(np.clip(rate, eps, 1 - eps) /
++                       np.clip(1 - rate, eps, 1 - eps)) - g_logit
++        # unseen ids have exactly the global prior, hence zero contribution
++        logit[cnt <= 0] = 0.0
++        tables.append((col, weight, logit.astype(np.float32)))
++    return tables
++
++
++def prior_scores(X, tables):
++    out = np.zeros(len(X), dtype=np.float64)
++    for col, weight, table in tables:
++        ids = X[:, col].astype(np.int64)
++        ok = ids < len(table)
++        contrib = np.zeros(len(X), dtype=np.float64)
++        contrib[ok] = table[ids[ok]]
++        out += weight * contrib
++    return out
++
++
+ @torch.no_grad()
+-def ensemble_predict(models, X, users, device='cpu'):
++def bpr_ensemble_rank(models, X, users, device='cpu'):
+     pred = np.zeros(len(X), dtype=np.float64)
+     for m in models:
+         raw = m.predict(X, device=device)
+         pred += within_user_rank_scores(raw, users)
+     pred /= len(models)
+     return pred
++
++
++def blended_predict(models, priors, X, users, device='cpu', alpha=0.85):
++    bpr = bpr_ensemble_rank(models, X, users, device=device)
++    pr = within_user_rank_scores(prior_scores(X, priors), users)
++    return alpha * bpr + (1.0 - alpha) * pr
+ 
+ 
+ if __name__ == '__main__':
+@@ -191,6 +239,7 @@
+     ap.add_argument('--epochs', type=int, default=40)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
++    ap.add_argument('--alpha', type=float, default=0.85)
+     a = ap.parse_args()
+ 
+     torch.manual_seed(a.seed)
+@@ -201,18 +250,22 @@
+     models, enc = train_ensemble(splits, k=a.k, lr=a.lr,
+                                  epochs=a.epochs, seed=a.seed,
+                                  device=a.device, verbose=a.out is None)
++    priors = fit_prior_ranker(enc)
+ 
+     X, y, users = enc[a.split]
+-    scores = ensemble_predict(models, X, users, device=a.device)
++    scores = blended_predict(models, priors, X, users, device=a.device,
++                             alpha=a.alpha)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_7_rank_ensemble (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr7_prior_blend (seed={a.seed}, alpha={a.alpha}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+-            r = evaluate(us, ys, ensemble_predict(models, Xs, us, device=a.device))
++            r = evaluate(us, ys, blended_predict(models, priors, Xs, us,
++                                                 device=a.device,
++                                                 alpha=a.alpha))
+             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+                   f"| primary {r['primary']:.4f}")
+ 

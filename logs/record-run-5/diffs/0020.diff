@@ -1,0 +1,81 @@
+# iteration 20  (parent: 15)
+# hypothesis: improve 15: tab×hour was the best time cross, and a very small tab×weekday cross may capture tab-specific weekly drift without the sparsity that hurt half-hour. This is a targeted refinement of the current best time+BPR model, adding only 35 buckets.
+# result: GAUC 0.671598 | nDCG@5 0.538166 | primary 0.604882 | verdict KEPT
+
+--- logs/record-run-5/solutions/015_bpr_weekday_hour_tabcross_fm.py
++++ logs/record-run-5/solutions/020_bpr_weekday_hour_tabtime_fm.py
+@@ -1,9 +1,9 @@
+-"""3-model multi-negative BPR FM with weekday/hour and tab-hour cross features.
+-
+-Parent 13 is the current best. This refinement keeps the successful reusable
+-weekday and hour features, and adds a compact tab-by-hour categorical cross
+-(5*24 buckets) so the linear/FM model can learn tab-specific diurnal propensities
+-rather than relying only on a low-rank tab-hour interaction.
++"""3-model multi-negative BPR FM with weekday/hour and compact tab-time crosses.
++
++This refines node 15 by keeping its successful weekday, hour, and tab-hour
++features, and adding only a small tab-by-weekday cross (5*7 buckets). The goal
++is to capture tab-specific weekly drift without the sparsity that hurt the
++half-hour experiment.
+ """
+ import argparse
+ import csv
+@@ -81,7 +81,6 @@
+             reader = csv.DictReader(f)
+             for r in reader:
+                 d = int(float(_get(r, 'date')))
+-                # author_id is in the processed tuple but not in log_standard.
+                 key = (
+                     d,
+                     int(float(_get(r, 'user_id'))),
+@@ -102,12 +101,12 @@
+     off_dow = dim
+     off_hour = off_dow + 7
+     off_tab_hour = off_hour + 24
+-    final_dim = off_tab_hour + 5 * 24
++    off_tab_dow = off_tab_hour + 5 * 24
++    final_dim = off_tab_dow + 5 * 7
+     for sp, rows in splits.items():
+         X, y, u = enc[sp]
+-        feats = np.empty((len(rows), 3), dtype=np.int64)
++        feats = np.empty((len(rows), 4), dtype=np.int64)
+         for i, row in enumerate(rows):
+-            # tuple: date, user_id, video_id, author_id, tab, duration_ms, label
+             tab = int(row[4])
+             key = (int(row[0]), int(row[1]), int(row[2]), tab, int(row[5]))
+             if raw_time.get(key):
+@@ -123,6 +122,7 @@
+             feats[i, 0] = off_dow + dow
+             feats[i, 1] = off_hour + hour
+             feats[i, 2] = off_tab_hour + tab_bucket * 24 + hour
++            feats[i, 3] = off_tab_dow + tab_bucket * 7 + dow
+         X2 = np.concatenate([X.astype(np.int64), feats], axis=1)
+         out[sp] = (X2, y, u)
+     if missing:
+@@ -191,7 +191,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | multineg_bpr_tab_hour {np.mean(losses):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | multineg_bpr_tab_time {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -246,7 +246,7 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+['weekday','hour','tab_hour']")
++          f"fields={FIELDS}+['weekday','hour','tab_hour','tab_weekday']")
+ 
+     models, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                       neg_k=a.neg_k, seed=a.seed, device=a.device,
+@@ -259,7 +259,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_weekday_hour_tabcross_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_weekday_hour_tabtime_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, predict_ensemble(models, Xs, device=a.device))

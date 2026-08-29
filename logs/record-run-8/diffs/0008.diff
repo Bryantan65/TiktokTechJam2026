@@ -1,0 +1,135 @@
+# iteration 8  (parent: 3)
+# hypothesis: improve 3: focus the successful BPR+BCE loss on harder same-user mistakes by sampling 35% of negatives from each user's current top-scored negative pool after epoch 1, aiming to improve top-rank nDCG without changing model capacity.
+# result: GAUC 0.667162 | nDCG@5 0.535258 | primary 0.60121 | verdict noise
+
+--- logs/record-run-8/solutions/003_bpr_bce_fm.py
++++ logs/record-run-8/solutions/008_hardneg_bpr_bce_fm.py
+@@ -1,9 +1,10 @@
+-"""Factorization Machine trained with within-user BPR plus a small BCE term.
+-
+-Starts from 002_bpr_fm.py: same FM, same same-user positive/negative pair sampler.
+-The change is the loss: BPR remains primary, with a lightly weighted pointwise
+-BCE on the paired rows to preserve the useful calibration/static-feature signal
+-from the original baseline while still optimizing within-user ranking.
++"""FM trained with BPR+BCE using a mix of random and hard same-user negatives.
++
++This is a targeted refinement of 003_bpr_bce_fm.py.  The loss is unchanged,
++but after the first epoch part of the sampled negative rows are drawn from the
++currently highest-scoring negatives for that same user.  This keeps the within-
++user pairwise objective while focusing updates on mistakes that matter most for
++GAUC/nDCG top ranks.
+ """
+ import argparse
+ import os
+@@ -61,12 +62,34 @@
+     return groups
+ 
+ 
+-def sample_pairs(groups, rng):
++def build_hard_pools(groups, scores, topn=20):
++    pools = []
++    for _, n in groups:
++        if len(n) <= topn:
++            pools.append(n)
++        else:
++            sc = scores[n]
++            # argpartition is O(n); sort only the selected top tail for stable sampling.
++            idx = np.argpartition(sc, -topn)[-topn:]
++            idx = idx[np.argsort(sc[idx])[::-1]]
++            pools.append(n[idx])
++    return pools
++
++
++def sample_pairs(groups, rng, hard_pools=None, hard_frac=0.35):
+     pos_parts = []
+     neg_parts = []
+-    for p, n in groups:
++    use_hard = hard_pools is not None and hard_frac > 0.0
++    for gi, (p, n) in enumerate(groups):
++        m = len(p)
++        neg = rng.choice(n, size=m, replace=True)
++        if use_hard:
++            mask = rng.random(m) < hard_frac
++            if mask.any():
++                hp = hard_pools[gi]
++                neg[mask] = rng.choice(hp, size=int(mask.sum()), replace=True)
+         pos_parts.append(p)
+-        neg_parts.append(rng.choice(n, size=len(p), replace=True))
++        neg_parts.append(neg)
+     pi = np.concatenate(pos_parts)
+     ni = np.concatenate(neg_parts)
+     order = rng.permutation(len(pi))
+@@ -74,7 +97,8 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True, bce_weight=0.15):
++        seed=0, device='cpu', verbose=True, bce_weight=0.15,
++        hard_frac=0.35, hard_topn=20):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -82,7 +106,8 @@
+     groups = build_user_groups(ytr, utr)
+     if verbose:
+         n_pairs = sum(len(p) for p, _ in groups)
+-        print(f"BPR eligible users={len(groups):,d}, sampled pairs/epoch={n_pairs:,d}, bce_weight={bce_weight}")
++        print(f"BPR eligible users={len(groups):,d}, sampled pairs/epoch={n_pairs:,d}, "
++              f"bce_weight={bce_weight}, hard_frac={hard_frac}, hard_topn={hard_topn}")
+ 
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+@@ -92,10 +117,15 @@
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
++    hard_pools = None
+ 
+     for ep in range(1, epochs + 1):
+         t0 = time.time()
+-        pos_idx, neg_idx = sample_pairs(groups, rng)
++        if ep > 1 and hard_frac > 0.0:
++            tr_scores = model.predict(Xtr, device=device)
++            hard_pools = build_hard_pools(groups, tr_scores, topn=hard_topn)
++        pos_idx, neg_idx = sample_pairs(groups, rng, hard_pools=hard_pools,
++                                        hard_frac=hard_frac)
+         model.train()
+         losses = []
+         bprs = []
+@@ -109,8 +139,6 @@
+             sp = model(xp)
+             sn = model(xn)
+             bpr = -torch.nn.functional.logsigmoid(sp - sn).mean()
+-            # Balanced pointwise term on the same paired rows; positives target 1,
+-            # sampled negatives target 0.  Using softplus avoids allocating labels.
+             bce = 0.5 * (torch.nn.functional.softplus(-sp).mean() +
+                          torch.nn.functional.softplus(sn).mean())
+             loss = bpr + bce_weight * bce
+@@ -151,6 +179,8 @@
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     ap.add_argument('--bce_weight', type=float, default=0.15)
++    ap.add_argument('--hard_frac', type=float, default=0.35)
++    ap.add_argument('--hard_topn', type=int, default=20)
+     a = ap.parse_args()
+ 
+     torch.manual_seed(a.seed)
+@@ -166,7 +196,8 @@
+ 
+     model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+                      device=a.device, verbose=a.out is None,
+-                     bce_weight=a.bce_weight)
++                     bce_weight=a.bce_weight, hard_frac=a.hard_frac,
++                     hard_topn=a.hard_topn)
+ 
+     X, y, users = enc[target]
+     scores = model.predict(X, device=a.device)
+@@ -175,7 +206,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== hardneg_bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

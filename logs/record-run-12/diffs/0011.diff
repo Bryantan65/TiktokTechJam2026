@@ -1,0 +1,131 @@
+# iteration 11  (parent: 8)
+# hypothesis: improve 8: keep the same cached seed-bagged BPR/BCE members but fuse per-user percentile ranks instead of z-scored scores at 70/30. This tests whether top-k ordering benefits from rank-scale normalization rather than score-scale normalization.
+# result: GAUC 0.670756 | nDCG@5 0.537317 | primary 0.604037 | verdict KEPT
+
+--- logs/record-run-12/solutions/008_bpr_bce_seedbag.py
++++ logs/record-run-12/solutions/011_bpr_bce_seedbag_rank.py
+@@ -1,9 +1,10 @@
+-"""Seed-bagged blend of BPR-FM and pointwise BCE FM.
+-
+-Refines node 7 by keeping the same readable 70/30 per-user z-score blend, but
+-averaging that blend over member seeds 0, 1 and 2.  The base-member code and
+-cache names are unchanged from 007, so cached predictions are reused when
+-available; with an empty cache the script trains the six members standalone.
++"""Seed-bagged BPR/BCE FM blend using per-user rank fusion.
++
++Refines node 8 without changing any member training.  Instead of per-user
++z-scored score averaging, convert each member's scores to within-user percentile
++ranks and blend those ranks at 70/30 BPR/BCE, then average over member seeds
++0/1/2.  Cache names are unchanged from 007/008, so existing member predictions
++are reused; if caches are absent the script trains the six members standalone.
+ """
+ import argparse
+ import os
+@@ -14,8 +15,7 @@
+ import torch
+ import torch.nn.functional as F
+ 
+-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+-                                '..', 'kuairand-starter-kit'))
++sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'kuairand-starter-kit'))
+ from data import load, encode, FIELDS          # noqa: E402
+ from evaluate import evaluate                  # noqa: E402
+ 
+@@ -46,8 +46,7 @@
+ def train_bce_member(enc, dim, seed=0, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False):
+     Xtr, ytr, _ = enc['train']; Xva, yva, uva = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+-    opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+-                            {'params': [model.b], 'weight_decay': 0.0}], lr=lr, betas=(0.9, 0.999), eps=1e-8)
++    opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2}, {'params': [model.b], 'weight_decay': 0.0}], lr=lr, betas=(0.9, 0.999), eps=1e-8)
+     X_t = torch.from_numpy(Xtr.astype(np.int64)); y_t = torch.from_numpy(ytr.astype(np.float32))
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+@@ -56,8 +55,7 @@
+         t0 = time.time(); model.train(); losses = []
+         perm = rng.permutation(n)
+         for i in range(0, n, bs):
+-            idx_np = perm[i:i + bs]
+-            idx = torch.from_numpy(idx_np)
++            idx = torch.from_numpy(perm[i:i + bs])
+             xb = X_t[idx].to(device); yb = y_t[idx].to(device)
+             opt.zero_grad(set_to_none=True)
+             loss = F.binary_cross_entropy_with_logits(model(xb), yb)
+@@ -83,14 +81,11 @@
+     start = 0; gid = 0; n = len(order)
+     while start < n:
+         end = start + 1
+-        while end < n and users_s[end] == users_s[start]:
+-            end += 1
++        while end < n and users_s[end] == users_s[start]: end += 1
+         idx = order[start:end]; yy = y[idx]
+         pos = idx[yy > 0.5]; neg = idx[yy <= 0.5]
+         if len(pos) > 0 and len(neg) > 0:
+-            pos_indices.append(pos.astype(np.int64))
+-            pos_gids.append(np.full(len(pos), gid, dtype=np.int32))
+-            neg_by_gid.append(neg.astype(np.int64)); gid += 1
++            pos_indices.append(pos.astype(np.int64)); pos_gids.append(np.full(len(pos), gid, dtype=np.int32)); neg_by_gid.append(neg.astype(np.int64)); gid += 1
+         start = end
+     if not pos_indices:
+         raise RuntimeError('No users with both positive and negative impressions')
+@@ -108,8 +103,7 @@
+ def train_bpr_member(enc, dim, seed=0, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=5, repeats=2, bce_weight=0.10, device='cpu', verbose=False):
+     Xtr, ytr, utr = enc['train']; Xva, yva, uva = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+-    opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+-                            {'params': [model.b], 'weight_decay': 0.0}], lr=lr, betas=(0.9, 0.999), eps=1e-8)
++    opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2}, {'params': [model.b], 'weight_decay': 0.0}], lr=lr, betas=(0.9, 0.999), eps=1e-8)
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     pos_base, pos_gid_base, neg_by_gid = make_positive_index_pairs(ytr, utr)
+     rng = np.random.default_rng(seed)
+@@ -146,21 +140,22 @@
+     return model
+ 
+ 
+-def zscore_by_user(scores, users):
+-    scores = np.asarray(scores, dtype=np.float64)
+-    users = np.asarray(users)
++def percentile_rank_by_user(scores, users):
++    scores = np.asarray(scores, dtype=np.float64); users = np.asarray(users)
+     out = np.empty_like(scores, dtype=np.float64)
+-    order = np.argsort(users, kind='mergesort')
+-    us = users[order]
++    order = np.argsort(users, kind='mergesort'); us = users[order]
+     start = 0; n = len(order)
+     while start < n:
+         end = start + 1
+-        while end < n and us[end] == us[start]:
+-            end += 1
++        while end < n and us[end] == us[start]: end += 1
+         idx = order[start:end]
+-        vals = scores[idx]
+-        sd = vals.std()
+-        out[idx] = 0.0 if sd < 1e-12 else (vals - vals.mean()) / sd
++        # ascending rank, so larger original score gets larger fused score
++        ord2 = idx[np.argsort(scores[idx], kind='mergesort')]
++        m = len(ord2)
++        if m <= 1:
++            out[ord2] = 0.0
++        else:
++            out[ord2] = np.arange(m, dtype=np.float64) / (m - 1.0)
+         start = end
+     return out
+ 
+@@ -187,8 +182,6 @@
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+ 
+-    # The external seed is intentionally not used for member selection: this is
+-    # a fixed seed-bagged predictor, and the member seeds are recorded here.
+     torch.manual_seed(0)
+     print(f"loading {a.data_dir} ...")
+     if a.split == 'dev':
+@@ -205,7 +198,7 @@
+     for member_seed in (0, 1, 2):
+         bpr = get_member_preds('bpr_anchor_v1', train_bpr_member, enc, dim, Xtar, member_seed, a.device, verbose)
+         bce = get_member_preds('bce_v1', train_bce_member, enc, dim, Xtar, member_seed, a.device, verbose)
+-        blended.append(0.70 * zscore_by_user(bpr, utar) + 0.30 * zscore_by_user(bce, utar))
++        blended.append(0.70 * percentile_rank_by_user(bpr, utar) + 0.30 * percentile_rank_by_user(bce, utar))
+     scores = np.mean(blended, axis=0)
+ 
+     if a.out:

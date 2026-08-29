@@ -1,0 +1,80 @@
+# iteration 19  (parent: 17)
+# hypothesis: improve 17: time features are the only new signal that clearly moved the best node, so add finer quarter-hour and tab×quarter-hour buckets while keeping the same BPR7 ensemble. This tests whether nDCG gains from hour context were limited by overly coarse temporal buckets.
+# result: GAUC 0.671063 | nDCG@5 0.537812 | primary 0.604437 | verdict KEPT
+
+--- logs/record-run-3/solutions/017_time_context_keyfix.py
++++ logs/record-run-3/solutions/019_time_quarter_context.py
+@@ -1,9 +1,7 @@
+-"""Seven-member same-user BPR FM ensemble with correctly keyed temporal context.
+-
+-Debugs node 14: the raw interaction logs do not contain author_id, so the
+-(date,user,video,author,tab,duration) lookup missed almost every row and fell
+-back to hour=0.  This version aligns raw hourmin by fields actually present in
+-both sources: (date,user,video,tab,duration_ms,long_view), FIFO for duplicates.
++"""Seven-member same-user BPR FM ensemble with finer temporal context.
++
++Improves node 17 by adding quarter-hour bucket and tab x quarter-hour features
++on top of the correctly keyed raw hourmin alignment.
+ """
+ import argparse
+ import csv
+@@ -72,10 +70,12 @@
+ def _time_feats(date_int, hourmin, tab):
+     hm = _to_int(hourmin, 0)
+     hour = max(0, min(23, hm // 100))
++    minute = max(0, min(59, hm % 100))
++    qhour = hour * 4 + minute // 15
+     hblock = hour // 4
+     dow = _weekday(date_int)
+     tab = _to_int(tab, 0)
+-    return (hour, hblock, dow, tab * 24 + hour, tab * 7 + dow)
++    return (hour, hblock, qhour, dow, tab * 24 + hour, tab * 96 + qhour, tab * 7 + dow)
+ 
+ 
+ def _raw_log_path(data_dir, filename):
+@@ -83,18 +83,6 @@
+         if os.path.exists(p):
+             return p
+     return os.path.join(data_dir, filename)
+-
+-
+-def _dur_bucket(ms):
+-    # fallback key if data.load stores a bucket rather than raw duration; keep coarse and deterministic
+-    x = _to_int(ms, 0)
+-    if x < 5000: return 0
+-    if x < 10000: return 1
+-    if x < 30000: return 2
+-    if x < 60000: return 3
+-    if x < 120000: return 4
+-    if x < 300000: return 5
+-    return 6
+ 
+ 
+ def read_raw_time_lookup(data_dir):
+@@ -127,7 +115,7 @@
+     miss = exact = nodur = 0
+     examples = []
+     for sp, rows in splits.items():
+-        arr = np.zeros((len(rows), 5), dtype=np.int64)
++        arr = np.zeros((len(rows), 7), dtype=np.int64)
+         for i, row in enumerate(rows):
+             date, user, video, tab, dur, y = _to_int(row[0]), _to_int(row[1]), _to_int(row[2]), _to_int(row[4]), _to_int(row[5]), _to_int(row[6])
+             q = look_exact.get((date, user, video, tab, dur, y))
+@@ -287,7 +275,7 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+['hour','hblock','weekday','tab_hour','tab_weekday']")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+['hour','hblock','qhour','weekday','tab_hour','tab_qhour','tab_weekday']")
+     models, enc = train_ensemble(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[a.split]
+     scores = ensemble_predict(models, X, users, device=a.device)
+@@ -295,7 +283,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr7_time_context_keyfix (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== time_quarter_context (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, ensemble_predict(models, Xs, us, device=a.device))

@@ -1,0 +1,77 @@
+# iteration 4  (parent: 2)
+# hypothesis: improve 2: BPR improved GAUC but not enough nDCG, so add a small pointwise BCE term on the same sampled positive/negative rows to keep the baseline calibration signal while retaining within-user pairwise optimization.
+# result: GAUC 0.669249 | nDCG@5 0.536437 | primary 0.602843 | verdict noise
+
+--- logs/record-run-3/solutions/002_bpr_fm.py
++++ logs/record-run-3/solutions/004_bpr_bce_fm.py
+@@ -1,9 +1,8 @@
+-"""FM trained with within-user BPR pairwise ranking loss.
++"""FM trained with a hybrid within-user BPR + pointwise BCE loss.
+ 
+-This keeps the baseline FM architecture and data fields, but replaces pointwise
+-BCE with Bayesian Personalized Ranking pairs: for each training user that has at
+-least one positive and one negative impression, compare that user's positive
+-rows against sampled negative rows from the same user.
++This refines 002_bpr_fm.py. BPR optimizes same-user ranking directly, while a
++small BCE term on the sampled positive/negative rows should regularize score
++scale and preserve the stable pointwise signal from the baseline.
+ """
+ import argparse
+ import os
+@@ -81,7 +80,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True):
++        seed=0, device='cpu', verbose=True, bce_weight=0.25):
+     enc, dim = encode(splits)
+     Xtr, ytr, _ = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -94,7 +93,7 @@
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     pos_lists, neg_lists, n_pos = make_user_pairs(ytr, enc['train'][2])
+     if verbose:
+-        print(f"BPR users={len(pos_lists):,d} positives paired/epoch={n_pos:,d}")
++        print(f"Hybrid BPR+BCE users={len(pos_lists):,d} positives paired/epoch={n_pos:,d} bce_weight={bce_weight}")
+ 
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+@@ -112,14 +111,18 @@
+             opt.zero_grad(set_to_none=True)
+             sp = model(xp)
+             sn = model(xn)
+-            loss = torch.nn.functional.softplus(-(sp - sn)).mean()
++            bpr = torch.nn.functional.softplus(-(sp - sn)).mean()
++            logits = torch.cat([sp, sn], dim=0)
++            labels = torch.cat([torch.ones_like(sp), torch.zeros_like(sn)], dim=0)
++            bce = torch.nn.functional.binary_cross_entropy_with_logits(logits, labels)
++            loss = bpr + bce_weight * bce
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | loss {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -155,7 +158,7 @@
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+     model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
++                     device=a.device, verbose=a.out is None, bce_weight=0.25)
+ 
+     X, y, users = enc[a.split]
+     scores = model.predict(X, device=a.device)
+@@ -164,7 +167,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

@@ -1,0 +1,183 @@
+# iteration 20  (parent: 19)
+# hypothesis: debug 19: node 19 timed out because it trained a full IPS ensemble; test the same IPS exposure correction cheaply with one clipped IPS-weighted BCE time/content member blended at 30%, so a scored result can diagnose the direction.
+# result: GAUC 0.671293 | nDCG@5 0.537626 | primary 0.60446 | verdict KEPT
+
+--- logs/record-run-9/solutions/019_ips_debiased_time.py
++++ logs/record-run-9/solutions/020_debug_ips_single_bce.py
+@@ -1,10 +1,8 @@
+-"""Draft direction 8: IPS-debiased FM member blended with node 15.
+-
+-All node-15 members are unchanged and use their existing caches.  This adds a
+-new content+time FM ensemble whose BCE/BPR losses are weighted by clipped
+-inverse exposure propensities estimated from logged train video frequencies vs
+-log_random video frequencies.  The random log is used only for propensity
+-estimation, never as training labels.
++"""Debug node 19: cheap IPS test.
++
++Node 19 timed out because it added a full 4-member IPS ensemble.  This keeps the
++node-15 combiner unchanged and adds only one IPS-weighted BCE content+time FM at
++30%, enough weight to see whether debiasing helps while staying below timeout.
+ """
+ import argparse, csv, os, sys, time
+ from collections import defaultdict, deque, Counter
+@@ -108,21 +106,17 @@
+                 qs[(date,u,v,a,tab,dur)].append(hm)
+     return qs
+ 
+-def read_ips_weights(data_dir, train_rows, clip_lo=0.25, clip_hi=4.0, alpha=20.0):
+-    """Estimate target/logged exposure ratio by video using log_random only as exposure data."""
+-    logc=Counter(int(r[2]) for r in train_rows)
+-    randc=Counter(); total_r=0
++def read_ips_weights(data_dir, train_rows, clip_lo=0.5, clip_hi=2.0, alpha=50.0):
++    logc=Counter(int(r[2]) for r in train_rows); randc=Counter(); total_r=0
+     for fn in ['log_random_4_22_to_5_08_pure.csv','log_random_4_22_to_5_08.csv']:
+         path=os.path.join(data_dir,fn)
+         if os.path.isfile(path):
+             with open(path,newline='',encoding='utf-8') as f:
+                 for rec in csv.DictReader(f):
+                     v=_ival(rec,['video_id','photo_id','video'],None)
+-                    if v is not None:
+-                        randc[int(v)]+=1; total_r+=1
++                    if v is not None: randc[int(v)]+=1; total_r+=1
+             break
+-    if total_r<=0:
+-        return np.ones(len(train_rows),dtype=np.float32)
++    if total_r<=0: return np.ones(len(train_rows),dtype=np.float32)
+     vids=set(logc.keys())|set(randc.keys()); V=max(1,len(vids)); total_l=sum(logc.values())
+     ratio={}
+     for v in vids:
+@@ -130,8 +124,7 @@
+         p_l=(logc.get(v,0)+alpha)/(total_l+alpha*V)
+         ratio[v]=p_r/p_l
+     w=np.asarray([ratio.get(int(r[2]),1.0) for r in train_rows],dtype=np.float64)
+-    w=np.clip(w,clip_lo,clip_hi)
+-    w=w/(w.mean()+1e-12)
++    w=np.clip(w,clip_lo,clip_hi); w=w/(w.mean()+1e-12)
+     return w.astype(np.float32)
+ 
+ def _date_obj(d):
+@@ -141,8 +134,7 @@
+ def time_date_feats(hm, date, tab):
+     try: hm=int(hm)
+     except Exception: hm=0
+-    hour=hm//100 if hm>=100 else hm
+-    minute=hm%100 if hm>=100 else 0
++    hour=hm//100 if hm>=100 else hm; minute=hm%100 if hm>=100 else 0
+     if hour<0 or hour>23: hour=0
+     mb=min(5, max(0, minute//10))
+     if hour<6: part=0
+@@ -222,6 +214,25 @@
+             if bad>=patience: break
+     model.load_state_dict(best_state); return model
+ 
++def train_bce_ips(enc,dim,k=16,lr=0.001,l2=1e-6,epochs=20,bs=8192,patience=2,seed=0,device='cpu',verbose=False):
++    Xtr,ytr,_=enc['train']; Xva,yva,uva=enc['valid']; wtr=enc.get('train_weight',np.ones(len(ytr),dtype=np.float32))
++    model=TorchFM(dim,k,seed).to(device); opt=torch.optim.Adam([{'params':[model.V,model.W],'weight_decay':l2},{'params':[model.b],'weight_decay':0.0}],lr=lr)
++    Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); ytr_t=torch.from_numpy(ytr.astype(np.float32)); wtr_t=torch.from_numpy(wtr.astype(np.float32)); rng=np.random.default_rng(seed)
++    best=-1.; best_state=None; bad=0
++    for ep in range(1,epochs+1):
++        idx=rng.permutation(len(ytr)); model.train(); t0=time.time()
++        for i in range(0,len(idx),bs):
++            sel=torch.from_numpy(idx[i:i+bs]); xb=Xtr_t[sel].to(device); yb=ytr_t[sel].to(device); wb=wtr_t[sel].to(device)
++            opt.zero_grad(set_to_none=True); raw=torch.nn.functional.binary_cross_entropy_with_logits(model(xb),yb,reduction='none')
++            loss=(raw*wb).mean(); loss.backward(); opt.step()
++        va=evaluate(uva,yva,model.predict(Xva,device=device))
++        if verbose: print(f"  BCE-IPS seed {seed} epoch {ep:2d} valid {va['primary']:.6f} {time.time()-t0:.1f}s")
++        if va['primary']>best+1e-5: best=va['primary']; bad=0; best_state={k:v.detach().clone() for k,v in model.state_dict().items()}
++        else:
++            bad+=1
++            if bad>=patience: break
++    model.load_state_dict(best_state); return model
++
+ def train_bpr(enc,dim,k=16,lr=0.001,l2=1e-6,epochs=40,bs=8192,patience=4,seed=0,device='cpu',verbose=False):
+     Xtr,ytr,utr=enc['train']; Xva,yva,uva=enc['valid']; model=TorchFM(dim,k,seed).to(device)
+     opt=torch.optim.Adam([{'params':[model.V,model.W],'weight_decay':l2},{'params':[model.b],'weight_decay':0.0}],lr=lr)
+@@ -243,48 +254,6 @@
+             if bad>=patience: break
+     model.load_state_dict(best_state); return model
+ 
+-def train_bce_ips(enc,dim,k=16,lr=0.001,l2=1e-6,epochs=40,bs=8192,patience=4,seed=0,device='cpu',verbose=False):
+-    Xtr,ytr,_=enc['train']; Xva,yva,uva=enc['valid']; wtr=enc.get('train_weight',np.ones(len(ytr),dtype=np.float32))
+-    model=TorchFM(dim,k,seed).to(device); opt=torch.optim.Adam([{'params':[model.V,model.W],'weight_decay':l2},{'params':[model.b],'weight_decay':0.0}],lr=lr)
+-    Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); ytr_t=torch.from_numpy(ytr.astype(np.float32)); wtr_t=torch.from_numpy(wtr.astype(np.float32)); rng=np.random.default_rng(seed)
+-    best=-1.; best_state=None; bad=0
+-    for ep in range(1,epochs+1):
+-        idx=rng.permutation(len(ytr)); model.train(); t0=time.time()
+-        for i in range(0,len(idx),bs):
+-            sel=torch.from_numpy(idx[i:i+bs]); xb=Xtr_t[sel].to(device); yb=ytr_t[sel].to(device); wb=wtr_t[sel].to(device)
+-            opt.zero_grad(set_to_none=True); raw=torch.nn.functional.binary_cross_entropy_with_logits(model(xb),yb,reduction='none')
+-            loss=(raw*wb).mean(); loss.backward(); opt.step()
+-        va=evaluate(uva,yva,model.predict(Xva,device=device))
+-        if verbose: print(f"  BCE-IPS seed {seed} epoch {ep:2d} valid {va['primary']:.6f} {time.time()-t0:.1f}s")
+-        if va['primary']>best+1e-5: best=va['primary']; bad=0; best_state={k:v.detach().clone() for k,v in model.state_dict().items()}
+-        else:
+-            bad+=1
+-            if bad>=patience: break
+-    model.load_state_dict(best_state); return model
+-
+-def train_bpr_ips(enc,dim,k=16,lr=0.001,l2=1e-6,epochs=40,bs=8192,patience=4,seed=0,device='cpu',verbose=False):
+-    Xtr,ytr,utr=enc['train']; Xva,yva,uva=enc['valid']; wtr=enc.get('train_weight',np.ones(len(ytr),dtype=np.float32))
+-    model=TorchFM(dim,k,seed).to(device); opt=torch.optim.Adam([{'params':[model.V,model.W],'weight_decay':l2},{'params':[model.b],'weight_decay':0.0}],lr=lr)
+-    Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); wtr_t=torch.from_numpy(wtr.astype(np.float32)); pos_rows,pos_users,neg_by_user=make_bpr_training_arrays(ytr,utr); rng=np.random.default_rng(seed)
+-    best=-1.; best_state=None; bad=0
+-    for ep in range(1,epochs+1):
+-        perm=rng.permutation(len(pos_rows)); model.train(); t0=time.time()
+-        for st in range(0,len(perm),bs):
+-            psel=perm[st:st+bs]; pidx_np=pos_rows[psel]; users_np=pos_users[psel]; nidx_np=np.empty(len(users_np),dtype=np.int64)
+-            for j,u in enumerate(users_np):
+-                negs=neg_by_user[int(u)]; nidx_np[j]=negs[rng.integers(len(negs))]
+-            pidx=torch.from_numpy(pidx_np); nidx=torch.from_numpy(nidx_np); xp=Xtr_t[pidx].to(device); xn=Xtr_t[nidx].to(device)
+-            wb=(0.5*(wtr_t[pidx]+wtr_t[nidx])).to(device)
+-            opt.zero_grad(set_to_none=True); raw=torch.nn.functional.softplus(-(model(xp)-model(xn)))
+-            loss=(raw*wb).mean(); loss.backward(); opt.step()
+-        va=evaluate(uva,yva,model.predict(Xva,device=device))
+-        if verbose: print(f"  BPR-IPS seed {seed} epoch {ep:2d} valid {va['primary']:.6f} {time.time()-t0:.1f}s")
+-        if va['primary']>best+1e-5: best=va['primary']; bad=0; best_state={k:v.detach().clone() for k,v in model.state_dict().items()}
+-        else:
+-            bad+=1
+-            if bad>=patience: break
+-    model.load_state_dict(best_state); return model
+-
+ def within_user_ranks(scores,users):
+     scores=np.asarray(scores); users=np.asarray(users); out=np.empty(len(scores),dtype=np.float64); order=np.argsort(users,kind='stable'); us=users[order]
+     cuts=np.r_[0,np.flatnonzero(us[1:]!=us[:-1])+1,len(order)]
+@@ -301,12 +270,12 @@
+     torch.manual_seed(member_seed); model=train_fn(enc,dim,seed=member_seed,device=device,verbose=verbose)
+     preds=model.predict(Xout,device=device).astype(np.float64); np.save(path,preds); return preds
+ 
+-def ensemble_rank(enc,dim,Xout,uout,split,seed,device,verbose,cache_prefix,bpr_name,bce_name,bpr_fn=train_bpr,bce_fn=train_bce):
++def ensemble_rank(enc,dim,Xout,uout,split,seed,device,verbose,cache_prefix,bpr_name,bce_name):
+     bpr_sum=np.zeros(len(Xout),dtype=np.float64)
+     for ms in [seed,seed+101,seed+202]:
+-        bpr_sum+=within_user_ranks(member_pred(cache_prefix,bpr_name,bpr_fn,enc,dim,Xout,split,seed,ms,device,verbose),uout)
++        bpr_sum+=within_user_ranks(member_pred(cache_prefix,bpr_name,train_bpr,enc,dim,Xout,split,seed,ms,device,verbose),uout)
+     bpr_rank=bpr_sum/3.0
+-    bce_rank=within_user_ranks(member_pred(cache_prefix,bce_name,bce_fn,enc,dim,Xout,split,seed,seed+303,device,verbose),uout)
++    bce_rank=within_user_ranks(member_pred(cache_prefix,bce_name,train_bce,enc,dim,Xout,split,seed,seed+303,device,verbose),uout)
+     return 0.70*bpr_rank+0.30*bce_rank
+ 
+ def run_predict(splits,data_dir,split='valid',seed=0,device='cpu',verbose=False):
+@@ -322,17 +291,15 @@
+     enc_time,dim_time=encode_history(splits,video_feats=vf,add_content=True,hour_qs=hour_qs,add_time=True); Xtime,_,utime=enc_time[split]
+     time_rank=ensemble_rank(enc_time,dim_time,Xtime,utime,split,seed,device,verbose,'015','bprtimedate','bcetimedate')
+     node15=0.50*node10+0.50*time_rank
+-    # Fresh queues because encode_history consumes duplicate-row hour queues.
+-    hour_qs2=read_hour_queues(data_dir)
+-    enc_ips,dim_ips=encode_history(splits,video_feats=vf,add_content=True,hour_qs=hour_qs2,add_time=True)
+-    enc_ips['train_weight']=read_ips_weights(data_dir,splits['train'])
+-    Xips,_,uips=enc_ips[split]
+-    ips_rank=ensemble_rank(enc_ips,dim_ips,Xips,uips,split,seed,device,verbose,'019','bprips','bceips',train_bpr_ips,train_bce_ips)
+-    return 0.65*node15+0.35*ips_rank
++    # Single cheap IPS member on the same rich feature space.
++    enc_time['train_weight']=read_ips_weights(data_dir,splits['train'])
++    ips_pred=member_pred('020','bceips_single',train_bce_ips,enc_time,dim_time,Xtime,split,seed,seed+909,device,verbose)
++    ips_rank=within_user_ranks(ips_pred,utime)
++    return 0.70*node15+0.30*ips_rank
+ 
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date+ips')
++    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date+single_ips')
+     scores=run_predict(splits,a.data_dir,split=a.split,seed=a.seed,device=a.device,verbose=a.out is None)
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')

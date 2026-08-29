@@ -1,0 +1,62 @@
+# iteration 7  (parent: 6)
+# hypothesis: improve 6: the separate BCE+BPR rank blend is close to target; change only the blend to 60% BPR / 40% BCE to test whether more pointwise signal lifts nDCG@5 while retaining most of BPR's GAUC.
+# result: GAUC 0.670252 | nDCG@5 0.536933 | primary 0.603592 | verdict KEPT
+
+--- logs/record-run-10/solutions/006_bce_bpr_rankblend.py
++++ logs/record-run-10/solutions/007_bce_bpr_rankblend_60.py
+@@ -1,9 +1,9 @@
+ """Score-level blend of pointwise FM and pairwise-BPR FM.
+ 
+-Node 3 mixed BCE and BPR gradients into one model and regressed.  This keeps the
+-objectives separate, early-stops each model normally, then combines only their
+-within-user ranks so the stronger BPR model can keep its ordering while BCE can
+-vote on cases where the pairwise sampler is noisy.
++Refines 006 by changing only the fixed blend weight.  The 70/30 BPR/BCE rank
++blend improved over either mixed-loss training or pure BPR; give BCE a larger
++vote (40%) because its pointwise prior may help top-5 ordering while BPR still
++remains the majority signal.
+ """
+ import argparse
+ import os
+@@ -164,7 +164,7 @@
+     return model
+ 
+ 
+-def weighted_within_user_rank(scores_a, scores_b, users, wa=0.70):
++def weighted_within_user_rank(scores_a, scores_b, users, wa=0.60):
+     """Return a label-free weighted rank blend; each input is monotone-invariant."""
+     users = np.asarray(users)
+     out = np.zeros(len(users), dtype=np.float64)
+@@ -180,7 +180,6 @@
+         if n == 1:
+             out[idx[0]] = 0.0
+         else:
+-            # Ordinal ranks are enough because only final ordering is scored.
+             ra = np.empty(n, dtype=np.float64)
+             rb = np.empty(n, dtype=np.float64)
+             ra[np.argsort(scores_a[idx], kind='mergesort')] = np.linspace(0.0, 1.0, n)
+@@ -192,8 +191,6 @@
+ 
+ def run(splits, k=16, lr=0.001, epochs=40, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+-    # Deliberately separate objectives.  Different initial seeds add a little
+-    # diversity without ignoring the harness seed.
+     bpr = train_bpr(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed,
+                     device=device, verbose=verbose)
+     bce = train_bce(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed + 1009,
+@@ -229,13 +226,13 @@
+     X, y, users = enc[target]
+     s_bpr = bpr.predict(X, device=a.device)
+     s_bce = bce.predict(X, device=a.device)
+-    scores = weighted_within_user_rank(s_bpr, s_bce, users, wa=0.70)
++    scores = weighted_within_user_rank(s_bpr, s_bce, users, wa=0.60)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+         r = evaluate(users, y, scores)
+-        print(f"\n=== bce_bpr_rankblend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bce_bpr_rankblend_60 (seed={a.seed}, device={a.device}) ===")
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

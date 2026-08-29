@@ -1,0 +1,108 @@
+# iteration 3  (parent: 2)
+# hypothesis: improve 2: keep BPR as the main objective but add a small balanced BCE term on the same positive/negative pairs, aiming to retain baseline calibration/item signal while preserving the within-user ranking loss.
+# result: GAUC 0.670064 | nDCG@5 0.537187 | primary 0.603625 | verdict KEPT
+
+--- logs/record-run-8/solutions/002_bpr_fm.py
++++ logs/record-run-8/solutions/003_bpr_bce_fm.py
+@@ -1,10 +1,9 @@
+-"""Factorization Machine trained with within-user BPR pairwise ranking loss.
++"""Factorization Machine trained with within-user BPR plus a small BCE term.
+ 
+-This keeps the official FM feature set/model and changes only the objective from
+-pointwise BCE to pairwise BPR: for each user with both positive and negative
+-training impressions, sample negatives for that user's positives and optimize
+--log sigmoid(score_pos - score_neg).  Early stopping is still done on the
+-provided validation split exactly as in the baseline script.
++Starts from 002_bpr_fm.py: same FM, same same-user positive/negative pair sampler.
++The change is the loss: BPR remains primary, with a lightly weighted pointwise
++BCE on the paired rows to preserve the useful calibration/static-feature signal
++from the original baseline while still optimizing within-user ranking.
+ """
+ import argparse
+ import os
+@@ -63,7 +62,6 @@
+ 
+ 
+ def sample_pairs(groups, rng):
+-    """One sampled negative for every positive impression of eligible users."""
+     pos_parts = []
+     neg_parts = []
+     for p, n in groups:
+@@ -76,7 +74,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True):
++        seed=0, device='cpu', verbose=True, bce_weight=0.15):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -84,7 +82,7 @@
+     groups = build_user_groups(ytr, utr)
+     if verbose:
+         n_pairs = sum(len(p) for p, _ in groups)
+-        print(f"BPR eligible users={len(groups):,d}, sampled pairs/epoch={n_pairs:,d}")
++        print(f"BPR eligible users={len(groups):,d}, sampled pairs/epoch={n_pairs:,d}, bce_weight={bce_weight}")
+ 
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+@@ -100,6 +98,8 @@
+         pos_idx, neg_idx = sample_pairs(groups, rng)
+         model.train()
+         losses = []
++        bprs = []
++        bces = []
+         for i in range(0, len(pos_idx), bs):
+             psel = torch.from_numpy(pos_idx[i:i + bs])
+             nsel = torch.from_numpy(neg_idx[i:i + bs])
+@@ -108,14 +108,21 @@
+             opt.zero_grad(set_to_none=True)
+             sp = model(xp)
+             sn = model(xn)
+-            loss = -torch.nn.functional.logsigmoid(sp - sn).mean()
++            bpr = -torch.nn.functional.logsigmoid(sp - sn).mean()
++            # Balanced pointwise term on the same paired rows; positives target 1,
++            # sampled negatives target 0.  Using softplus avoids allocating labels.
++            bce = 0.5 * (torch.nn.functional.softplus(-sp).mean() +
++                         torch.nn.functional.softplus(sn).mean())
++            loss = bpr + bce_weight * bce
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
++            bprs.append(bpr.item())
++            bces.append(bce.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | loss {np.mean(losses):.4f} bpr {np.mean(bprs):.4f} bce {np.mean(bces):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -143,6 +150,7 @@
+     ap.add_argument('--epochs', type=int, default=40)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
++    ap.add_argument('--bce_weight', type=float, default=0.15)
+     a = ap.parse_args()
+ 
+     torch.manual_seed(a.seed)
+@@ -157,7 +165,8 @@
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+     model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
++                     device=a.device, verbose=a.out is None,
++                     bce_weight=a.bce_weight)
+ 
+     X, y, users = enc[target]
+     scores = model.predict(X, device=a.device)
+@@ -166,7 +175,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

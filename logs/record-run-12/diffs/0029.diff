@@ -1,0 +1,74 @@
+# iteration 29  (parent: 26)
+# hypothesis: improve 26: node 26's personalized prior helps, so add a small 4% global item-quality prior (video/author/tag/music/tab/duration target rates) to catch generally good videos that user-sparse histories miss while keeping the 12% behavior signal intact.
+# result: GAUC 0.672271 | nDCG@5 0.537841 | primary 0.605056 | verdict KEPT
+
+--- logs/record-run-12/solutions/027_behavior_prior.py
++++ logs/record-run-12/solutions/030_global_quality_prior.py
+@@ -1,5 +1,5 @@
+-"""Best cached content-FM/DeepFM ensemble plus train-only user-history target priors."""
+-import argparse, csv, os, sys, time
++"""Best cached content-FM/DeepFM ensemble plus user-history and global item-quality priors."""
++import argparse, csv, os, sys
+ import numpy as np
+ import torch
+ import torch.nn.functional as F
+@@ -194,12 +194,36 @@
+     for i,r in enumerate(splits[target]):
+         num=0.0; den=0.0; st=0.0
+         for name,fn,alpha,wt,d in maps:
+-            n,s=d.get(fn(r),(0,0.0)); rate=(s+alpha*global_mean)/(n+alpha)
+-            shrink=n/(n+alpha)
++            n,s=d.get(fn(r),(0,0.0)); rate=(s+alpha*global_mean)/(n+alpha); shrink=n/(n+alpha)
+             num += wt*shrink*rate; den += wt*shrink; st += wt*shrink
+-        raw[i]=global_mean if den<=0 else num/den
+-        strength[i]=st
++        raw[i]=global_mean if den<=0 else num/den; strength[i]=st
+     print('behavior prior mean/std/coverage/strength',float(raw.mean()),float(raw.std()),float((strength>0).mean()),float(strength.mean()))
++    return raw
++
++def make_quality_prior(splits, target, content):
++    y=np.array([r[6] for r in splits['train']],dtype=np.float64); global_mean=float(y.mean())
++    specs=[
++        ('video', lambda r: norm_val(r[2]), 25.0, 1.60),
++        ('author', lambda r: norm_val(r[3]), 50.0, 1.10),
++        ('tag', lambda r: content.get(norm_val(r[2]),('__MISS__',)*7)[1], 80.0, 0.70),
++        ('music', lambda r: content.get(norm_val(r[2]),('__MISS__',)*7)[0], 60.0, 0.55),
++        ('tab', lambda r: norm_val(r[4]), 200.0, 0.30),
++        ('dur', lambda r: str(int(float(r[5])//10000)), 100.0, 0.25),
++    ]
++    maps=[]
++    for name,fn,alpha,wt in specs:
++        d={}
++        for r in splits['train']:
++            k=fn(r); n,s=d.get(k,(0,0.0)); d[k]=(n+1,s+float(r[6]))
++        maps.append((name,fn,alpha,wt,d)); print('quality map',name,'keys',len(d))
++    raw=np.empty(len(splits[target]),dtype=np.float64); strength=np.empty(len(splits[target]),dtype=np.float64)
++    for i,r in enumerate(splits[target]):
++        num=0.0; den=0.0; st=0.0
++        for name,fn,alpha,wt,d in maps:
++            n,s=d.get(fn(r),(0,0.0)); rate=(s+alpha*global_mean)/(n+alpha); shrink=n/(n+alpha)
++            num += wt*shrink*rate; den += wt*shrink; st += wt*shrink
++        raw[i]=global_mean if den<=0 else num/den; strength[i]=st
++    print('quality prior mean/std/coverage/strength',float(raw.mean()),float(raw.std()),float((strength>0).mean()),float(strength.mean()))
+     return raw
+ 
+ if __name__=='__main__':
+@@ -223,13 +247,12 @@
+         dp=get_preds('024','deepfm_content_bpr_v1',train_deep_bpr,enc,dim,Xtar,s,a.device,verbose)
+         deep_bags.append(percentile_rank_by_user(dp,utar))
+     deep=np.mean(deep_bags,axis=0)
+-    vc=train_video_counts(splits,target)
+-    w=0.20 + 0.25/(1.0 + vc/5.0)
++    vc=train_video_counts(splits,target); w=0.20 + 0.25/(1.0 + vc/5.0)
+     base=(1.0-w)*fm_base + w*deep
+-    prior=percentile_rank_by_user(make_behavior_prior(splits,target,content),utar)
+-    # Train-only personalized history is sparse/noisy, so use it as a small nDCG-oriented reranker.
+-    scores=0.88*base + 0.12*prior
+-    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'behavior blend 0.12')
++    behavior=percentile_rank_by_user(make_behavior_prior(splits,target,content),utar)
++    quality=percentile_rank_by_user(make_quality_prior(splits,target,content),utar)
++    scores=0.84*base + 0.12*behavior + 0.04*quality
++    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'blend base=0.84 behavior=0.12 quality=0.04')
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,} predictions')
+     else: print('done')

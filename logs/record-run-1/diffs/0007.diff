@@ -1,0 +1,262 @@
+# iteration 7  (parent: 2)
+# hypothesis: Try a watch-time/CWM-inspired pairwise objective using raw play_time_ms versus duration_ms as a continuous preference signal, rather than only binary long_view labels; censored watch-time modeling is intended for short-video recommendation and should better separate positives near the top. Search reference used: CWM/censored watch-time overview (web result) and implementation will still predict va
+# result: GAUC 0.616264 | nDCG@5 0.511657 | primary 0.56396 | verdict worse
+
+--- logs/record-run-1/solutions/002_bpr_fm.py
++++ logs/record-run-1/solutions/007_watchtime_pairwise_fm.py
+@@ -1,15 +1,18 @@
+-"""FM trained with same-user BPR pairwise ranking loss.
+-
+-This keeps the official FM architecture/features but changes the training objective
+-from pointwise BCE to pairwise ranking.  Each update compares a positive and a
+-negative impression from the same user:
+-
+-    loss = softplus(-(score_pos - score_neg))
+-
+-Users with no within-user label variation cannot affect GAUC/nDCG ranking and are
+-not sampled for BPR pairs.
++"""FM trained with same-user pairwise loss from continuous watch-time preference.
++
++Instead of only comparing binary positives to negatives, this script reads raw
++play_time_ms from the KuaiRand-Pure log CSVs and builds same-user pairs where one
++impression has clearly higher normalized watch engagement than another.  The
++preference value is a simple censored-watch-time proxy:
++
++    value = log1p(min(play_time_ms, duration_ms) / duration_ms)
++
++with a small bonus for the official binary label.  This keeps the official FM
++features but gives the pairwise objective more graded supervision about video
++engagement while avoiding validation labels for training.
+ """
+ import argparse
++import csv
+ import os
+ import sys
+ import time
+@@ -49,54 +52,112 @@
+         return np.concatenate(out)
+ 
+ 
+-def make_pos_user_negpools(y, users):
+-    """Return positive row ids, their users, and same-user negative pools."""
+-    pos_by_u = defaultdict(list)
+-    neg_by_u = defaultdict(list)
+-    for i, (yy, uu) in enumerate(zip(y, users)):
+-        if yy > 0.5:
+-            pos_by_u[int(uu)].append(i)
+-        else:
+-            neg_by_u[int(uu)].append(i)
+-
+-    pos_idx = []
+-    pos_user = []
+-    neg_pools = {}
+-    for u, ps in pos_by_u.items():
+-        ns = neg_by_u.get(u)
+-        if ns:
+-            neg_pools[u] = np.asarray(ns, dtype=np.int64)
+-            pos_idx.extend(ps)
+-            pos_user.extend([u] * len(ps))
+-
+-    return (np.asarray(pos_idx, dtype=np.int64),
+-            np.asarray(pos_user, dtype=np.int64),
+-            neg_pools)
+-
+-
+-def sample_pairs(pos_idx, pos_user, neg_pools, rng, multiplier=2):
+-    """Sample same-user BPR pairs; two negatives per positive by default."""
+-    n_base = len(pos_idx)
+-    order = rng.permutation(n_base)
+-    if multiplier > 1:
+-        order = np.tile(order, multiplier)
+-        rng.shuffle(order)
+-
+-    p = pos_idx[order]
+-    n = np.empty_like(p)
+-    # Looping over pairs is cheap relative to model training at this dataset size
+-    # and avoids constructing large padded user-by-negative matrices.
+-    for j, u in enumerate(pos_user[order]):
+-        pool = neg_pools[int(u)]
+-        n[j] = pool[rng.integers(len(pool))]
+-    return p, n
+-
+-
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True):
++def find_log_dir(data_dir):
++    cands = [data_dir, os.path.join(data_dir, 'data'), os.path.dirname(data_dir)]
++    for d in cands:
++        if os.path.exists(os.path.join(d, 'log_standard_4_08_to_4_21_pure.csv')):
++            return d
++    return data_dir
++
++
++def read_play_times(data_dir, n_total):
++    """Read play_time_ms in the same row order as data.load: train+valid/test logs."""
++    log_dir = find_log_dir(data_dir)
++    files = ['log_standard_4_08_to_4_21_pure.csv',
++             'log_standard_4_22_to_5_08_pure.csv']
++    vals = []
++    for fn in files:
++        path = os.path.join(log_dir, fn)
++        if not os.path.exists(path):
++            raise FileNotFoundError(path)
++        with open(path, 'r', newline='', encoding='utf-8') as f:
++            rdr = csv.DictReader(f)
++            if 'play_time_ms' not in rdr.fieldnames:
++                raise RuntimeError(f'play_time_ms not found in {path}; columns={rdr.fieldnames[:20]}')
++            for row in rdr:
++                try:
++                    vals.append(float(row.get('play_time_ms') or 0.0))
++                except ValueError:
++                    vals.append(0.0)
++                if len(vals) >= n_total:
++                    break
++        if len(vals) >= n_total:
++            break
++    if len(vals) < n_total:
++        raise RuntimeError(f'Only read {len(vals)} raw rows but need {n_total}')
++    return np.asarray(vals[:n_total], dtype=np.float32)
++
++
++def engagement_values(splits, play_all):
++    """Return per-split continuous engagement aligned with load() rows."""
++    out = {}
++    off = 0
++    for sp in ('train', 'valid', 'test'):
++        rows = splits[sp]
++        n = len(rows)
++        play = play_all[off:off+n]
++        dur = np.asarray([max(float(r[5]), 1.0) for r in rows], dtype=np.float32)
++        y = np.asarray([float(r[6]) for r in rows], dtype=np.float32)
++        # Censored watch proxy: cap observed watch by video duration, compress tail,
++        # and retain some direct alignment with the official binary target.
++        ratio = np.clip(play / dur, 0.0, 1.0)
++        val = np.log1p(ratio) + 0.25 * y
++        out[sp] = val.astype(np.float32)
++        off += n
++    return out
++
++
++def make_user_sorted_indices(values, users, labels, min_gap=0.05):
++    """For each eligible user, keep train row ids sorted by continuous value."""
++    by_u = defaultdict(list)
++    for i, u in enumerate(users):
++        by_u[int(u)].append(i)
++    eligible_users = []
++    sorted_by_u = {}
++    for u, idxs in by_u.items():
++        arr = np.asarray(idxs, dtype=np.int64)
++        vals = values[arr]
++        # Need meaningful variation and at least one official positive for metric alignment.
++        if len(arr) >= 2 and labels[arr].max() > 0.5 and labels[arr].min() < 0.5 and (vals.max() - vals.min()) >= min_gap:
++            order = np.argsort(vals)
++            sorted_by_u[u] = arr[order]
++            eligible_users.append(u)
++    return np.asarray(eligible_users, dtype=np.int64), sorted_by_u
++
++
++def sample_watch_pairs(eligible_users, sorted_by_u, values, rng, n_pairs):
++    """Sample same-user high-engagement vs low-engagement pairs."""
++    users = eligible_users[rng.integers(len(eligible_users), size=n_pairs)]
++    hi = np.empty(n_pairs, dtype=np.int64)
++    lo = np.empty(n_pairs, dtype=np.int64)
++    weights = np.empty(n_pairs, dtype=np.float32)
++    for j, u in enumerate(users):
++        arr = sorted_by_u[int(u)]
++        m = len(arr)
++        # Draw from top and bottom halves to avoid nearly-tied noisy pairs.
++        mid = max(1, m // 2)
++        low_pos = rng.integers(0, mid)
++        high_pos = rng.integers(mid, m) if mid < m else m - 1
++        a = arr[high_pos]
++        b = arr[low_pos]
++        if values[a] < values[b]:
++            a, b = b, a
++        hi[j] = a
++        lo[j] = b
++        weights[j] = np.clip(values[a] - values[b], 0.05, 1.0)
++    return hi, lo, weights
++
++
++def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
++        patience=4, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
++
++    n_total = sum(len(splits[sp]) for sp in ('train', 'valid', 'test'))
++    play_all = read_play_times(data_dir, n_total)
++    vals = engagement_values(splits, play_all)
++    train_val = vals['train']
+ 
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+@@ -104,9 +165,11 @@
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+-    pos_idx, pos_user, neg_pools = make_pos_user_negpools(ytr, utr)
+-    if len(pos_idx) == 0:
+-        raise RuntimeError('No same-user positive/negative pairs found for BPR')
++    eligible_users, sorted_by_u = make_user_sorted_indices(train_val, utr, ytr)
++    if len(eligible_users) == 0:
++        raise RuntimeError('No eligible users for watch-time pairwise training')
++    # Similar update count to BPR baseline: about two pairs per binary positive.
++    n_pairs = int(max(1, 2 * np.sum(ytr > 0.5)))
+ 
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+@@ -114,26 +177,29 @@
+     for ep in range(1, epochs + 1):
+         t0 = time.time()
+         model.train()
+-        pidx, nidx = sample_pairs(pos_idx, pos_user, neg_pools, rng, multiplier=2)
++        pidx, nidx, w = sample_watch_pairs(eligible_users, sorted_by_u, train_val, rng, n_pairs)
++        order = rng.permutation(len(pidx))
++        pidx, nidx, w = pidx[order], nidx[order], w[order]
+         losses = []
+         for i in range(0, len(pidx), bs):
+             ps = torch.from_numpy(pidx[i:i + bs])
+             ns = torch.from_numpy(nidx[i:i + bs])
++            wb = torch.from_numpy(w[i:i + bs]).to(device)
+             xp = Xtr_t[ps].to(device)
+             xn = Xtr_t[ns].to(device)
+             opt.zero_grad(set_to_none=True)
+             diff = model(xp) - model(xn)
+-            loss = torch.nn.functional.softplus(-diff).mean()
++            loss = (torch.nn.functional.softplus(-diff) * wb).mean()
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | wt-bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | pairs {len(pidx):,d} | "
+-                  f"{time.time() - t0:.1f}s")
++                  f"users {len(eligible_users):,d} | {time.time() - t0:.1f}s")
+ 
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+@@ -166,8 +232,8 @@
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
++    model, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
++                     seed=a.seed, device=a.device, verbose=a.out is None)
+ 
+     X, y, users = enc[a.split]
+     scores = model.predict(X, device=a.device)
+@@ -176,7 +242,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== watchtime_pairwise_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

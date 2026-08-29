@@ -1,0 +1,95 @@
+# iteration 11  (parent: 9)
+# hypothesis: improve 9: hour features helped slightly, so add only low-cardinality context crosses tab×hour and weekday×hour while leaving the BPR/BCE training and 60/40 rank blend unchanged.
+# result: GAUC 0.669397 | nDCG@5 0.536712 | primary 0.603055 | verdict noise
+
+--- logs/record-run-10/solutions/009_hour_time_blend.py
++++ logs/record-run-10/solutions/011_time_cross_blend.py
+@@ -1,9 +1,8 @@
+-"""BCE+BPR rank blend with shared day/hour time features.
+-
+-Improves 008 by reading hourmin from the raw KuaiRand log CSVs and adding
+-hour-of-day plus 4-hour block categorical fields.  Rows from data.load are
+-plain tuples, so raw rows are matched by (date,user_id,video_id,tab) queues,
+-preserving original CSV order for duplicate impressions.
++"""BCE+BPR rank blend with low-cardinality crossed time features.
++
++Improves 009 by keeping the same two-model objective/blend and adding only
++shared time-context crosses: tab x hour and dow x hour.  Unlike raw date, these
++categories are seen in train and can capture time drift without unseen IDs.
+ """
+ import argparse
+ import csv
+@@ -22,7 +21,7 @@
+ from evaluate import evaluate                         # noqa: E402
+ 
+ 
+-EXT_FIELDS = FIELDS + ['dow', 'hour', 'tod4']
++EXT_FIELDS = FIELDS + ['dow', 'hour', 'tod4', 'tab_hour', 'dow_hour']
+ 
+ 
+ def yyyymmdd_to_dow(d):
+@@ -51,6 +50,13 @@
+     return 4
+ 
+ 
++def safe_int(x, default=0):
++    try:
++        return int(float(x))
++    except Exception:
++        return default
++
++
+ def norm_int_str(x):
+     s = str(x)
+     try:
+@@ -60,11 +66,7 @@
+ 
+ 
+ def parse_hour(v):
+-    try:
+-        h = int(float(v))
+-    except Exception:
+-        return 0
+-    # hourmin is usually HHMM, but accept a raw 0..23 hour too.
++    h = safe_int(v, 0)
+     if h >= 100:
+         h = h // 100
+     return max(0, min(23, h))
+@@ -91,8 +93,6 @@
+             if hour_col is None or date_col is None:
+                 continue
+             for r in rdr:
+-                # The starter tuples contain author/duration after joining video features, but
+-                # the raw log does not necessarily; use the stable log columns only.
+                 key = (norm_int_str(r.get(date_col, '')),
+                        norm_int_str(r.get('user_id', '')),
+                        norm_int_str(r.get('video_id', '')),
+@@ -117,7 +117,6 @@
+                 arr[i] = dq.popleft()
+                 used += 1
+             else:
+-                # Fallback keeps the feature valid if a raw row is absent.
+                 arr[i] = 0
+                 miss += 1
+         lookup[name] = arr
+@@ -126,8 +125,11 @@
+ 
+ 
+ def row_features(row, hour):
++    dow = yyyymmdd_to_dow(row[0])
++    hour = int(hour)
++    tab = safe_int(row[4], 0)
+     return (row[1], row[2], row[3], row[4], dur_bucket(row[5]),
+-            yyyymmdd_to_dow(row[0]), int(hour), int(hour) // 4)
++            dow, hour, hour // 4, tab * 24 + hour, dow * 24 + hour)
+ 
+ 
+ def encode_ext(splits, hour_lookup):
+@@ -348,6 +350,6 @@
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+         r = evaluate(users, y, scores)
+-        print(f"\n=== hour_time_blend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== time_cross_blend (seed={a.seed}, device={a.device}) ===")
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

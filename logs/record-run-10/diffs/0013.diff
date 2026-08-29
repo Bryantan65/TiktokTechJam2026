@@ -1,0 +1,67 @@
+# iteration 13  (parent: 12)
+# hypothesis: debug 12: node 12 crashed because frozen eval histories were stored in a plain dict and unseen users raised KeyError; use an empty history for train-unseen users so the DIN sequence member is actually tested.
+# result: GAUC 0.670284 | nDCG@5 0.536954 | primary 0.603619 | verdict KEPT
+
+--- logs/record-run-10/solutions/012_din_seq_blend.py
++++ logs/record-run-10/solutions/013_din_seq_debug.py
+@@ -1,8 +1,8 @@
+-"""BPR + DIN-style sequence BCE rank blend with day/hour features.
+-
+-Branches from 009.  The BPR member is unchanged.  The BCE member is replaced by
+-an FM with attention over each user's recent positive video/author history,
+-using only prior train interactions for valid/test histories.
++"""Debug 012: BPR + DIN-style sequence BCE rank blend with day/hour features.
++
++Fixes the history builder for users absent from the train-positive history.  The
++BPR member is unchanged from 009; the BCE member is an FM augmented with DIN
++attention over recent same-user positive video/author history.
+ """
+ import argparse
+ import csv
+@@ -19,7 +19,6 @@
+                                 '..', 'kuairand-starter-kit'))
+ from data import load, FIELDS                         # noqa: E402
+ from evaluate import evaluate                         # noqa: E402
+-
+ 
+ EXT_FIELDS = FIELDS + ['dow', 'hour', 'tod4']
+ SEQ_LEN = 20
+@@ -154,7 +153,6 @@
+ 
+ 
+ def build_histories(enc, seq_len=SEQ_LEN):
+-    """Recent positive video/author feature ids; valid/test see train history only."""
+     hist = {}
+     user_hist = defaultdict(lambda: deque(maxlen=seq_len))
+ 
+@@ -163,7 +161,7 @@
+         hv = np.full((n, seq_len), -1, dtype=np.int64)
+         ha = np.full((n, seq_len), -1, dtype=np.int64)
+         for i, u in enumerate(users):
+-            h = user_hist[u]
++            h = user_hist[u] if update else user_hist.get(u)
+             if h:
+                 vals = list(h)[-seq_len:]
+                 start = seq_len - len(vals)
+@@ -175,12 +173,11 @@
+ 
+     Xtr, ytr, utr = enc['train']
+     hist['train'] = fill_from_deques(utr, Xtr, ytr, update=True)
+-    # Freeze the post-train history for all evaluation splits; do not consume valid/test labels.
+     frozen = {u: deque(v, maxlen=seq_len) for u, v in user_hist.items()}
+     for name, (X, y, users) in enc.items():
+         if name == 'train':
+             continue
+-        user_hist = {u: deque(v, maxlen=seq_len) for u, v in frozen.items()}
++        user_hist = frozen
+         hist[name] = fill_from_deques(users, X, None, update=False)
+     return hist
+ 
+@@ -436,6 +433,6 @@
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+         r = evaluate(users, y, scores)
+-        print(f"\n=== din_seq_blend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== din_seq_debug (seed={a.seed}, device={a.device}) ===")
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

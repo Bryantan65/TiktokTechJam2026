@@ -1,0 +1,166 @@
+# iteration 22  (parent: 20)
+# hypothesis: improve 20: the residual time tree is useful but is built on five seed-only FM members; diversify the strong ensemble by spreading BPR+BCE tradeoffs across members (BCE weights 0.09..0.225) before fitting the same LGB residual.
+# result: GAUC 0.671367 | nDCG@5 0.537947 | primary 0.604657 | verdict KEPT
+
+--- logs/record-run-8/solutions/020_lgb_time_residual.py
++++ logs/record-run-8/solutions/022_diverse_bce_lgb_time.py
+@@ -1,9 +1,9 @@
+-"""FM rank ensemble plus residual LightGBM with raw time features.
+-
+-This refines the earlier time-feature draft by adding hour/date/tab-hour only to
+-LightGBM's residual LambdaRank stage, where trees can use them as top-k
+-corrections around the strong FM rank ensemble instead of forcing sparse time
+-embeddings into the FM itself.
++"""Time-aware LGB residual on a more diverse BPR+BCE FM rank ensemble.
++
++Refines node 20 by keeping the same residual LightGBM/time feature stage, but
++trains the five FM members with slightly different BCE regularization weights.
++The base node's five members differ only by seed; varying the BPR/BCE tradeoff
++may add useful ranking diversity before the residual tree stage.
+ """
+ import argparse
+ import csv
+@@ -78,7 +78,6 @@
+             for r in reader:
+                 d = _to_int(r.get(date_col, 0)) if date_col else 0
+                 hm = _to_int(r.get(hour_col, 0)) if hour_col else 0
+-                # timestamp-like fallbacks should not create huge bogus hours.
+                 if hm > 2359:
+                     hm = hm % 10000
+                 recs.append((d, hm))
+@@ -87,8 +86,6 @@
+ 
+ 
+ def _date_ord(yyyymmdd):
+-    # Dataset is Apr/May 2022.  This compact monotone day index is enough for
+-    # trees without importing datetime in the hot path.
+     yyyymmdd = int(yyyymmdd)
+     m = (yyyymmdd // 100) % 100
+     d = yyyymmdd % 100
+@@ -102,8 +99,6 @@
+         dates = set(_to_int(r[0]) for r in rows)
+         sel = [(d, hm) for d, hm in raw if d in dates]
+         if len(sel) < len(rows):
+-            # Conservative fallback: use tuple dates and missing hour rather
+-            # than risking a shifted alignment.
+             print(f"time alignment {sp}: only {len(sel):,d}/{len(rows):,d}; falling back for missing rows")
+             sel = sel + [(_to_int(r[0]), 0) for r in rows[len(sel):]]
+         else:
+@@ -114,7 +109,6 @@
+ 
+ 
+ def time_features_for_rows(rows, raw_time_rows):
+-    # Four categorical columns and three numeric columns.
+     out = np.zeros((len(rows), 7), dtype=np.float32)
+     for i, r in enumerate(rows):
+         if i < len(raw_time_rows):
+@@ -126,12 +120,10 @@
+         minute = max(0, min(59, hm % 100))
+         tab = _to_int(r[4])
+         dord = _date_ord(d)
+-        # Categorical: hour, 4-hour block, tab-hour, day-of-window.
+         out[i, 0] = hour
+         out[i, 1] = hour // 4
+         out[i, 2] = tab * 24 + hour
+         out[i, 3] = dord
+-        # Numeric: monotone day, time-of-day in [0,1], rough weekend-ish cycle.
+         out[i, 4] = dord / 40.0
+         out[i, 5] = (hour * 60 + minute) / 1440.0
+         out[i, 6] = (dord % 7) / 6.0
+@@ -193,7 +185,7 @@
+     Xva, yva, uva = enc['valid']
+     groups = build_user_groups(ytr, utr)
+     if verbose:
+-        print(f"{tag} BPR eligible users={len(groups):,d}, sampled pairs/epoch={sum(len(p) for p, _ in groups):,d}")
++        print(f"{tag} BPR eligible users={len(groups):,d}, sampled pairs/epoch={sum(len(p) for p, _ in groups):,d}, bce={bce_weight:.4f}")
+ 
+     torch.manual_seed(seed)
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+@@ -276,10 +268,7 @@
+     for r in rows:
+         y = float(r[6])
+         dur_bucket = int(min(20, max(0, int(r[5]) // 5000)))
+-        keys = {
+-            'video': r[2], 'author': r[3], 'tab': r[4], 'dur': dur_bucket,
+-            'author_tab': (r[3], r[4]),
+-        }
++        keys = {'video': r[2], 'author': r[3], 'tab': r[4], 'dur': dur_bucket, 'author_tab': (r[3], r[4])}
+         for k, key in keys.items():
+             sums[k][key] += y
+             cnts[k][key] += 1
+@@ -292,9 +281,8 @@
+     for i, r in enumerate(rows):
+         dur_ms = float(r[5])
+         dur_bucket = int(min(20, max(0, int(r[5]) // 5000)))
+-        keys = [r[2], r[3], r[4], dur_bucket, (r[3], r[4])]
+         vals = []
+-        for name, key in zip(names, keys):
++        for name, key in zip(names, [r[2], r[3], r[4], dur_bucket, (r[3], r[4])]):
+             c = cnts[name].get(key, 0)
+             s = sums[name].get(key, 0.0)
+             vals.append(np.log1p(c))
+@@ -305,8 +293,6 @@
+ 
+ 
+ def lgb_matrix(enc_X, rows, gctr, sums, cnts, fm_rank, time_feat):
+-    # Features: item/context categorical IDs, time categorical/numeric features,
+-    # smoothed train-only rates, and incumbent FM rank.
+     return np.hstack([
+         enc_X[:, 1:].astype(np.int32),
+         time_feat.astype(np.float32),
+@@ -345,8 +331,6 @@
+                      time_features_for_rows(splits['valid'], time_maps['valid']))
+     Xtr_s, ytr_s, gtr, init_tr = sort_groups_by_user(Xtr, ytr.astype(np.float32), utr, fm_train_rank.astype(np.float64))
+     Xva_s, yva_s, gva, init_va = sort_groups_by_user(Xva, yva.astype(np.float32), uva, fm_valid_rank.astype(np.float64))
+-    # First 4 columns are encoded video/author/tab/duration; next 4 are
+-    # hour/hour-block/tab-hour/day categorical time columns.
+     dtr = lgb.Dataset(Xtr_s, label=ytr_s, group=gtr, init_score=init_tr,
+                       categorical_feature=[0, 1, 2, 3, 4, 5, 6, 7], free_raw_data=False)
+     dva = lgb.Dataset(Xva_s, label=yva_s, group=gva, init_score=init_va,
+@@ -367,15 +351,27 @@
+     return model, (gctr, sums, cnts)
+ 
+ 
++def _bce_for_member(base, m, n_models):
++    if n_models <= 1:
++        return base
++    mults = np.linspace(0.60, 1.50, n_models)
++    return float(base * mults[m])
++
++
+ def train_all(splits, data_dir, k=16, lr=0.001, epochs=40, seed=0, device='cpu',
+               verbose=True, bce_weight=0.15, n_models=5):
+     enc, dim = encode(splits)
+     fm_models = []
++    bces = []
+     for m in range(n_models):
+         s = int(seed + 997 * m)
++        bw = _bce_for_member(bce_weight, m, n_models)
++        bces.append(bw)
+         fm_models.append(train_one_fm(enc, dim, k=k, lr=lr, epochs=epochs, seed=s,
+                                       device=device, verbose=verbose,
+-                                      bce_weight=bce_weight, tag=f"m{m}/seed{s}"))
++                                      bce_weight=bw, tag=f"m{m}/seed{s}"))
++    if verbose:
++        print("member_bce_weights=", ",".join(f"{x:.4f}" for x in bces))
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+     fm_train_rank = fm_rank_ensemble(fm_models, Xtr, utr, device=device)
+@@ -422,7 +418,7 @@
+         splits = load(a.data_dir)
+         target = a.split
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}, residual_lgb_time, fm_models={a.n_models}, fm_weight={a.fm_weight}")
++          f"fields={FIELDS}, diverse_bce_lgb_time, fm_models={a.n_models}, fm_weight={a.fm_weight}")
+ 
+     fm_models, lgb_model, stat_pack, time_maps, enc = train_all(
+         splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+@@ -437,7 +433,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== lgb_time_residual (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== diverse_bce_lgb_time (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

@@ -1,0 +1,69 @@
+# iteration 5  (parent: 2)
+# hypothesis: improve 2: pure BPR is still the best node; add a small BCE term during BPR epochs to retain pointwise label-rate information while keeping same-user pairwise ranking dominant.
+# result: GAUC 0.669462 | nDCG@5 0.53649 | primary 0.602976 | verdict noise
+
+--- logs/record-run-11/solutions/002_bpr_fm.py
++++ logs/record-run-11/solutions/005_hybrid_bpr_bce.py
+@@ -1,8 +1,9 @@
+-"""FM trained with within-user BPR pairwise ranking loss.
++"""FM trained with within-user BPR plus a small pointwise BCE anchor.
+ 
+-This keeps the baseline FM architecture/features but replaces pointwise BCE with
+-pairs (positive, negative) sampled from the same user, matching the within-user
+-ranking metrics. Early stopping still uses the official valid evaluator.
++Starts from node 2.  Pure BPR improved GAUC/nDCG, but after the one-epoch BCE
++warmup it discards absolute label-rate information.  During BPR epochs this adds
++BCE on the sampled positive/negative rows, keeping the ranking signal dominant
++while anchoring score scale and easy pointwise constraints.
+ """
+ import argparse
+ import os
+@@ -60,8 +61,6 @@
+     for u in eligible:
+         ps = np.asarray(pos_by_u[u], dtype=np.int64)
+         ns = np.asarray(neg_by_u[u], dtype=np.int64)
+-        # One negative per positive is a compact unbiased epoch; users with many
+-        # positives naturally get more pair constraints, like GAUC weighting.
+         for _ in range(neg_per_pos):
+             sampled_n = rng.choice(ns, size=len(ps), replace=True)
+             left.append(ps)
+@@ -75,7 +74,8 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True, neg_per_pos=1, bce_warmup=1):
++        seed=0, device='cpu', verbose=True, neg_per_pos=1, bce_warmup=1,
++        bce_weight=0.15):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -117,15 +117,17 @@
+                 opt.zero_grad(set_to_none=True)
+                 sp = model(xp)
+                 sn = model(xn)
+-                # BPR: -log sigmoid(score_pos - score_neg)
+-                loss = torch.nn.functional.softplus(-(sp - sn)).mean()
++                bpr_loss = torch.nn.functional.softplus(-(sp - sn)).mean()
++                point_scores = torch.cat([sp, sn])
++                point_labels = torch.cat([torch.ones_like(sp), torch.zeros_like(sn)])
++                loss = bpr_loss + bce_weight * bce(point_scores, point_labels)
+                 loss.backward()
+                 opt.step()
+                 losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            phase = 'bce' if ep <= bce_warmup else 'bpr'
++            phase = 'bce' if ep <= bce_warmup else 'hybrid'
+             print(f"  epoch {ep:2d} {phase} | loss {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+@@ -175,7 +177,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== hybrid_bpr_bce (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

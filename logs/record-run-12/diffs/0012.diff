@@ -1,0 +1,40 @@
+# iteration 12  (parent: 11)
+# hypothesis: improve 11: with rank fusion outperforming z-score fusion, change only the rank blend weight to 75/25 BPR/BCE, reusing unchanged cached members. This probes whether the best rank-fusion weight is slightly more BPR-heavy than 70/30.
+# result: GAUC 0.670777 | nDCG@5 0.53718 | primary 0.603979 | verdict KEPT
+
+--- logs/record-run-12/solutions/011_bpr_bce_seedbag_rank.py
++++ logs/record-run-12/solutions/012_bpr_bce_seedbag_rank75.py
+@@ -1,10 +1,9 @@
+-"""Seed-bagged BPR/BCE FM blend using per-user rank fusion.
+-
+-Refines node 8 without changing any member training.  Instead of per-user
+-z-scored score averaging, convert each member's scores to within-user percentile
+-ranks and blend those ranks at 70/30 BPR/BCE, then average over member seeds
+-0/1/2.  Cache names are unchanged from 007/008, so existing member predictions
+-are reused; if caches are absent the script trains the six members standalone.
++"""Seed-bagged BPR/BCE FM blend using per-user rank fusion at 75/25.
++
++This refines node 11 by changing only the rank-fusion blend weight from 70/30
++to 75/25 (BPR/BCE). Member training code and cache names are unchanged from
++007/008/011, so existing predictions are reused; if caches are absent the
++script trains the six members standalone.
+ """
+ import argparse
+ import os
+@@ -149,7 +148,6 @@
+         end = start + 1
+         while end < n and us[end] == us[start]: end += 1
+         idx = order[start:end]
+-        # ascending rank, so larger original score gets larger fused score
+         ord2 = idx[np.argsort(scores[idx], kind='mergesort')]
+         m = len(ord2)
+         if m <= 1:
+@@ -198,7 +196,7 @@
+     for member_seed in (0, 1, 2):
+         bpr = get_member_preds('bpr_anchor_v1', train_bpr_member, enc, dim, Xtar, member_seed, a.device, verbose)
+         bce = get_member_preds('bce_v1', train_bce_member, enc, dim, Xtar, member_seed, a.device, verbose)
+-        blended.append(0.70 * percentile_rank_by_user(bpr, utar) + 0.30 * percentile_rank_by_user(bce, utar))
++        blended.append(0.75 * percentile_rank_by_user(bpr, utar) + 0.25 * percentile_rank_by_user(bce, utar))
+     scores = np.mean(blended, axis=0)
+ 
+     if a.out:

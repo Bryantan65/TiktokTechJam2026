@@ -1,0 +1,47 @@
+# iteration 3  (parent: 2)
+# hypothesis: debug 2: the listwise draft crashed because encode() returns users as a Python list; convert users/labels to NumPy before grouping. This tests the same per-user softmax ranking loss without changing the method.
+# result: GAUC 0.660428 | nDCG@5 0.532754 | primary 0.59659 | verdict worse
+
+--- logs/record-run-6/solutions/002_listwise_softmax_fm.py
++++ logs/record-run-6/solutions/003_listwise_softmax_fm_fix_users.py
+@@ -1,11 +1,7 @@
+ """FM trained with a per-user listwise softmax loss.
+ 
+-For each train user with at least one positive and one negative impression, optimise
+--log P(any positive | that user's impressed items) = logsumexp(all scores) -
+-logsumexp(positive scores).  This directly pushes positives above negatives inside
+-the same user list, closer to GAUC/nDCG than pointwise BCE.
+-
+-Reference idea: ListMLE/listwise learning-to-rank softmax likelihood.
++Debug of 002: encode() returns users as a Python list, so convert labels/users to
++NumPy arrays before sorting/grouping.  The method is otherwise unchanged.
+ """
+ import argparse
+ import os
+@@ -48,6 +44,8 @@
+ 
+ def make_user_groups(y, users):
+     """Return row-index arrays for users having both classes."""
++    y = np.asarray(y)
++    users = np.asarray(users)
+     order = np.argsort(users, kind='mergesort')
+     su = users[order]
+     cuts = np.r_[0, np.flatnonzero(su[1:] != su[:-1]) + 1, len(su)]
+@@ -61,8 +59,6 @@
+ 
+ 
+ def segment_logsumexp(z, gid, n_groups):
+-    # z: (N,), gid: int64 in [0, n_groups).  PyTorch scatter_reduce gives a
+-    # vectorised stable logsumexp over variable-length user segments.
+     maxv = torch.full((n_groups,), -torch.inf, device=z.device, dtype=z.dtype)
+     maxv.scatter_reduce_(0, gid, z, reduce='amax', include_self=True)
+     expv = torch.exp(z - maxv[gid])
+@@ -90,7 +86,7 @@
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+-    ytr_t = torch.from_numpy(ytr.astype(np.float32))
++    ytr_t = torch.from_numpy(np.asarray(ytr, dtype=np.float32))
+     groups = make_user_groups(ytr, utr)
+ 
+     rng = np.random.default_rng(seed)

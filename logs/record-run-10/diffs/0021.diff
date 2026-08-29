@@ -1,0 +1,97 @@
+# iteration 21  (parent: 19)
+# hypothesis: improve 19: add non-leaky user behaviour summary features to the LambdaRank member only: prior per-user counts/rates for candidate video/author/context from earlier train rows, then freeze them for valid/test. This targets direction 2 sequence/history signal without another opaque low-weight neural member.
+# result: GAUC 0.67134 | nDCG@5 0.537614 | primary 0.604477 | verdict KEPT
+
+--- logs/record-run-10/solutions/019_threeway_bpr_ltr_bce.py
++++ logs/record-run-10/solutions/021_history_ltr_blend.py
+@@ -1,9 +1,8 @@
+-"""Three-way rank blend: BPR FM + LambdaRank + BCE FM.
+-
+-Debugs 018 by removing the target-stat features that collapsed LambdaRank and
+-returning to the raw LambdaRank feature set of 015, then tests whether the BCE
+-FM member from the previous best time-aware FM blend adds complementary within-
+-user ranking signal at readable weight.
++"""3-way rank blend with simple train-prefix user history features for LambdaRank.
++
++Adds non-leaky per-user familiarity features (prior counts/rates for candidate
++video/author/context) to the LambdaRank member while keeping node 19's FM members
++and blend weights unchanged.
+ """
+ import argparse
+ import csv
+@@ -22,6 +21,7 @@
+ from evaluate import evaluate                         # noqa: E402
+ 
+ EXT_FIELDS = FIELDS + ['dow', 'hour', 'tod4']
++HIST_FIELD_IDXS = [1, 2, 3, 4, 6, 7]  # video, author, tab, dur_bucket, hour, tod4 within row_features
+ 
+ 
+ def yyyymmdd_to_dow(d):
+@@ -92,6 +92,40 @@
+             yyyymmdd_to_dow(row[0]), int(hour), int(hour) // 4)
+ 
+ 
++def hist_one(vals, counts, poss, ucnt, upos, recent):
++    u = vals[0]
++    uc = float(ucnt.get(u, 0)); up = float(upos.get(u, 0.0))
++    upr = (up + 2.0 * 0.36) / (uc + 2.0)
++    out = [np.log1p(uc), upr]
++    rq = recent.get(u)
++    out.append((sum(rq) + 2.0 * upr) / (len(rq) + 2.0) if rq else upr)
++    for j in HIST_FIELD_IDXS:
++        key = (u, j, vals[j])
++        c = float(counts.get(key, 0)); p = float(poss.get(key, 0.0))
++        out.append(np.log1p(c))
++        out.append((p + 5.0 * upr) / (c + 5.0))
++    return out
++
++
++def build_history_features(splits, hour_lookup):
++    counts = defaultdict(int); poss = defaultdict(float); ucnt = defaultdict(int); upos = defaultdict(float)
++    recent = defaultdict(lambda: deque(maxlen=20))
++    out = {}
++    for name, rows in splits.items():
++        feats = np.empty((len(rows), 3 + 2 * len(HIST_FIELD_IDXS)), dtype=np.float32)
++        update = (name == 'train')
++        for i, (r, h) in enumerate(zip(rows, hour_lookup[name])):
++            vals = row_features(r, h)
++            feats[i] = np.asarray(hist_one(vals, counts, poss, ucnt, upos, recent), dtype=np.float32)
++            if update:
++                y = float(r[6]); u = vals[0]
++                ucnt[u] += 1; upos[u] += y; recent[u].append(y)
++                for j in HIST_FIELD_IDXS:
++                    key = (u, j, vals[j]); counts[key] += 1; poss[key] += y
++        out[name] = feats
++    return out
++
++
+ def encode_ext(splits, hour_lookup):
+     vocabs = [{} for _ in EXT_FIELDS]
+     for name, rows in splits.items():
+@@ -100,6 +134,7 @@
+                 if v not in vocabs[j]: vocabs[j][v] = len(vocabs[j])
+     offsets = np.cumsum([0] + [len(v) for v in vocabs[:-1]], dtype=np.int64)
+     dim = int(offsets[-1] + len(vocabs[-1]))
++    hist = build_history_features(splits, hour_lookup)
+     enc = {}; rawcat = {}
+     for name, rows in splits.items():
+         X = np.empty((len(rows), len(EXT_FIELDS)), dtype=np.int64)
+@@ -114,7 +149,8 @@
+             try: dur[i] = float(r[5])
+             except Exception: dur[i] = 0.0
+         enc[name] = (X, y, users)
+-        rawcat[name] = np.column_stack([C, np.log1p(np.maximum(dur, 0.0)).astype(np.float32)]).astype(np.float32)
++        base = np.column_stack([C, np.log1p(np.maximum(dur, 0.0)).astype(np.float32)]).astype(np.float32)
++        rawcat[name] = np.column_stack([base, hist[name]]).astype(np.float32)
+     return enc, rawcat, dim
+ 
+ 
+@@ -279,7 +315,7 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 3way bpr/ltr/bce")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 3way bpr/ltr-history/bce")
+     bpr, bce, ltr, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[target]
+     sbpr = bpr.predict(X, device=a.device)

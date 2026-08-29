@@ -1,0 +1,224 @@
+# iteration 4  (parent: 2)
+# hypothesis: Add temporal context features (date and hour) to the current BPR-FM, motivated by temporal dynamics in recommender systems (Koren 2009: https://dl.acm.org/doi/10.1145/1557019.1557072). The model still optimizes same-user BPR, but can learn time-dependent item/tab biases for train-valid drift and within-user session context.
+# result: GAUC 0.66912 | nDCG@5 0.536114 | primary 0.602617 | verdict noise
+
+--- logs/record-run-1/solutions/002_bpr_fm.py
++++ logs/record-run-1/solutions/004_time_bpr_fm.py
+@@ -1,15 +1,14 @@
+-"""FM trained with same-user BPR pairwise ranking loss.
+-
+-This keeps the official FM architecture/features but changes the training objective
+-from pointwise BCE to pairwise ranking.  Each update compares a positive and a
+-negative impression from the same user:
+-
+-    loss = softplus(-(score_pos - score_neg))
+-
+-Users with no within-user label variation cannot affect GAUC/nDCG ranking and are
+-not sampled for BPR pairs.
++"""BPR-FM with temporal context features from raw CSV logs.
++
++This extends the best same-user BPR FM by adding categorical time fields:
++  [user_id, video_id, author_id, tab, dur_bucket, date, hour, weekday, tab_hour]
++
++The starter-kit load() tuples contain date but not hourmin, so hour is read from
++raw CSVs.  The raw log files are read in the documented order and then sliced to
++match train/valid/test row order returned by load().
+ """
+ import argparse
++import csv
+ import os
+ import sys
+ import time
+@@ -20,8 +19,111 @@
+ 
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 '..', 'kuairand-starter-kit'))
+-from data import load, encode, FIELDS          # noqa: E402
++from data import load, FIELDS                  # noqa: E402
+ from evaluate import evaluate                  # noqa: E402
++
++
++def dur_bucket(duration_ms):
++    # Match the starter-kit field name semantically with a conservative log2 ms bucket.
++    # Exact cut points are less important than consistent train/valid/test encoding.
++    try:
++        d = float(duration_ms)
++    except Exception:
++        d = 0.0
++    if d <= 0:
++        return 0
++    return int(min(31, np.log2(d / 1000.0 + 1.0) * 4.0))
++
++
++def ymd_to_weekday(yyyymmdd):
++    # Zeller-like via Python stdlib would be fine, but avoid importing datetime in hot loops.
++    import datetime as _dt
++    y = int(yyyymmdd) // 10000
++    m = (int(yyyymmdd) // 100) % 100
++    d = int(yyyymmdd) % 100
++    return _dt.date(y, m, d).weekday()
++
++
++def read_hourmins(data_dir, total_rows):
++    paths = [
++        os.path.join(data_dir, 'log_standard_4_08_to_4_21_pure.csv'),
++        os.path.join(data_dir, 'log_standard_4_22_to_5_08_pure.csv'),
++    ]
++    hours = []
++    for path in paths:
++        with open(path, 'r', newline='', encoding='utf-8') as f:
++            rdr = csv.DictReader(f)
++            for row in rdr:
++                hm = row.get('hourmin', '')
++                try:
++                    hm_int = int(float(hm))
++                    hour = hm_int // 100
++                    if hour < 0 or hour > 23:
++                        hour = 0
++                except Exception:
++                    hour = 0
++                hours.append(hour)
++    if len(hours) < total_rows:
++        raise RuntimeError(f'raw logs have {len(hours)} rows, need at least {total_rows}')
++    return np.asarray(hours[:total_rows], dtype=np.int16)
++
++
++def encode_with_time(splits, hours_by_split):
++    """Encode categorical FM fields, including date/hour context."""
++    maps = []
++    for _ in range(9):
++        maps.append({})
++
++    def add(mp, val):
++        if val not in mp:
++            mp[val] = len(mp)
++        return mp[val]
++
++    # Build maps on all splits so valid/test unseen values get IDs, as starter encode() does.
++    raw_feats = {}
++    for sp, rows in splits.items():
++        hs = hours_by_split[sp]
++        feats_sp = []
++        for r, hour in zip(rows, hs):
++            date, user_id, video_id, author_id, tab, duration_ms, label = r
++            db = dur_bucket(duration_ms)
++            wd = ymd_to_weekday(date)
++            h = int(hour)
++            feats = [
++                ('u', int(user_id)),
++                ('v', int(video_id)),
++                ('a', int(author_id)),
++                ('t', int(tab)),
++                ('d', int(db)),
++                ('date', int(date)),
++                ('hour', h),
++                ('wd', wd),
++                ('tab_hour', (int(tab), h)),
++            ]
++            feats_sp.append(feats)
++            for j, (_, val) in enumerate(feats):
++                add(maps[j], val)
++        raw_feats[sp] = feats_sp
++
++    offsets = []
++    off = 0
++    for mp in maps:
++        offsets.append(off)
++        off += len(mp)
++    dim = off
++
++    enc = {}
++    for sp, rows in splits.items():
++        X = np.empty((len(rows), 9), dtype=np.int64)
++        y = np.empty(len(rows), dtype=np.float32)
++        users = np.empty(len(rows), dtype=np.int64)
++        for i, (r, feats) in enumerate(zip(rows, raw_feats[sp])):
++            y[i] = float(r[6])
++            users[i] = int(r[1])
++            for j, (_, val) in enumerate(feats):
++                X[i, j] = offsets[j] + maps[j][val]
++        enc[sp] = (X, y, users)
++    return enc, dim
+ 
+ 
+ class TorchFM(torch.nn.Module):
+@@ -50,7 +152,6 @@
+ 
+ 
+ def make_pos_user_negpools(y, users):
+-    """Return positive row ids, their users, and same-user negative pools."""
+     pos_by_u = defaultdict(list)
+     neg_by_u = defaultdict(list)
+     for i, (yy, uu) in enumerate(zip(y, users)):
+@@ -75,7 +176,6 @@
+ 
+ 
+ def sample_pairs(pos_idx, pos_user, neg_pools, rng, multiplier=2):
+-    """Sample same-user BPR pairs; two negatives per positive by default."""
+     n_base = len(pos_idx)
+     order = rng.permutation(n_base)
+     if multiplier > 1:
+@@ -84,17 +184,15 @@
+ 
+     p = pos_idx[order]
+     n = np.empty_like(p)
+-    # Looping over pairs is cheap relative to model training at this dataset size
+-    # and avoids constructing large padded user-by-negative matrices.
+     for j, u in enumerate(pos_user[order]):
+         pool = neg_pools[int(u)]
+         n[j] = pool[rng.integers(len(pool))]
+     return p, n
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True):
+-    enc, dim = encode(splits)
++def run(splits, hours_by_split, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
++        patience=4, seed=0, device='cpu', verbose=True):
++    enc, dim = encode_with_time(splits, hours_by_split)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+@@ -133,7 +231,7 @@
+             print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | pairs {len(pidx):,d} | "
+-                  f"{time.time() - t0:.1f}s")
++                  f"dim {dim:,d} | {time.time() - t0:.1f}s")
+ 
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+@@ -164,10 +262,20 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+-
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
++    print({k_: len(v) for k_, v in splits.items()}, f"base_fields={FIELDS}")
++
++    total = len(splits['train']) + len(splits['valid']) + len(splits['test'])
++    all_hours = read_hourmins(a.data_dir, total)
++    ntr = len(splits['train'])
++    nva = len(splits['valid'])
++    hours_by_split = {
++        'train': all_hours[:ntr],
++        'valid': all_hours[ntr:ntr + nva],
++        'test': all_hours[ntr + nva:ntr + nva + len(splits['test'])],
++    }
++
++    model, enc = run(splits, hours_by_split, k=a.k, lr=a.lr, epochs=a.epochs,
++                     seed=a.seed, device=a.device, verbose=a.out is None)
+ 
+     X, y, users = enc[a.split]
+     scores = model.predict(X, device=a.device)
+@@ -176,7 +284,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== time_bpr_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

@@ -1,0 +1,64 @@
+# iteration 6  (parent: 5)
+# hypothesis: improve 5: node 5's BCE anchor was computed on balanced pair rows, so it may not preserve real label-rate information; sample the auxiliary BCE minibatch from all train rows while keeping BPR pairs for ranking.
+# result: GAUC 0.668734 | nDCG@5 0.53616 | primary 0.602447 | verdict noise
+
+--- logs/record-run-11/solutions/005_hybrid_bpr_bce.py
++++ logs/record-run-11/solutions/006_hybrid_global_bce.py
+@@ -1,9 +1,10 @@
+-"""FM trained with within-user BPR plus a small pointwise BCE anchor.
++"""FM trained with within-user BPR plus a true pointwise BCE anchor.
+ 
+-Starts from node 2.  Pure BPR improved GAUC/nDCG, but after the one-epoch BCE
+-warmup it discards absolute label-rate information.  During BPR epochs this adds
+-BCE on the sampled positive/negative rows, keeping the ranking signal dominant
+-while anchoring score scale and easy pointwise constraints.
++This refines node 5.  Node 5 added BCE only on the sampled positive/negative
++pair rows, which makes the auxiliary pointwise task artificially 50/50 positive.
++Here the BPR minibatch remains same-user ranking pairs, but the BCE auxiliary
++minibatch is sampled from all training rows with the real labels, preserving the
++label-rate/calibration information that pure BPR lacks.
+ """
+ import argparse
+ import os
+@@ -114,20 +115,28 @@
+                 ns = torch.from_numpy(nidx[i:i + bs])
+                 xp = Xtr_t[ps].to(device)
+                 xn = Xtr_t[ns].to(device)
++
++                # Independent pointwise minibatch from the real train distribution,
++                # not the 50/50 pair sample.
++                bsz = len(ps)
++                bce_sel_np = rng.integers(0, len(ytr), size=bsz, dtype=np.int64)
++                bce_sel = torch.from_numpy(bce_sel_np)
++                xb = Xtr_t[bce_sel].to(device)
++                yb = ytr_t[bce_sel].to(device)
++
+                 opt.zero_grad(set_to_none=True)
+                 sp = model(xp)
+                 sn = model(xn)
+                 bpr_loss = torch.nn.functional.softplus(-(sp - sn)).mean()
+-                point_scores = torch.cat([sp, sn])
+-                point_labels = torch.cat([torch.ones_like(sp), torch.zeros_like(sn)])
+-                loss = bpr_loss + bce_weight * bce(point_scores, point_labels)
++                point_loss = bce(model(xb), yb)
++                loss = bpr_loss + bce_weight * point_loss
+                 loss.backward()
+                 opt.step()
+                 losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            phase = 'bce' if ep <= bce_warmup else 'hybrid'
++            phase = 'bce' if ep <= bce_warmup else 'bpr+global_bce'
+             print(f"  epoch {ep:2d} {phase} | loss {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+@@ -177,7 +186,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== hybrid_bpr_bce (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== hybrid_global_bce (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

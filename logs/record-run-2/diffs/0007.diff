@@ -1,0 +1,105 @@
+# iteration 7  (parent: 6)
+# hypothesis: improve 6: node 6's blend works and BPR is the higher-variance component; average two independently sampled BPR FMs before adding the BCE signal to reduce sampling/initialization noise without changing the successful objective mix.
+# result: GAUC 0.670587 | nDCG@5 0.53728 | primary 0.603933 | verdict KEPT
+
+--- logs/record-run-2/solutions/006_bpr_bce_ensemble.py
++++ logs/record-run-2/solutions/007_two_bpr_bce_ensemble.py
+@@ -1,8 +1,8 @@
+-"""Fixed blend of a BPR FM and a pointwise BCE FM.
+-
+-The pairwise BPR model is the current best for within-user ranking, while the
+-original BCE FM has slightly different bias/score calibration. Train both with
+-the same feature encoder and output a fixed weighted sum of standardized logits.
++"""Blend two independently sampled BPR FMs with one pointwise BCE FM.
++
++Node 6 showed complementary signal from BPR and BCE. This keeps the same blend
++but reduces BPR negative-sampling/initialization noise by averaging two BPR FMs
++trained with different seeds before adding the BCE component.
+ """
+ import argparse
+ import os
+@@ -81,13 +81,13 @@
+ 
+ 
+ def train_bpr(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
+-              patience=4, seed=0, device='cpu', verbose=True):
++              patience=4, seed=0, device='cpu', verbose=True, tag='bpr'):
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+     groups = build_user_pos_neg(ytr, utr)
+     if verbose:
+         npos = sum(len(p) for p, _ in groups)
+-        print(f"BPR groups={len(groups):,d} paired_positives/epoch={npos:,d}")
++        print(f"{tag} groups={len(groups):,d} paired_positives/epoch={npos:,d}")
+ 
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+@@ -111,7 +111,7 @@
+             losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  bpr epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
++            print(f"  {tag} epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -163,33 +163,39 @@
+ 
+ 
+ class BlendedModel:
+-    def __init__(self, bpr, bce, enc, device='cpu', w_bce=0.25):
+-        self.bpr = bpr
++    def __init__(self, bprs, bce, enc, device='cpu', w_bce=0.25):
++        self.bprs = bprs
+         self.bce = bce
+         self.device = device
+         self.w_bce = w_bce
+         Xtr, _, _ = enc['train']
+-        # Use train-set score scale only; no split-specific fitting.
+-        s1 = bpr.predict(Xtr, device=device)
++        self.bpr_stats = []
++        for m in bprs:
++            s = m.predict(Xtr, device=device)
++            self.bpr_stats.append((float(s.mean()), float(s.std() + 1e-6)))
+         s2 = bce.predict(Xtr, device=device)
+-        self.m1, self.sd1 = float(s1.mean()), float(s1.std() + 1e-6)
+         self.m2, self.sd2 = float(s2.mean()), float(s2.std() + 1e-6)
+ 
+     def predict(self, X):
+-        s1 = self.bpr.predict(X, device=self.device)
++        bsum = None
++        for m, (mu, sd) in zip(self.bprs, self.bpr_stats):
++            z = (m.predict(X, device=self.device) - mu) / sd
++            bsum = z if bsum is None else bsum + z
++        zbpr = bsum / len(self.bprs)
+         s2 = self.bce.predict(X, device=self.device)
+-        z1 = (s1 - self.m1) / self.sd1
+         z2 = (s2 - self.m2) / self.sd2
+-        return z1 + self.w_bce * z2
++        return zbpr + self.w_bce * z2
+ 
+ 
+ def run(splits, k=16, lr=0.001, epochs=40, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+-    bpr = train_bpr(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed,
+-                    device=device, verbose=verbose)
++    bpr1 = train_bpr(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed,
++                     device=device, verbose=verbose, tag='bpr1')
++    bpr2 = train_bpr(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed + 12345,
++                     device=device, verbose=verbose, tag='bpr2')
+     bce = train_bce(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed,
+                     device=device, verbose=verbose)
+-    return BlendedModel(bpr, bce, enc, device=device, w_bce=0.25), enc
++    return BlendedModel([bpr1, bpr2], bce, enc, device=device, w_bce=0.25), enc
+ 
+ 
+ if __name__ == '__main__':
+@@ -218,7 +224,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_bce_ensemble (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== two_bpr_bce_ensemble (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs))

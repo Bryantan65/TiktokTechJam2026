@@ -1,0 +1,272 @@
+# iteration 14  (parent: 9)
+# hypothesis: draft 4: replace the BCE member with a censored log-normal watch-time FM trained from raw play_time_ms, treating near-complete views as right-censored at duration; this follows the CWM/survival framing for watch-time recommendation (https://www.kdd.org/kdd2016/subtopic/view/deep-neural-networks-for-youtube-recommendations).
+# result: GAUC 0.667588 | nDCG@5 0.535607 | primary 0.601598 | verdict noise
+
+--- logs/record-run-10/solutions/009_hour_time_blend.py
++++ logs/record-run-10/solutions/014_cwm_watch_blend.py
+@@ -1,9 +1,9 @@
+-"""BCE+BPR rank blend with shared day/hour time features.
+-
+-Improves 008 by reading hourmin from the raw KuaiRand log CSVs and adding
+-hour-of-day plus 4-hour block categorical fields.  Rows from data.load are
+-plain tuples, so raw rows are matched by (date,user_id,video_id,tab) queues,
+-preserving original CSV order for duplicate impressions.
++"""BPR + censored watch-time FM rank blend with day/hour features.
++
++Branches from 009.  The BPR member is unchanged; the BCE member is replaced by
++an FM trained on raw play_time_ms with a simple censored log-normal likelihood:
++partial watches regress observed log watch time, near-complete watches are
++right-censored at the video duration.
+ """
+ import argparse
+ import csv
+@@ -64,10 +64,21 @@
+         h = int(float(v))
+     except Exception:
+         return 0
+-    # hourmin is usually HHMM, but accept a raw 0..23 hour too.
+     if h >= 100:
+         h = h // 100
+     return max(0, min(23, h))
++
++
++def parse_float(v, default=0.0):
++    try:
++        if v is None or v == '':
++            return default
++        x = float(v)
++        if not np.isfinite(x):
++            return default
++        return x
++    except Exception:
++        return default
+ 
+ 
+ def raw_log_paths(data_dir):
+@@ -77,7 +88,14 @@
+     ]
+ 
+ 
+-def load_hour_queues(data_dir):
++def pick_col(cols, names):
++    for n in names:
++        if n in cols:
++            return n
++    return None
++
++
++def load_raw_queues(data_dir):
+     q = defaultdict(deque)
+     total = 0
+     for path in raw_log_paths(data_dir):
+@@ -86,42 +104,45 @@
+         with open(path, 'r', newline='', encoding='utf-8') as f:
+             rdr = csv.DictReader(f)
+             cols = rdr.fieldnames or []
+-            hour_col = 'hourmin' if 'hourmin' in cols else ('hour' if 'hour' in cols else None)
+-            date_col = 'date' if 'date' in cols else ('time_ms' if 'time_ms' in cols else None)
++            hour_col = pick_col(cols, ['hourmin', 'hour'])
++            date_col = pick_col(cols, ['date', 'time_ms'])
++            play_col = pick_col(cols, ['play_time_ms', 'playtime_ms', 'play_time', 'playtime'])
+             if hour_col is None or date_col is None:
+                 continue
+             for r in rdr:
+-                # The starter tuples contain author/duration after joining video features, but
+-                # the raw log does not necessarily; use the stable log columns only.
+                 key = (norm_int_str(r.get(date_col, '')),
+                        norm_int_str(r.get('user_id', '')),
+                        norm_int_str(r.get('video_id', '')),
+                        norm_int_str(r.get('tab', '')))
+-                q[key].append(parse_hour(r.get(hour_col, 0)))
++                q[key].append((parse_hour(r.get(hour_col, 0)),
++                               parse_float(r.get(play_col), 0.0) if play_col else 0.0))
+                 total += 1
+-    print(f"loaded raw hourmin for {total:,d} rows across {len(q):,d} keys")
++    print(f"loaded raw hour/play for {total:,d} rows across {len(q):,d} keys")
+     return q
+ 
+ 
+-def make_hour_lookup(splits, data_dir):
+-    queues = load_hour_queues(data_dir)
++def make_raw_lookup(splits, data_dir):
++    queues = load_raw_queues(data_dir)
+     lookup = {}
+     miss = 0
+     used = 0
+     for name, rows in splits.items():
+-        arr = np.zeros(len(rows), dtype=np.int16)
++        hours = np.zeros(len(rows), dtype=np.int16)
++        plays = np.zeros(len(rows), dtype=np.float32)
+         for i, r in enumerate(rows):
+             key = (norm_int_str(r[0]), norm_int_str(r[1]), norm_int_str(r[2]), norm_int_str(r[4]))
+             dq = queues.get(key)
+             if dq:
+-                arr[i] = dq.popleft()
++                h, p = dq.popleft()
++                hours[i] = h
++                plays[i] = p
+                 used += 1
+             else:
+-                # Fallback keeps the feature valid if a raw row is absent.
+-                arr[i] = 0
++                hours[i] = 0
++                plays[i] = float(r[6]) * max(1.0, parse_float(r[5], 1.0))
+                 miss += 1
+-        lookup[name] = arr
+-    print(f"matched raw hourmin for {used:,d} tuple rows; missing {miss:,d}")
++        lookup[name] = (hours, plays)
++    print(f"matched raw hour/play for {used:,d} tuple rows; missing {miss:,d}")
+     return lookup
+ 
+ 
+@@ -130,10 +151,10 @@
+             yyyymmdd_to_dow(row[0]), int(hour), int(hour) // 4)
+ 
+ 
+-def encode_ext(splits, hour_lookup):
++def encode_ext(splits, raw_lookup):
+     vocabs = [{} for _ in EXT_FIELDS]
+     for name, rows in splits.items():
+-        hours = hour_lookup[name]
++        hours, _ = raw_lookup[name]
+         for r, h in zip(rows, hours):
+             vals = row_features(r, h)
+             for j, v in enumerate(vals):
+@@ -143,17 +164,20 @@
+     dim = int(offsets[-1] + len(vocabs[-1]))
+     enc = {}
+     for name, rows in splits.items():
+-        hours = hour_lookup[name]
++        hours, plays = raw_lookup[name]
+         X = np.empty((len(rows), len(EXT_FIELDS)), dtype=np.int64)
+         y = np.empty(len(rows), dtype=np.float32)
+         users = np.empty(len(rows), dtype=object)
++        dur = np.empty(len(rows), dtype=np.float32)
++        play = np.asarray(plays, dtype=np.float32)
+         for i, (r, h) in enumerate(zip(rows, hours)):
+             vals = row_features(r, h)
+             for j, v in enumerate(vals):
+                 X[i, j] = vocabs[j][v] + offsets[j]
+             y[i] = float(r[6])
+             users[i] = r[1]
+-        enc[name] = (X, y, users)
++            dur[i] = max(1.0, parse_float(r[5], 1.0))
++        enc[name] = (X, y, users, dur, play)
+     return enc, dim
+ 
+ 
+@@ -181,16 +205,31 @@
+         return np.concatenate(out)
+ 
+ 
+-def train_bce(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
++def cwm_lognormal_loss(mu, play_ms, dur_ms, log_sigma=0.55):
++    sigma = float(np.exp(log_sigma))
++    eps = 1e-6
++    cap = torch.log1p(torch.clamp(dur_ms, min=1.0))
++    obs = torch.log1p(torch.minimum(torch.clamp(play_ms, min=0.0), torch.clamp(dur_ms, min=1.0)))
++    cens = play_ms.ge(0.95 * dur_ms)
++    z = (obs - mu) / sigma
++    unc_loss = 0.5 * z.pow(2) + np.log(sigma)
++    # Right-censored likelihood: log P(T >= duration).  erfc form is stable.
++    zz = (cap - mu) / (sigma * np.sqrt(2.0))
++    surv = 0.5 * torch.special.erfc(zz)
++    cen_loss = -torch.log(torch.clamp(surv, min=eps))
++    return torch.where(cens, cen_loss, unc_loss).mean()
++
++
++def train_cwm(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
+               patience=4, seed=0, device='cpu', verbose=True):
+-    Xtr, ytr, _ = enc['train']
+-    Xva, yva, uva = enc['valid']
++    Xtr, ytr, _, dtr, ptr = enc['train']
++    Xva, yva, uva, _, _ = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}], lr=lr)
+-    lossfn = torch.nn.BCEWithLogitsLoss()
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+-    ytr_t = torch.from_numpy(ytr.astype(np.float32))
++    ptr_t = torch.from_numpy(ptr.astype(np.float32))
++    dtr_t = torch.from_numpy(dtr.astype(np.float32))
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+     for ep in range(1, epochs + 1):
+@@ -199,13 +238,16 @@
+         model.train(); losses = []
+         for i in range(0, len(idx), bs):
+             sel = torch.from_numpy(idx[i:i + bs])
+-            xb = Xtr_t[sel].to(device); yb = ytr_t[sel].to(device)
++            xb = Xtr_t[sel].to(device)
++            pb = ptr_t[sel].to(device)
++            db = dtr_t[sel].to(device)
+             opt.zero_grad(set_to_none=True)
+-            loss = lossfn(model(xb), yb)
++            loss = cwm_lognormal_loss(model(xb), pb, db)
+             loss.backward(); opt.step(); losses.append(loss.item())
+-        va = evaluate(uva, yva, model.predict(Xva, device=device))
++        va_scores = model.predict(Xva, device=device)
++        va = evaluate(uva, yva, va_scores)
+         if verbose:
+-            print(f"  BCE epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
++            print(f"  CWM epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -246,8 +288,8 @@
+ 
+ def train_bpr(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
+               patience=4, seed=0, device='cpu', verbose=True):
+-    Xtr, ytr, utr = enc['train']
+-    Xva, yva, uva = enc['valid']
++    Xtr, ytr, utr, _, _ = enc['train']
++    Xva, yva, uva, _, _ = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}], lr=lr)
+@@ -306,13 +348,13 @@
+ 
+ 
+ def run(splits, data_dir, k=16, lr=0.001, epochs=40, seed=0, device='cpu', verbose=True):
+-    hour_lookup = make_hour_lookup(splits, data_dir)
+-    enc, dim = encode_ext(splits, hour_lookup)
++    raw_lookup = make_raw_lookup(splits, data_dir)
++    enc, dim = encode_ext(splits, raw_lookup)
+     bpr = train_bpr(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed,
+                     device=device, verbose=verbose)
+-    bce = train_bce(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed + 1009,
++    cwm = train_cwm(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed + 1009,
+                     device=device, verbose=verbose)
+-    return bpr, bce, enc
++    return bpr, cwm, enc
+ 
+ 
+ if __name__ == '__main__':
+@@ -334,20 +376,20 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}")
+-
+-    bpr, bce, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, cwm_lognormal")
++
++    bpr, cwm, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                         seed=a.seed, device=a.device, verbose=a.out is None)
+-    X, y, users = enc[target]
++    X, y, users, _, _ = enc[target]
+     s_bpr = bpr.predict(X, device=a.device)
+-    s_bce = bce.predict(X, device=a.device)
+-    scores = weighted_within_user_rank(s_bpr, s_bce, users, wa=0.60)
++    s_cwm = cwm.predict(X, device=a.device)
++    scores = weighted_within_user_rank(s_bpr, s_cwm, users, wa=0.60)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+         r = evaluate(users, y, scores)
+-        print(f"\n=== hour_time_blend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== cwm_watch_blend (seed={a.seed}, device={a.device}) ===")
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

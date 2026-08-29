@@ -1,0 +1,15 @@
+# iteration 26  (parent: 25)
+# hypothesis: improve 25: the 30% per-user margin blend gave a small but consistent lift, so test a readable stronger 50% margin correction to see whether score spacing is underweighted rather than just a tie-breaker.
+# result: GAUC 0.670857 | nDCG@5 0.53818 | primary 0.604519 | verdict KEPT
+
+--- logs/record-run-6/solutions/025_rank_margin_blend.py
++++ logs/record-run-6/solutions/026_margin50_rank_blend.py
+@@ -9,7 +9,7 @@
+ 
+ AUX_NAMES = ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']
+ RANK_GAMMA = 2.0
+-MARGIN_WEIGHT = 0.30
++MARGIN_WEIGHT = 0.50
+ 
+ def to_int(x, default=0):
+     try: return int(float(x))

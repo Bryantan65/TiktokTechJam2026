@@ -1,0 +1,175 @@
+# iteration 28  (parent: 26)
+# hypothesis: improve 26: node 23's compact history model was close to node 15 and may be more complementary than the simple-time member; replace node 26's 33% weekday+hour member with a 33% tab-hour+history member. This tests history as a readable ensemble component without increasing ensemble size.
+# result: GAUC 0.672106 | nDCG@5 0.538173 | primary 0.60514 | verdict KEPT
+
+--- logs/record-run-5/solutions/026_mixed_tabhour_simple_time_ensemble.py
++++ logs/record-run-5/solutions/028_mixed_tabhour_history_ensemble.py
+@@ -1,9 +1,9 @@
+-"""Mixed 3-model BPR FM ensemble: two tab-hour time models plus one simpler time model.
+-
+-Node 15's tab-hour cross is the best single solution, but node 13 without the
+-cross was nearly as strong. This keeps the same total number of trained members
+-and replaces one tab-hour member with a weekday+hour member to add a 33% diverse
+-vote without the unreadable low-weight ensemble pattern.
++"""Mixed 3-model BPR FM ensemble: two tab-hour time models plus one history model.
++
++Node 26 showed a 33% diverse member can improve over three identical tab-hour
++models. This keeps the same 2/3 incumbent tab-hour vote but replaces the simple
++weekday+hour member with node 23's compact leakage-safe user history features,
++so the history signal is tested at a readable 33% weight.
+ """
+ import argparse
+ import csv
+@@ -88,26 +88,74 @@
+                     int(float(_get(r, 'tab'))),
+                     int(float(_get(r, 'duration_ms'))),
+                 )
+-                hour = parse_hour(_get(r, 'hourmin'))
+-                lookup[key].append((yyyymmdd_to_weekday(d), hour))
++                lookup[key].append((yyyymmdd_to_weekday(d), parse_hour(_get(r, 'hourmin'))))
+     return lookup
+ 
+ 
+-def encode_with_time(splits, data_dir, include_tab_hour=True):
++def ctr_bin(pos, cnt):
++    if cnt <= 0:
++        return 0
++    r = pos / cnt
++    if pos <= 0:
++        return 1
++    if r < 0.34:
++        return 2
++    if r < 0.67:
++        return 3
++    return 4
++
++
++def uv_state(pos, cnt):
++    if cnt <= 0:
++        return 0
++    if pos <= 0:
++        return 1
++    if pos >= cnt:
++        return 2
++    return 3
++
++
++def build_light_history(splits):
++    ua = {}
++    uv = {}
++    hist = {}
++    for sp in ('train', 'valid', 'test'):
++        rows = splits[sp]
++        feats = np.empty((len(rows), 2), dtype=np.int64)
++        update = (sp == 'train')
++        for i, row in enumerate(rows):
++            u = int(row[1]); v = int(row[2]); a = int(row[3])
++            c, p = ua.get((u, a), (0, 0))
++            c2, p2 = uv.get((u, v), (0, 0))
++            feats[i, 0] = ctr_bin(p, c)
++            feats[i, 1] = uv_state(p2, c2)
++            if update:
++                y = 1 if float(row[6]) > 0.5 else 0
++                ua[(u, a)] = (c + 1, p + y)
++                uv[(u, v)] = (c2 + 1, p2 + y)
++        hist[sp] = feats
++    return hist
++
++
++def encode_with_time(splits, data_dir, include_history=False):
+     enc, dim = encode(splits)
+     raw_time = build_raw_time_lookup(data_dir)
++    hist = build_light_history(splits) if include_history else None
+     out = {}
+     missing = 0
+     off_dow = dim
+     off_hour = off_dow + 7
+-    if include_tab_hour:
+-        off_tab_hour = off_hour + 24
++    off_tab_hour = off_hour + 24
++    if include_history:
++        off_ua_ctr = off_tab_hour + 5 * 24
++        off_uv_state = off_ua_ctr + 5
++        final_dim = off_uv_state + 4
++        n_extra = 5
++        hist_offsets = np.asarray([off_ua_ctr, off_uv_state], dtype=np.int64)
++    else:
+         final_dim = off_tab_hour + 5 * 24
+         n_extra = 3
+-    else:
+-        off_tab_hour = None
+-        final_dim = off_hour + 24
+-        n_extra = 2
++        hist_offsets = None
+ 
+     for sp, rows in splits.items():
+         X, y, u = enc[sp]
+@@ -120,15 +168,16 @@
+             else:
+                 missing += 1
+                 dow, hour = yyyymmdd_to_weekday(row[0]), 0
++            tab_bucket = tab
++            if tab_bucket < 0:
++                tab_bucket = 0
++            if tab_bucket > 4:
++                tab_bucket = 4
+             feats[i, 0] = off_dow + dow
+             feats[i, 1] = off_hour + hour
+-            if include_tab_hour:
+-                tab_bucket = tab
+-                if tab_bucket < 0:
+-                    tab_bucket = 0
+-                if tab_bucket > 4:
+-                    tab_bucket = 4
+-                feats[i, 2] = off_tab_hour + tab_bucket * 24 + hour
++            feats[i, 2] = off_tab_hour + tab_bucket * 24 + hour
++        if include_history:
++            feats[:, 3:5] = hist[sp] + hist_offsets.reshape(1, -1)
+         X2 = np.concatenate([X.astype(np.int64), feats], axis=1)
+         out[sp] = (X2, y, u)
+     if missing:
+@@ -197,7 +246,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | mixed_bpr {np.mean(losses):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | mixed_hist_bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -217,13 +266,13 @@
+ 
+ def run(splits, data_dir, k=16, lr=0.001, epochs=40, neg_k=4, seed=0,
+         device='cpu', verbose=True):
+-    enc_full, dim_full = encode_with_time(splits, data_dir, include_tab_hour=True)
+-    enc_simple, dim_simple = encode_with_time(splits, data_dir, include_tab_hour=False)
++    enc_full, dim_full = encode_with_time(splits, data_dir, include_history=False)
++    enc_hist, dim_hist = encode_with_time(splits, data_dir, include_history=True)
+     members = []
+     plan = [
+         ('tabhour1/3', enc_full, dim_full, seed),
+         ('tabhour2/3', enc_full, dim_full, seed + 1009),
+-        ('simple3/3', enc_simple, dim_simple, seed + 2018),
++        ('history3/3', enc_hist, dim_hist, seed + 2018),
+     ]
+     for tag, enc_i, dim_i, s in plan:
+         torch.manual_seed(s)
+@@ -259,7 +308,7 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+mixed two ['weekday','hour','tab_hour'] and one ['weekday','hour']")
++          f"fields={FIELDS}+two tab-hour members and one tab-hour+history member")
+ 
+     members = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                   neg_k=a.neg_k, seed=a.seed, device=a.device,
+@@ -271,8 +320,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== mixed_tabhour_simple_time_ensemble (seed={a.seed}, device={a.device}) ===")
+-        # Use users/labels from any encoding; row order is identical.
++        print(f"\n=== mixed_tabhour_history_ensemble (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             _, ys, us = members[0][1][sp]
+             r = evaluate(us, ys, predict_mixed(members, sp, device=a.device))

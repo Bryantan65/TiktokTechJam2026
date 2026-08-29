@@ -1,0 +1,53 @@
+# iteration 22  (parent: 19)
+# hypothesis: improve 19: nDCG@5 is top-heavy, so make the successful per-user rank ensemble more top-sensitive by averaging squared normalized ranks instead of linear ranks; related to LambdaRank/NDCG top-position weighting (https://www.microsoft.com/en-us/research/publication/from-ranknet-to-lambdarank-to-lambdamart-an-overview/).
+# result: GAUC 0.670861 | nDCG@5 0.538142 | primary 0.604502 | verdict KEPT
+
+--- logs/record-run-6/solutions/019_ensemble8_rankavg.py
++++ logs/record-run-6/solutions/022_power_rankavg.py
+@@ -8,6 +8,7 @@
+ from evaluate import evaluate
+ 
+ AUX_NAMES = ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']
++RANK_GAMMA = 2.0
+ 
+ def to_int(x, default=0):
+     try: return int(float(x))
+@@ -150,7 +151,7 @@
+             if bad >= patience: break
+     m.load_state_dict(state); return m
+ 
+-def per_user_rank_average(preds, users):
++def per_user_power_rank_average(preds, users, gamma=RANK_GAMMA):
+     P = np.vstack(preds).astype(np.float64)
+     users = np.asarray(users)
+     out = np.zeros(P.shape[1], dtype=np.float64)
+@@ -165,23 +166,23 @@
+             out[idx] = P[:, idx].mean(0)
+         else:
+             acc = np.zeros(n, dtype=np.float64)
+-            for m in range(P.shape[0]):
+-                vals = P[m, idx]
++            for mi in range(P.shape[0]):
++                vals = P[mi, idx]
+                 r = np.empty(n, dtype=np.float64)
+                 r[np.argsort(vals, kind='mergesort')] = np.arange(n, dtype=np.float64)
+-                acc += r / (n - 1.0)
++                acc += (r / (n - 1.0)) ** gamma
+             out[idx] = acc / P.shape[0]
+         start = end
+     return out
+ 
+ if __name__ == '__main__':
+-    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); a = ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, 'fields+coarse_time; 8x rank ensemble')
++    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--rank_gamma', type=float, default=RANK_GAMMA); a = ap.parse_args()
++    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'fields+coarse_time; 8x power-rank ensemble gamma={a.rank_gamma}')
+     enc, dim, hist, aux_t = prepare(splits, a.data_dir); X, y, users = enc[a.split]; preds = []
+     for s in range(8):
+         m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None))
+         preds.append(m.predict(X, hist[a.split], device=a.device))
+-    scores = per_user_rank_average(preds, users)
++    scores = per_user_power_rank_average(preds, users, gamma=a.rank_gamma)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else: print(scores[:10])

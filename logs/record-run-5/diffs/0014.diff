@@ -1,0 +1,130 @@
+# iteration 14  (parent: 13)
+# hypothesis: improve 13: hour gave a clear gain, so add finer half-hour and weekday×half-hour reusable time categories to capture daily cycles without raw-date leakage. If this over-sparsifies, node 13 remains the simpler time-feature choice.
+# result: GAUC 0.671617 | nDCG@5 0.538065 | primary 0.604841 | verdict KEPT
+
+--- logs/record-run-5/solutions/013_debug12_bpr_weekday_hour_fm.py
++++ logs/record-run-5/solutions/014_bpr_weekday_fine_time_fm.py
+@@ -1,9 +1,9 @@
+-"""Debug of node 12: 3-model multi-negative BPR FM with weekday/hour features.
+-
+-The raw log_standard CSV does not contain author_id, so the node-12 raw-time
+-lookup crashed before training. This version keys raw rows by columns actually
+-present in both the loader tuple and log CSV: date, user_id, video_id, tab, and
+-duration_ms, with a deque to preserve file order for duplicates.
++"""3-model multi-negative BPR FM with finer leakage-safe time features.
++
++Parent 13 showed that weekday + hour recovered from raw log CSVs is a large
++win. This refinement keeps those features and adds half-hour-of-day plus
++weekday-by-half-hour categories, which are reusable across train/valid/test and
++can model finer daily cycles without raw-date leakage.
+ """
+ import argparse
+ import csv
+@@ -52,14 +52,24 @@
+     return datetime.strptime(str(int(d)), '%Y%m%d').weekday()  # Monday=0
+ 
+ 
+-def parse_hour(hourmin):
++def parse_time_features(hourmin):
+     hm = int(float(hourmin))
+     h = hm // 100
++    m = hm % 100
+     if h < 0:
+         h = 0
+     if h > 23:
+         h = h % 24
+-    return h
++    if m < 0:
++        m = 0
++    if m > 59:
++        m = 59
++    halfhour = (h * 60 + m) // 30  # 0..47
++    if halfhour < 0:
++        halfhour = 0
++    if halfhour > 47:
++        halfhour = 47
++    return h, halfhour
+ 
+ 
+ def _get(row, *names):
+@@ -89,8 +99,9 @@
+                     int(float(_get(r, 'tab'))),
+                     int(float(_get(r, 'duration_ms'))),
+                 )
+-                hour = parse_hour(_get(r, 'hourmin'))
+-                lookup[key].append((yyyymmdd_to_weekday(d), hour))
++                hour, halfhour = parse_time_features(_get(r, 'hourmin'))
++                dow = yyyymmdd_to_weekday(d)
++                lookup[key].append((dow, hour, halfhour))
+     return lookup
+ 
+ 
+@@ -99,24 +110,33 @@
+     raw_time = build_raw_time_lookup(data_dir)
+     out = {}
+     missing = 0
++    # feature blocks: weekday(7), hour(24), halfhour(48), weekday_halfhour(336)
++    off_dow = dim
++    off_hour = off_dow + 7
++    off_halfhour = off_hour + 24
++    off_dow_halfhour = off_halfhour + 48
++    final_dim = off_dow_halfhour + 7 * 48
++
+     for sp, rows in splits.items():
+         X, y, u = enc[sp]
+-        feats = np.empty((len(rows), 2), dtype=np.int64)
++        feats = np.empty((len(rows), 4), dtype=np.int64)
+         for i, row in enumerate(rows):
+             # tuple: date, user_id, video_id, author_id, tab, duration_ms, label
+             key = (int(row[0]), int(row[1]), int(row[2]), int(row[4]), int(row[5]))
+             if raw_time.get(key):
+-                dow, hour = raw_time[key].popleft()
++                dow, hour, halfhour = raw_time[key].popleft()
+             else:
+                 missing += 1
+-                dow, hour = yyyymmdd_to_weekday(row[0]), 0
+-            feats[i, 0] = dim + dow
+-            feats[i, 1] = dim + 7 + hour
++                dow, hour, halfhour = yyyymmdd_to_weekday(row[0]), 0, 0
++            feats[i, 0] = off_dow + dow
++            feats[i, 1] = off_hour + hour
++            feats[i, 2] = off_halfhour + halfhour
++            feats[i, 3] = off_dow_halfhour + dow * 48 + halfhour
+         X2 = np.concatenate([X.astype(np.int64), feats], axis=1)
+         out[sp] = (X2, y, u)
+     if missing:
+-        print(f"warning: {missing} rows missing raw hourmin; used hour=0 fallback")
+-    return out, dim + 7 + 24
++        print(f"warning: {missing} rows missing raw hourmin; used time fallback")
++    return out, final_dim
+ 
+ 
+ def make_user_pair_pools(y, users):
+@@ -180,7 +200,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | multineg_bpr_time {np.mean(losses):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | multineg_bpr_fine_time {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -234,7 +254,8 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+['weekday','hour']")
++    print({k_: len(v) for k_, v in splits.items()},
++          f"fields={FIELDS}+['weekday','hour','halfhour','weekday_halfhour']")
+ 
+     models, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                       neg_k=a.neg_k, seed=a.seed, device=a.device,
+@@ -247,7 +268,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== debug12_bpr_weekday_hour_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_weekday_fine_time_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, predict_ensemble(models, Xs, device=a.device))

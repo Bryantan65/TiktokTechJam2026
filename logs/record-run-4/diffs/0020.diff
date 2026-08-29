@@ -1,0 +1,452 @@
+# iteration 20  (parent: 19)
+# hypothesis: improve 19: the recent-history residual moved both metrics up but is nearly saturated; add a very small empirical-Bayes global author/video quality residual from train only to help rank items for users without repeated entities. This is a targeted last pass on the history-statistics mechanism, not another ensemble member.
+# result: GAUC 0.670889 | nDCG@5 0.537234 | primary 0.604062 | verdict KEPT
+
+--- logs/record-run-4/solutions/019_recent_history.py
++++ logs/record-run-4/solutions/020_global_quality_history.py
+@@ -1,4 +1,4 @@
+-"""Sampled-softmax multitask FM plus all-history and recent user-history affinities."""
++"""Node 19 plus conservative empirical-Bayes global author/video quality residuals."""
+ import argparse
+ import csv
+ import datetime as _dt
+@@ -10,11 +10,9 @@
+ import numpy as np
+ import torch
+ 
+-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+-                                '..', 'kuairand-starter-kit'))
++sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'kuairand-starter-kit'))
+ from data import load, encode, FIELDS          # noqa: E402
+ from evaluate import evaluate                  # noqa: E402
+-
+ 
+ AUX_NAMES = ('is_click', 'is_like', 'is_follow', 'is_comment',
+              'is_forward', 'is_profile_enter', 'is_hate')
+@@ -24,8 +22,7 @@
+     def __init__(self, dim, k=16, n_aux=0, seed=0):
+         super().__init__()
+         rng = np.random.default_rng(seed)
+-        self.V = torch.nn.Parameter(torch.from_numpy(
+-            rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
++        self.V = torch.nn.Parameter(torch.from_numpy(rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+         self.n_aux = int(n_aux)
+@@ -39,13 +36,11 @@
+         return 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
+ 
+     def forward(self, X):
+-        inter = self._inter(X)
+-        return self.b + self.W[X].sum(1) + inter
++        return self.b + self.W[X].sum(1) + self._inter(X)
+ 
+     def aux_forward(self, X):
+-        inter = self._inter(X).view(-1, 1)
+         lin = self.W_aux[:, X].sum(2).t()
+-        return self.b_aux.view(1, -1) + lin + inter
++        return self.b_aux.view(1, -1) + lin + self._inter(X).view(-1, 1)
+ 
+     @torch.no_grad()
+     def predict(self, X, bs=200_000, device='cpu'):
+@@ -81,36 +76,28 @@
+ 
+ 
+ def _raw_maps(data_dir):
+-    names = ['log_standard_4_08_to_4_21_pure.csv',
+-             'log_standard_4_22_to_5_08_pure.csv']
+-    full = defaultdict(deque)
+-    nodur = defaultdict(deque)
++    names = ['log_standard_4_08_to_4_21_pure.csv', 'log_standard_4_22_to_5_08_pure.csv']
++    full, nodur = defaultdict(deque), defaultdict(deque)
+     for name in names:
+         path = os.path.join(data_dir, name)
+         if not os.path.exists(path):
+             continue
+         with open(path, newline='', encoding='utf-8') as f:
+-            reader = csv.DictReader(f)
+-            for r in reader:
++            for r in csv.DictReader(f):
+                 date = _to_int(_get(r, 'date'))
+                 user = _to_int(_get(r, 'user_id', 'user'))
+                 video = _to_int(_get(r, 'video_id', 'item_id', 'photo_id'))
+                 author = _to_int(_get(r, 'author_id'))
+                 tab = _to_int(_get(r, 'tab'))
+-                tab_clip = max(0, min(tab, 7))
+                 dur = _to_int(_get(r, 'duration_ms', 'duration'))
+                 lab = _to_int(_get(r, 'long_view', 'label'))
+                 hm = _to_int(_get(r, 'hourmin', 'hour_min', 'time'))
+                 hour = (hm // 100) % 24 if hm >= 100 else hm % 24
+-                dow = _dow_from_date(date)
+-                htab = hour * 8 + tab_clip
+-                extra = (hour, dow, htab)
++                extra = (hour, _dow_from_date(date), hour * 8 + max(0, min(tab, 7)))
+                 aux = tuple(float(_to_int(_get(r, n), 0)) for n in AUX_NAMES)
+                 val = (extra, aux)
+-                k_full = (date, user, video, author, tab, dur, lab)
+-                k_nodur = (date, user, video, author, tab, lab)
+-                full[k_full].append(val)
+-                nodur[k_nodur].append(val)
++                full[(date, user, video, author, tab, dur, lab)].append(val)
++                nodur[(date, user, video, author, tab, lab)].append(val)
+     return full, nodur
+ 
+ 
+@@ -119,9 +106,7 @@
+     full, nodur = _raw_maps(data_dir)
+     sizes = np.array([24, 7, 24 * 8], dtype=np.int64)
+     offsets = dim + np.concatenate([[0], np.cumsum(sizes)[:-1]]).astype(np.int64)
+-    out = {}
+-    aux_out = {}
+-    matched = {}
++    out, aux_out, matched = {}, {}, {}
+     for sp, rows in splits.items():
+         Xb, y, users = enc[sp]
+         extra = np.zeros((len(rows), len(sizes)), dtype=np.int64)
+@@ -129,33 +114,22 @@
+         ok = np.zeros(len(rows), dtype=bool)
+         for i, row in enumerate(rows):
+             date, user, video, author, tab, dur, lab = row
+-            k_full = (_to_int(date), _to_int(user), _to_int(video),
+-                      _to_int(author), _to_int(tab), _to_int(dur), _to_int(lab))
+-            q = full.get(k_full)
++            key = (_to_int(date), _to_int(user), _to_int(video), _to_int(author), _to_int(tab), _to_int(dur), _to_int(lab))
++            q = full.get(key)
+             if q:
+-                e, a = q.popleft()
+-                extra[i] = e
+-                aux[i] = a
+-                ok[i] = True
+-                continue
+-            k_nodur = (_to_int(date), _to_int(user), _to_int(video),
+-                       _to_int(author), _to_int(tab), _to_int(lab))
+-            q = nodur.get(k_nodur)
++                e, a = q.popleft(); extra[i] = e; aux[i] = a; ok[i] = True; continue
++            key2 = (_to_int(date), _to_int(user), _to_int(video), _to_int(author), _to_int(tab), _to_int(lab))
++            q = nodur.get(key2)
+             if q:
+-                e, a = q.popleft()
+-                extra[i] = e
+-                aux[i] = a
+-                ok[i] = True
+-        Xt = np.concatenate([Xb.astype(np.int64), extra + offsets], axis=1)
+-        out[sp] = (Xt, y, users)
++                e, a = q.popleft(); extra[i] = e; aux[i] = a; ok[i] = True
++        out[sp] = (np.concatenate([Xb.astype(np.int64), extra + offsets], axis=1), y, users)
+         aux_out[sp] = aux
+         matched[sp] = ok
+     return out, aux_out, matched, int(dim + sizes.sum())
+ 
+ 
+ def make_pair_sampler(y, users):
+-    y = np.asarray(y)
+-    users = np.asarray(users)
++    y, users = np.asarray(y), np.asarray(users)
+     order = np.argsort(users, kind='mergesort')
+     us = users[order]
+     pos_chunks, neg_pools = [], []
+@@ -165,15 +139,12 @@
+         while j < len(order) and us[j] == us[i]:
+             j += 1
+         idx = order[i:j]
+-        pos = idx[y[idx] > 0.5]
+-        neg = idx[y[idx] <= 0.5]
++        pos, neg = idx[y[idx] > 0.5], idx[y[idx] <= 0.5]
+         if len(pos) and len(neg):
+             pos_chunks.append(pos.astype(np.int64, copy=False))
+             neg = neg.astype(np.int64, copy=False)
+             neg_pools.extend([neg] * len(pos))
+         i = j
+-    if not pos_chunks:
+-        raise RuntimeError('no users with both positive and negative rows')
+     return np.concatenate(pos_chunks), np.asarray(neg_pools, dtype=object)
+ 
+ 
+@@ -187,128 +158,95 @@
+ 
+ 
+ def build_history_stats(train_rows, decay=0.97):
+-    """Train-only user-conditioned rates, plus lazy exponentially decayed recent rates."""
+-    up = defaultdict(float); uc = defaultdict(float)
+-    uap = defaultdict(float); uac = defaultdict(float)
+-    uvp = defaultdict(float); uvc = defaultdict(float)
+-    utp = defaultdict(float); utc = defaultdict(float)
+-    gp = 0.0; gc = 0.0
+-
+-    # Recent counters use per-user impression index as time.  Lazy decay keeps the
+-    # effective window around 1/(1-decay) impressions without scanning all keys.
+-    t_user = defaultdict(int)
+-    final_t = defaultdict(int)
+-    ruap = defaultdict(float); ruac = defaultdict(float); rual = {}
+-    ruvp = defaultdict(float); ruvc = defaultdict(float); ruvl = {}
+-    rutp = defaultdict(float); rutc = defaultdict(float); rutl = {}
++    up, uc = defaultdict(float), defaultdict(float)
++    uap, uac, uvp, uvc, utp, utc = (defaultdict(float) for _ in range(6))
++    ap, ac, vp, vc = defaultdict(float), defaultdict(float), defaultdict(float), defaultdict(float)
++    gp = gc = 0.0
++    t_user, final_t = defaultdict(int), defaultdict(int)
++    ruap, ruac, ruvp, ruvc, rutp, rutc = (defaultdict(float) for _ in range(6))
++    rual, ruvl, rutl = {}, {}, {}
+ 
+     def upd(pdict, cdict, ldict, key, t, lab):
+         last = ldict.get(key)
+         if last is not None:
+             fac = decay ** (t - last)
+-            pdict[key] *= fac
+-            cdict[key] *= fac
+-        pdict[key] += lab
+-        cdict[key] += 1.0
+-        ldict[key] = t
++            pdict[key] *= fac; cdict[key] *= fac
++        pdict[key] += lab; cdict[key] += 1.0; ldict[key] = t
+ 
+     for r in train_rows:
+-        user = _to_int(r[1]); video = _to_int(r[2]); author = _to_int(r[3])
+-        tab = _to_int(r[4]); lab = float(_to_int(r[6]))
++        user, video, author, tab, lab = _to_int(r[1]), _to_int(r[2]), _to_int(r[3]), _to_int(r[4]), float(_to_int(r[6]))
+         gp += lab; gc += 1.0
+         up[user] += lab; uc[user] += 1.0
+-        ka = (user, author); kv = (user, video); kt = (user, tab)
+-        uap[ka] += lab; uac[ka] += 1.0
+-        uvp[kv] += lab; uvc[kv] += 1.0
+-        utp[kt] += lab; utc[kt] += 1.0
+-
+-        t_user[user] += 1
+-        t = t_user[user]
+-        final_t[user] = t
+-        upd(ruap, ruac, rual, ka, t, lab)
+-        upd(ruvp, ruvc, ruvl, kv, t, lab)
+-        upd(rutp, rutc, rutl, kt, t, lab)
+-
+-    def finalize(pdict, cdict, ldict):
++        ap[author] += lab; ac[author] += 1.0
++        vp[video] += lab; vc[video] += 1.0
++        ka, kv, kt = (user, author), (user, video), (user, tab)
++        uap[ka] += lab; uac[ka] += 1.0; uvp[kv] += lab; uvc[kv] += 1.0; utp[kt] += lab; utc[kt] += 1.0
++        t_user[user] += 1; t = t_user[user]; final_t[user] = t
++        upd(ruap, ruac, rual, ka, t, lab); upd(ruvp, ruvc, ruvl, kv, t, lab); upd(rutp, rutc, rutl, kt, t, lab)
++
++    for pdict, cdict, ldict in ((ruap, ruac, rual), (ruvp, ruvc, ruvl), (rutp, rutc, rutl)):
+         for key, last in list(ldict.items()):
+-            user = key[0]
+-            fac = decay ** (final_t[user] - last)
+-            pdict[key] *= fac
+-            cdict[key] *= fac
+-
+-    finalize(ruap, ruac, rual)
+-    finalize(ruvp, ruvc, ruvl)
+-    finalize(rutp, rutc, rutl)
+-    return {
+-        'global': gp / max(gc, 1.0),
+-        'up': up, 'uc': uc,
+-        'uap': uap, 'uac': uac,
+-        'uvp': uvp, 'uvc': uvc,
+-        'utp': utp, 'utc': utc,
+-        'ruap': ruap, 'ruac': ruac,
+-        'ruvp': ruvp, 'ruvc': ruvc,
+-        'rutp': rutp, 'rutc': rutc,
+-    }
++            fac = decay ** (final_t[key[0]] - last)
++            pdict[key] *= fac; cdict[key] *= fac
++    return {'global': gp / max(gc, 1.0), 'up': up, 'uc': uc, 'uap': uap, 'uac': uac, 'uvp': uvp, 'uvc': uvc,
++            'utp': utp, 'utc': utc, 'ruap': ruap, 'ruac': ruac, 'ruvp': ruvp, 'ruvc': ruvc, 'rutp': rutp, 'rutc': rutc,
++            'ap': ap, 'ac': ac, 'vp': vp, 'vc': vc}
+ 
+ 
+ def history_adjust(rows, stats):
+-    g = stats['global']
++    g = stats['global']; glog = _logit(g)
+     out = np.zeros(len(rows), dtype=np.float32)
+     for i, r in enumerate(rows):
+-        user = _to_int(r[1]); video = _to_int(r[2]); author = _to_int(r[3]); tab = _to_int(r[4])
++        user, video, author, tab = _to_int(r[1]), _to_int(r[2]), _to_int(r[3]), _to_int(r[4])
+         uc = stats['uc'].get(user, 0.0)
+         ur = (stats['up'].get(user, 0.0) + 8.0 * g) / (uc + 8.0)
+         base = _logit(ur)
+         adj = 0.0
+-
+-        ka = (user, author)
++        ka, kv, kt = (user, author), (user, video), (user, tab)
++
+         ca = stats['uac'].get(ka, 0.0)
+         if ca > 0.0:
+             ra = (stats['uap'].get(ka, 0.0) + 2.5 * ur) / (ca + 2.5)
+-            conf = np.sqrt(ca / (ca + 4.0))
+-            adj += 0.45 * conf * (_logit(ra) - base)
+-
+-        kv = (user, video)
++            adj += 0.45 * np.sqrt(ca / (ca + 4.0)) * (_logit(ra) - base)
+         cv = stats['uvc'].get(kv, 0.0)
+         if cv > 0.0:
+             rv = (stats['uvp'].get(kv, 0.0) + 1.5 * ur) / (cv + 1.5)
+-            conf = np.sqrt(cv / (cv + 3.0))
+-            adj += 0.30 * conf * (_logit(rv) - base)
+-
+-        kt = (user, tab)
++            adj += 0.30 * np.sqrt(cv / (cv + 3.0)) * (_logit(rv) - base)
+         ct = stats['utc'].get(kt, 0.0)
+         if ct > 0.0:
+             rt = (stats['utp'].get(kt, 0.0) + 4.0 * ur) / (ct + 4.0)
+-            conf = np.sqrt(ct / (ct + 8.0))
+-            adj += 0.20 * conf * (_logit(rt) - base)
+-
+-        # Small recency residuals: keep node-16's robust all-history signal, but
+-        # let the user's most recent train impressions nudge repeated entities.
++            adj += 0.20 * np.sqrt(ct / (ct + 8.0)) * (_logit(rt) - base)
++
+         rca = stats['ruac'].get(ka, 0.0)
+         if rca > 0.0:
+             rra = (stats['ruap'].get(ka, 0.0) + 1.5 * ur) / (rca + 1.5)
+             adj += 0.10 * np.sqrt(rca / (rca + 2.0)) * (_logit(rra) - base)
+-
+         rcv = stats['ruvc'].get(kv, 0.0)
+         if rcv > 0.0:
+             rrv = (stats['ruvp'].get(kv, 0.0) + 1.0 * ur) / (rcv + 1.0)
+             adj += 0.08 * np.sqrt(rcv / (rcv + 2.0)) * (_logit(rrv) - base)
+-
+         rct = stats['rutc'].get(kt, 0.0)
+         if rct > 0.0:
+             rrt = (stats['rutp'].get(kt, 0.0) + 2.5 * ur) / (rct + 2.5)
+             adj += 0.06 * np.sqrt(rct / (rct + 5.0)) * (_logit(rrt) - base)
+ 
+-        out[i] = np.float32(np.clip(adj, -1.0, 1.0))
++        gac = stats['ac'].get(author, 0.0)
++        if gac > 0.0:
++            gar = (stats['ap'].get(author, 0.0) + 30.0 * g) / (gac + 30.0)
++            adj += 0.055 * np.sqrt(gac / (gac + 80.0)) * (_logit(gar) - glog)
++        gvc = stats['vc'].get(video, 0.0)
++        if gvc > 0.0:
++            gvr = (stats['vp'].get(video, 0.0) + 12.0 * g) / (gvc + 12.0)
++            adj += 0.040 * np.sqrt(gvc / (gvc + 35.0)) * (_logit(gvr) - glog)
++
++        out[i] = np.float32(np.clip(adj, -1.05, 1.05))
+     return out
+ 
+ 
+ def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096,
+         patience=4, neg_k=8, aux_weight=0.05, seed=0, device='cpu', verbose=True):
+     enc, aux, matched, dim = encode_with_time_aux(splits, data_dir)
+-    Xtr, ytr, utr = enc['train']
+-    Xva, yva, uva = enc['valid']
+-
++    Xtr, ytr, utr = enc['train']; Xva, yva, uva = enc['valid']
+     valid_rows = matched['train']
+     prev = aux['train'][valid_rows].mean(0) if valid_rows.any() else np.zeros(len(AUX_NAMES))
+     keep_aux = np.where((prev > 0.001) & (prev < 0.999))[0]
+@@ -317,72 +255,44 @@
+     aux_tr = aux['train'][:, keep_aux] if len(keep_aux) else np.zeros((len(Xtr), 0), dtype=np.float32)
+ 
+     model = MultiTaskFM(dim, k=k, n_aux=len(keep_aux), seed=seed).to(device)
+-    params = [{'params': [model.V, model.W], 'weight_decay': l2},
+-              {'params': [model.b], 'weight_decay': 0.0}]
++    params = [{'params': [model.V, model.W], 'weight_decay': l2}, {'params': [model.b], 'weight_decay': 0.0}]
+     if len(keep_aux):
+-        params.append({'params': [model.W_aux], 'weight_decay': l2})
+-        params.append({'params': [model.b_aux], 'weight_decay': 0.0})
++        params += [{'params': [model.W_aux], 'weight_decay': l2}, {'params': [model.b_aux], 'weight_decay': 0.0}]
+     opt = torch.optim.Adam(params, lr=lr, betas=(0.9, 0.999), eps=1e-8)
+-
+-    Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+-    aux_t = torch.from_numpy(aux_tr.astype(np.float32))
++    Xtr_t = torch.from_numpy(Xtr.astype(np.int64)); aux_t = torch.from_numpy(aux_tr.astype(np.float32))
+     pos_idx, neg_pools = make_pair_sampler(ytr, utr)
+     rng = np.random.default_rng(seed)
+-
+     best, best_state, bad = -1.0, None, 0
+     for ep in range(1, epochs + 1):
+-        perm = rng.permutation(len(pos_idx))
+-        t0 = time.time()
+-        model.train()
+-        losses = []
++        perm = rng.permutation(len(pos_idx)); t0 = time.time(); model.train(); losses = []
+         for i in range(0, len(perm), bs):
+-            psel = perm[i:i + bs]
+-            bsz = len(psel)
+-            pidx = pos_idx[psel]
++            psel = perm[i:i + bs]; bsz = len(psel); pidx = pos_idx[psel]
+             nidx = np.empty((bsz, neg_k), dtype=np.int64)
+             for t, pool in enumerate(neg_pools[psel]):
+                 nidx[t] = pool[rng.integers(len(pool), size=neg_k)]
+             cand_idx = np.concatenate([pidx.reshape(-1, 1), nidx], axis=1)
+-
+-            xp = Xtr_t[torch.from_numpy(pidx)].to(device)
+-            xn = Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
++            xp = Xtr_t[torch.from_numpy(pidx)].to(device); xn = Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
+             opt.zero_grad(set_to_none=True)
+-            sp = model(xp).view(bsz, 1)
+-            sn = model(xn).view(bsz, neg_k)
+-            logits = torch.cat([sp, sn], dim=1)
+-            target = torch.zeros(bsz, dtype=torch.long, device=device)
+-            loss = torch.nn.functional.cross_entropy(logits, target)
+-
++            logits = torch.cat([model(xp).view(bsz, 1), model(xn).view(bsz, neg_k)], dim=1)
++            loss = torch.nn.functional.cross_entropy(logits, torch.zeros(bsz, dtype=torch.long, device=device))
+             if aux_weight > 0.0 and len(keep_aux):
+                 xc = Xtr_t[torch.from_numpy(cand_idx.reshape(-1))].to(device)
+                 ya = aux_t[torch.from_numpy(cand_idx.reshape(-1))].to(device)
+-                aux_logits = model.aux_forward(xc)
+-                aux_loss = torch.nn.functional.binary_cross_entropy_with_logits(aux_logits, ya)
+-                loss = loss + aux_weight * aux_loss
+-
+-            loss.backward()
+-            opt.step()
+-            losses.append(loss.item())
+-
++                loss = loss + aux_weight * torch.nn.functional.binary_cross_entropy_with_logits(model.aux_forward(xc), ya)
++            loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            kept = ','.join(AUX_NAMES[i] for i in keep_aux)
+-            print(f"  epoch {ep:2d} | mt-softmax {np.mean(losses):.4f} aux=[{kept}] | valid "
+-                  f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+-                  f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
++            print(f"  epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+         else:
+             bad += 1
+             if bad >= patience:
+-                if verbose:
+-                    print(f"  early stop at epoch {ep}")
++                if verbose: print(f"  early stop at epoch {ep}")
+                 break
+-
+     model.load_state_dict(best_state)
+-    hist = build_history_stats(splits['train'])
+-    return model, enc, hist
++    return model, enc, build_history_stats(splits['train'])
+ 
+ 
+ if __name__ == '__main__':
+@@ -396,27 +306,21 @@
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+-
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} recent_history")
+-
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time aux+recent_history+global_quality")
+     model, enc, hist = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                            seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[a.split]
+     scores = model.predict(X, device=a.device) + history_adjust(splits[a.split], hist)
+-
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== recent_history (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             pred = model.predict(Xs, device=a.device) + history_adjust(splits[sp], hist)
+             r = evaluate(us, ys, pred)
+-            print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+-                  f"| primary {r['primary']:.4f}")
+-
++            print(f"{sp}: GAUC {r['GAUC']:.4f} nDCG@5 {r['nDCG@5']:.4f} primary {r['primary']:.4f}")
++

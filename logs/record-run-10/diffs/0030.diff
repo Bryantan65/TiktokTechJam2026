@@ -1,0 +1,47 @@
+# iteration 30  (parent: 24)
+# hypothesis: improve 24: node 28's rank^2 transform raised nDCG but lost robustness, so try a milder rank^1.5 top-heavy transform to retain GAUC while nudging top-5 ordering.
+# result: GAUC 0.67153 | nDCG@5 0.538095 | primary 0.604812 | verdict KEPT
+
+--- logs/record-run-10/solutions/024_dual_ranker_4way.py
++++ logs/record-run-10/solutions/030_mild_topheavy_rank_blend.py
+@@ -1,8 +1,9 @@
+-"""Four-way rank blend: BPR FM + XE_NDCG LightGBM + LambdaRank LightGBM + BCE FM.
+-
+-Copy of node 22, adding back the node-19 lambdarank tree as a second tree
+-ranker.  All members get readable weight (>=20%) except none are hidden: BPR
+-0.40, XE_NDCG 0.20, LambdaRank 0.20, BCE 0.20.
++"""Four-way rank blend with mild top-heavy per-user percentile ranks.
++
++Node 28's gamma=2 transform improved nDCG but increased seed spread and slightly
++lost to node 24.  This is a one-line refinement of node 24's combiner: use
++rank**1.5 instead of rank**2 so the blend still emphasizes top-5 agreement but
++keeps more broad-order GAUC signal.
+ """
+ import argparse
+ import csv
+@@ -21,6 +22,7 @@
+ from evaluate import evaluate                         # noqa: E402
+ 
+ EXT_FIELDS = FIELDS + ['dow', 'hour', 'tod4']
++GAMMA = 1.5
+ 
+ 
+ def yyyymmdd_to_dow(d):
+@@ -249,7 +251,7 @@
+             for sc, w in zip(scores, weights):
+                 r = np.empty(n, dtype=np.float64)
+                 r[np.argsort(sc[idx], kind='mergesort')] = np.linspace(0.0, 1.0, n)
+-                acc += w * r
++                acc += w * np.power(r, GAMMA)
+             out[idx] = acc
+         s = e
+     return out
+@@ -279,7 +281,7 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 4way bpr/xendcg/lambdarank/bce")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, node24 mild top-heavy rank blend gamma={GAMMA}")
+     bpr, bce, xendcg, lambdarank, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[target]
+     sbpr = bpr.predict(X, device=a.device)

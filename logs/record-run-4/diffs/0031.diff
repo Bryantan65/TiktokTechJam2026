@@ -1,0 +1,83 @@
+# iteration 31  (parent: 25)
+# hypothesis: improve 25: exploit row order as a time proxy by adding a tiny train-learned user trend times within-target-split position residual; users whose recent train rate rose should get later impressions slightly boosted, and falling users slightly demoted.
+# result: GAUC 0.671519 | nDCG@5 0.537711 | primary 0.604615 | verdict KEPT
+
+--- logs/record-run-4/solutions/025_neg16_recent_history.py
++++ logs/record-run-4/solutions/031_user_trend_position.py
+@@ -1,4 +1,4 @@
+-"""Sampled-softmax multitask FM plus time and recent history; use more same-user negatives."""
++"""Sampled-softmax multitask FM plus time/recent history; add train-learned user trend x target row-position residual."""
+ import argparse, csv, datetime as _dt, os, sys, time
+ from collections import defaultdict, deque
+ import numpy as np
+@@ -121,6 +121,35 @@
+         out[i]=np.float32(np.clip(adj,-1.,1.))
+     return out
+ 
++def build_user_trends(train_rows, decay=0.98):
++    gp=0.; gc=0.; up=defaultdict(float); uc=defaultdict(float); rp=defaultdict(float); rc=defaultdict(float); last={}; t_user=defaultdict(int); final_t=defaultdict(int)
++    for r in train_rows:
++        u=_to_int(r[1]); lab=float(_to_int(r[6])); gp+=lab; gc+=1.; up[u]+=lab; uc[u]+=1.; t_user[u]+=1; t=t_user[u]; final_t[u]=t
++        if u in last:
++            fac=decay**(t-last[u]); rp[u]*=fac; rc[u]*=fac
++        rp[u]+=lab; rc[u]+=1.; last[u]=t
++    g=gp/max(gc,1.); trend={}
++    for u,c in uc.items():
++        if c < 8: continue
++        if u in last:
++            fac=decay**(final_t[u]-last[u]); rp[u]*=fac; rc[u]*=fac
++        overall=(up[u]+8.*g)/(c+8.); recent=(rp[u]+6.*overall)/(rc[u]+6.)
++        trend[u]=float(np.clip(_logit(recent)-_logit(overall), -2.0, 2.0))
++    return trend
++
++def trend_position_adjust(rows, trend, weight=0.06):
++    byu=defaultdict(list)
++    for i,r in enumerate(rows): byu[_to_int(r[1])].append(i)
++    out=np.zeros(len(rows),dtype=np.float32)
++    for u,idxs in byu.items():
++        tr=trend.get(u,0.0); n=len(idxs)
++        if n <= 1 or tr == 0.0: continue
++        denom=max(n-1,1)
++        for j,i in enumerate(idxs):
++            pos=j/denom - 0.5
++            out[i]=np.float32(np.clip(weight*tr*pos, -0.08, 0.08))
++    return out
++
+ def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096, patience=4, neg_k=16, aux_weight=0.05, seed=0, device='cpu', verbose=True):
+     enc,aux,matched,dim=encode_with_time_aux(splits,data_dir); Xtr,ytr,utr=enc['train']; Xva,yva,uva=enc['valid']
+     valid_rows=matched['train']; prev=aux['train'][valid_rows].mean(0) if valid_rows.any() else np.zeros(len(AUX_NAMES)); keep_aux=np.where((prev>0.001)&(prev<0.999))[0]
+@@ -134,7 +163,7 @@
+         perm=rng.permutation(len(pos_idx)); t0=time.time(); model.train(); losses=[]
+         for i in range(0,len(perm),bs):
+             psel=perm[i:i+bs]; bsz=len(psel); pidx=pos_idx[psel]; nidx=np.empty((bsz,neg_k),dtype=np.int64)
+-            for t,pool in enumerate(neg_pools[psel]): nidx[t]=pool[rng.integers(len(pool),size=neg_k)]
++            for j,pool in enumerate(neg_pools[psel]): nidx[j]=pool[rng.integers(len(pool),size=neg_k)]
+             cand_idx=np.concatenate([pidx.reshape(-1,1),nidx],axis=1); xp=Xtr_t[torch.from_numpy(pidx)].to(device); xn=Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
+             opt.zero_grad(set_to_none=True); logits=torch.cat([model(xp).view(bsz,1), model(xn).view(bsz,neg_k)], dim=1); loss=torch.nn.functional.cross_entropy(logits, torch.zeros(bsz,dtype=torch.long,device=device))
+             if aux_weight>0.0 and len(keep_aux):
+@@ -150,19 +179,19 @@
+             if bad>=patience:
+                 if verbose: print(f"  early stop at epoch {ep}")
+                 break
+-    model.load_state_dict(best_state); hist=build_history_stats(splits['train']); return model,enc,hist
++    model.load_state_dict(best_state); hist=build_history_stats(splits['train']); trends=build_user_trends(splits['train']); return model,enc,hist,trends
+ 
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test']); ap.add_argument('--out',default=None)
+     ap.add_argument('--k',type=int,default=16); ap.add_argument('--lr',type=float,default=0.001); ap.add_argument('--epochs',type=int,default=40); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+-    torch.manual_seed(a.seed); print(f"loading {a.data_dir} ..."); splits=load(a.data_dir); print({k_:len(v) for k_,v in splits.items()}, f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} recent_history neg16")
+-    model,enc,hist=run(splits,a.data_dir,k=a.k,lr=a.lr,epochs=a.epochs,seed=a.seed,device=a.device,verbose=a.out is None)
+-    X,y,users=enc[a.split]; scores=model.predict(X,device=a.device)+history_adjust(splits[a.split],hist)
++    torch.manual_seed(a.seed); print(f"loading {a.data_dir} ..."); splits=load(a.data_dir); print({k_:len(v) for k_,v in splits.items()}, f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} recent_history neg16 user_trend_position")
++    model,enc,hist,trends=run(splits,a.data_dir,k=a.k,lr=a.lr,epochs=a.epochs,seed=a.seed,device=a.device,verbose=a.out is None)
++    X,y,users=enc[a.split]; scores=model.predict(X,device=a.device)+history_adjust(splits[a.split],hist)+trend_position_adjust(splits[a.split],trends)
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== recent_history_neg16 (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== user_trend_position_neg16 (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid','test'):
+-            Xs,ys,us=enc[sp]; pred=model.predict(Xs,device=a.device)+history_adjust(splits[sp],hist); r=evaluate(us,ys,pred)
++            Xs,ys,us=enc[sp]; pred=model.predict(Xs,device=a.device)+history_adjust(splits[sp],hist)+trend_position_adjust(splits[sp],trends); r=evaluate(us,ys,pred)
+             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

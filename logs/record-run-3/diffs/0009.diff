@@ -1,0 +1,136 @@
+# iteration 9  (parent: 8)
+# hypothesis: improve 8: the 3-member BPR ensemble crossed target, so push the same mechanism by using five members and averaging within-user rank/Borda scores instead of raw normalized margins. Since both metrics depend only on within-user order, rank averaging should preserve each member's signal while reducing scale noise.
+# result: GAUC 0.671073 | nDCG@5 0.537515 | primary 0.604294 | verdict KEPT
+
+--- logs/record-run-3/solutions/008_bpr_seed_ensemble.py
++++ logs/record-run-3/solutions/009_bpr_5_rank_ensemble.py
+@@ -1,9 +1,10 @@
+-"""Small ensemble of within-user BPR FMs.
+-
+-Refines the best BPR node by keeping the same objective/sampler, but averaging
+-three independently initialized BPR FMs.  Each member is early-stopped exactly as
+-in 002; final scores are averaged after scaling each member by its train-score
+-standard deviation so one high-margin seed cannot dominate the rank blend.
++"""Five-member within-user rank ensemble of BPR FMs.
++
++This refines 008 by adding two more independently initialized BPR members and
++combining them as per-user rank/Borda scores instead of raw margins.  The metric
++is purely within-user ranking, so converting each member to within-user ranks
++keeps that member's ordering while avoiding user/member-specific margin scale
++noise before averaging.
+ """
+ import argparse
+ import os
+@@ -45,7 +46,6 @@
+ 
+ 
+ def make_user_pairs(y, users):
+-    """Return users' positive/negative row arrays for BPR sampling."""
+     y = np.asarray(y)
+     users = np.asarray(users)
+     order = np.argsort(users, kind='mergesort')
+@@ -67,7 +67,6 @@
+ 
+ 
+ def sample_epoch_pairs(pos_lists, neg_lists, n_pos, rng):
+-    """For every positive row, sample one same-user negative row."""
+     pos_all = np.empty(n_pos, dtype=np.int64)
+     neg_all = np.empty(n_pos, dtype=np.int64)
+     off = 0
+@@ -133,34 +132,52 @@
+                 break
+ 
+     model.load_state_dict(best_state)
+-    tr_scores = model.predict(Xtr, device=device)
+-    scale = float(np.std(tr_scores))
+-    if not np.isfinite(scale) or scale < 1e-6:
+-        scale = 1.0
+-    return model, scale
++    return model
+ 
+ 
+ def train_ensemble(splits, k=16, lr=0.001, epochs=40, seed=0,
+                    device='cpu', verbose=True):
+     enc, dim = encode(splits)
+-    # Deterministic offsets keep harness seeds distinct while producing a true
+-    # three-member ensemble for each requested seed.
+-    seeds = [seed, seed + 1009, seed + 2027]
+-    models, scales = [], []
++    seeds = [seed, seed + 1009, seed + 2027, seed + 3037, seed + 4051]
++    models = []
+     for j, s in enumerate(seeds):
+         torch.manual_seed(s)
+-        m, sc = train_one(enc, dim, k=k, lr=lr, epochs=epochs, seed=s,
+-                          device=device, verbose=verbose, tag=f"m{j+1}/3")
++        m = train_one(enc, dim, k=k, lr=lr, epochs=epochs, seed=s,
++                      device=device, verbose=verbose, tag=f"m{j+1}/5")
+         models.append(m)
+-        scales.append(sc)
+-    return models, scales, enc
++    return models, enc
++
++
++def within_user_rank_scores(scores, users):
++    """Map scores to [0,1] ranks within each user; higher score -> higher rank."""
++    scores = np.asarray(scores)
++    users = np.asarray(users)
++    out = np.zeros(len(scores), dtype=np.float64)
++    order = np.argsort(users, kind='mergesort')
++    su = users[order]
++    starts = np.r_[0, np.flatnonzero(su[1:] != su[:-1]) + 1]
++    ends = np.r_[starts[1:], len(order)]
++    for s, e in zip(starts, ends):
++        idx = order[s:e]
++        m = e - s
++        if m <= 1:
++            out[idx] = 0.0
++            continue
++        vals = scores[idx]
++        # Stable tie-break by original row order for deterministic output.
++        ord_local = np.argsort(vals, kind='mergesort')
++        ranks = np.empty(m, dtype=np.float64)
++        ranks[ord_local] = np.arange(m, dtype=np.float64) / (m - 1.0)
++        out[idx] = ranks
++    return out
+ 
+ 
+ @torch.no_grad()
+-def ensemble_predict(models, scales, X, device='cpu'):
++def ensemble_predict(models, X, users, device='cpu'):
+     pred = np.zeros(len(X), dtype=np.float64)
+-    for m, sc in zip(models, scales):
+-        pred += m.predict(X, device=device).astype(np.float64) / sc
++    for m in models:
++        raw = m.predict(X, device=device)
++        pred += within_user_rank_scores(raw, users)
+     pred /= len(models)
+     return pred
+ 
+@@ -182,21 +199,21 @@
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    models, scales, enc = train_ensemble(splits, k=a.k, lr=a.lr,
+-                                         epochs=a.epochs, seed=a.seed,
+-                                         device=a.device, verbose=a.out is None)
++    models, enc = train_ensemble(splits, k=a.k, lr=a.lr,
++                                 epochs=a.epochs, seed=a.seed,
++                                 device=a.device, verbose=a.out is None)
+ 
+     X, y, users = enc[a.split]
+-    scores = ensemble_predict(models, scales, X, device=a.device)
++    scores = ensemble_predict(models, X, users, device=a.device)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_seed_ensemble (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_5_rank_ensemble (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+-            r = evaluate(us, ys, ensemble_predict(models, scales, Xs, device=a.device))
++            r = evaluate(us, ys, ensemble_predict(models, Xs, us, device=a.device))
+             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+                   f"| primary {r['primary']:.4f}")
+ 

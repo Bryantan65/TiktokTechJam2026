@@ -1,0 +1,271 @@
+# iteration 12  (parent: 10)
+# hypothesis: draft 3: add shared auxiliary engagement heads for click/like/follow/comment/forward on top of node 10, following multi-task recommender practice such as MMoE/ESMM ideas for auxiliary user actions (https://dl.acm.org/doi/10.1145/3219819.3220007).
+# result: GAUC 0.6707 | nDCG@5 0.537381 | primary 0.604041 | verdict KEPT
+
+--- logs/record-run-11/solutions/010_time_context.py
++++ logs/record-run-11/solutions/012_multitask_aux.py
+@@ -1,9 +1,8 @@
+-"""FM with semi-hard BPR+BCE plus temporal context embeddings.
+-
+-Branches from node 9.  The ranking loss is unchanged except that the encoded
+-feature matrix is augmented with weekday/hour/daypart categorical fields.  Hour
+-comes from the raw log CSVs and is matched back to starter-kit tuples by
+-(date,user_id,video_id,tab) in original order.
++"""FM with semi-hard BPR+BCE, temporal context, and auxiliary engagement tasks.
++
++Branches from node 10.  The main scorer/loss is unchanged, but raw-log binary
++engagement columns are joined back to the starter rows and used as small-weight
++auxiliary BCE heads sharing the FM embeddings.
+ """
+ import argparse
+ import csv
+@@ -21,21 +20,36 @@
+ from data import load, encode, FIELDS          # noqa: E402
+ from evaluate import evaluate                  # noqa: E402
+ 
+-
+-class TorchFM(torch.nn.Module):
+-    def __init__(self, dim, k=16, seed=0):
++AUX_COLS = ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']
++
++
++class TorchFMTower(torch.nn.Module):
++    def __init__(self, dim, k=16, n_aux=0, seed=0):
+         super().__init__()
+         rng = np.random.default_rng(seed)
+         self.V = torch.nn.Parameter(torch.from_numpy(
+             rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
++        self.n_aux = int(n_aux)
++        if self.n_aux > 0:
++            self.aux_A = torch.nn.Parameter(torch.from_numpy(
++                rng.normal(0, 0.01, (k, self.n_aux)).astype(np.float32)))
++            self.aux_W = torch.nn.Parameter(torch.zeros((dim, self.n_aux), dtype=torch.float32))
++            self.aux_b = torch.nn.Parameter(torch.zeros(self.n_aux, dtype=torch.float32))
+ 
+     def forward(self, X):
+         E = self.V[X]
+         S = E.sum(1)
+         inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
+         return self.b + self.W[X].sum(1) + inter
++
++    def aux_logits(self, X):
++        if self.n_aux <= 0:
++            return None
++        E = self.V[X]
++        S = E.sum(1)
++        return S @ self.aux_A + self.aux_W[X].sum(1) + self.aux_b
+ 
+     @torch.no_grad()
+     def predict(self, X, bs=200_000, device='cpu'):
+@@ -54,13 +68,13 @@
+         return 7
+ 
+ 
+-def _read_hour_queues(data_dir):
+-    """Return key -> queue of hourmin values from raw logs."""
++def _read_raw_queues(data_dir):
+     files = [
+         os.path.join(data_dir, 'log_standard_4_08_to_4_21_pure.csv'),
+         os.path.join(data_dir, 'log_standard_4_22_to_5_08_pure.csv'),
+     ]
+     q = defaultdict(deque)
++    present = set()
+     n = 0
+     for path in files:
+         if not os.path.exists(path):
+@@ -70,23 +84,34 @@
+             cols = set(rd.fieldnames or [])
+             if not {'date', 'user_id', 'video_id', 'tab', 'hourmin'}.issubset(cols):
+                 continue
++            use_aux = [c for c in AUX_COLS if c in cols]
++            present.update(use_aux)
+             for r in rd:
+                 try:
+                     key = (int(r['date']), str(r['user_id']), str(r['video_id']), int(r['tab']))
+                     hm = int(float(r['hourmin']))
++                    aux = []
++                    for c in AUX_COLS:
++                        if c in cols:
++                            v = r.get(c, '')
++                            aux.append(1.0 if float(v) > 0 else 0.0)
++                        else:
++                            aux.append(np.nan)
+                 except Exception:
+                     continue
+-                q[key].append(hm)
++                q[key].append((hm, tuple(aux)))
+                 n += 1
+-    print(f"raw hour rows loaded: {n:,d} keys={len(q):,d}")
+-    return q
+-
+-
+-def augment_time_features(splits, enc, dim, data_dir):
+-    hour_q = _read_hour_queues(data_dir)
++    active = [c for c in AUX_COLS if c in present]
++    active_idx = [AUX_COLS.index(c) for c in active]
++    print(f"raw rows loaded: {n:,d} keys={len(q):,d} aux={active}")
++    return q, active, active_idx
++
++
++def augment_features_and_aux(splits, enc, dim, data_dir):
++    raw_q, active, active_idx = _read_raw_queues(data_dir)
+     new_enc = {}
++    aux_out = {}
+     total = matched = 0
+-    # offsets: weekday 0..7, hour 0..24, daypart 0..6 (last value = unknown)
+     off_week = dim
+     off_hour = off_week + 8
+     off_part = off_hour + 25
+@@ -95,13 +120,16 @@
+     for sp, (X, y, users) in enc.items():
+         rows = splits[sp]
+         extra = np.empty((len(rows), 3), dtype=np.int64)
++        aux = np.zeros((len(rows), len(active)), dtype=np.float32)
++        mask = np.zeros((len(rows), len(active)), dtype=np.float32)
+         for i, row in enumerate(rows):
+             date, uid, vid, _aid, tab, _dur, _lab = row
+             wd = _weekday(date)
+             key = (int(date), str(uid), str(vid), int(tab))
+             hm = None
+-            if key in hour_q and hour_q[key]:
+-                hm = hour_q[key].popleft()
++            avals = None
++            if key in raw_q and raw_q[key]:
++                hm, avals = raw_q[key].popleft()
+                 matched += 1
+             total += 1
+             if hm is None:
+@@ -119,10 +147,16 @@
+             extra[i, 0] = off_week + wd
+             extra[i, 1] = off_hour + hour
+             extra[i, 2] = off_part + part
+-        X2 = np.concatenate([X.astype(np.int64), extra], axis=1)
+-        new_enc[sp] = (X2, y, users)
+-    print(f"hour matched {matched:,d}/{total:,d} ({matched / max(total,1):.3%}); dim {dim}->{new_dim}; fields={FIELDS}+weekday+hour+daypart")
+-    return new_enc, new_dim
++            if avals is not None and active_idx:
++                for j, ai in enumerate(active_idx):
++                    v = avals[ai]
++                    if not np.isnan(v):
++                        aux[i, j] = v
++                        mask[i, j] = 1.0
++        new_enc[sp] = (np.concatenate([X.astype(np.int64), extra], axis=1), y, users)
++        aux_out[sp] = (aux, mask)
++    print(f"raw matched {matched:,d}/{total:,d} ({matched / max(total,1):.3%}); dim {dim}->{new_dim}; fields={FIELDS}+weekday+hour+daypart; aux={active}")
++    return new_enc, new_dim, aux_out, active
+ 
+ 
+ def build_user_groups(users, y):
+@@ -195,21 +229,41 @@
+     return p[perm], n[perm], w[perm]
+ 
+ 
++def aux_loss_fn(model, xb, ab, mb):
++    if model.n_aux <= 0 or ab.shape[1] == 0:
++        return None
++    logits = model.aux_logits(xb)
++    loss_mat = torch.nn.functional.binary_cross_entropy_with_logits(logits, ab, reduction='none')
++    denom = mb.sum()
++    if denom.item() <= 0:
++        return None
++    return (loss_mat * mb).sum() / denom
++
++
+ def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
+         patience=4, seed=0, device='cpu', verbose=True, bce_warmup=1,
+-        bce_weight=0.15, semi_k=4, semi_frac=0.25, lambda_alpha=2.5):
++        bce_weight=0.15, aux_weight=0.05, semi_k=4, semi_frac=0.25,
++        lambda_alpha=2.5):
+     enc0, dim0 = encode(splits)
+-    enc, dim = augment_time_features(splits, enc0, dim0, data_dir)
++    enc, dim, aux, active_aux = augment_features_and_aux(splits, enc0, dim0, data_dir)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+-
+-    model = TorchFM(dim, k=k, seed=seed).to(device)
+-    opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+-                            {'params': [model.b], 'weight_decay': 0.0}],
++    atr, mtr = aux['train']
++
++    model = TorchFMTower(dim, k=k, n_aux=len(active_aux), seed=seed).to(device)
++    params_decay = [model.V, model.W]
++    params_nodecay = [model.b]
++    if len(active_aux) > 0:
++        params_decay += [model.aux_A, model.aux_W]
++        params_nodecay += [model.aux_b]
++    opt = torch.optim.Adam([{'params': params_decay, 'weight_decay': l2},
++                            {'params': params_nodecay, 'weight_decay': 0.0}],
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
+     bce = torch.nn.BCEWithLogitsLoss()
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     ytr_t = torch.from_numpy(ytr.astype(np.float32))
++    atr_t = torch.from_numpy(atr.astype(np.float32))
++    mtr_t = torch.from_numpy(mtr.astype(np.float32))
+     groups = build_user_groups(utr, ytr)
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+@@ -227,6 +281,10 @@
+                 yb = ytr_t[sel].to(device)
+                 opt.zero_grad(set_to_none=True)
+                 loss = bce(model(xb), yb)
++                if len(active_aux) > 0 and aux_weight > 0:
++                    al = aux_loss_fn(model, xb, atr_t[sel].to(device), mtr_t[sel].to(device))
++                    if al is not None:
++                        loss = loss + aux_weight * al
+                 loss.backward()
+                 opt.step()
+                 losses.append(loss.item())
+@@ -236,8 +294,10 @@
+                                             semi_k=semi_k, semi_frac=semi_frac,
+                                             lambda_alpha=lambda_alpha)
+             for i in range(0, len(pidx), bs):
+-                ps = torch.from_numpy(pidx[i:i + bs])
+-                ns = torch.from_numpy(nidx[i:i + bs])
++                ps_np = pidx[i:i + bs]
++                ns_np = nidx[i:i + bs]
++                ps = torch.from_numpy(ps_np)
++                ns = torch.from_numpy(ns_np)
+                 wt = torch.from_numpy(pair_w[i:i + bs]).to(device)
+                 xp = Xtr_t[ps].to(device)
+                 xn = Xtr_t[ns].to(device)
+@@ -249,13 +309,19 @@
+                 point_scores = torch.cat([sp, sn])
+                 point_labels = torch.cat([torch.ones_like(sp), torch.zeros_like(sn)])
+                 loss = bpr_loss + bce_weight * bce(point_scores, point_labels)
++                if len(active_aux) > 0 and aux_weight > 0:
++                    both = torch.from_numpy(np.concatenate([ps_np, ns_np]))
++                    xb_aux = Xtr_t[both].to(device)
++                    al = aux_loss_fn(model, xb_aux, atr_t[both].to(device), mtr_t[both].to(device))
++                    if al is not None:
++                        loss = loss + aux_weight * al
+                 loss.backward()
+                 opt.step()
+                 losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            phase = 'bce' if ep <= bce_warmup else 'time_lambda_semihard'
++            phase = 'bce_aux' if ep <= bce_warmup else 'time_lambda_semihard_aux'
+             print(f"  epoch {ep:2d} {phase} | loss {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+@@ -295,7 +361,7 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+weekday+hour+daypart")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+weekday+hour+daypart aux={AUX_COLS}")
+ 
+     model, enc = run(splits, data_dir=a.data_dir, k=a.k, lr=a.lr,
+                      epochs=a.epochs, seed=a.seed, device=a.device,
+@@ -306,7 +372,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== time_context_lambda_semihard (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== multitask_aux_time_lambda_semihard (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

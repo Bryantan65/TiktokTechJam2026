@@ -1,0 +1,35 @@
+# iteration 28  (parent: 24)
+# hypothesis: improve 24: switch the personalized residual tree from pairwise LambdaRank to LightGBM's XE_NDCG/listwise rank_xendcg objective, which is closer to nDCG@5 while keeping the same FM ensemble and features.
+# result: GAUC 0.671288 | nDCG@5 0.537988 | primary 0.604638 | verdict KEPT
+
+--- logs/record-run-8/solutions/024_lgb_user_pref_residual.py
++++ logs/record-run-8/solutions/028_lgb_xendcg_residual.py
+@@ -145,10 +145,8 @@
+     X=np.zeros((len(rows),21),np.float32)
+     for i,r in enumerate(rows):
+         y=float(r[6]) if loo else 0.0; _,gkeys,ukeys=keys_for(r); vals=[]
+-        # global item/context priors: keep parent behaviour (no leave-one-out)
+         for k,key in zip(gnames,gkeys):
+             c=cnts[k].get(key,0); s=sums[k].get(key,0.0); vals += [np.log1p(c),(s+20*gc)/(c+20)]
+-        # personalized preferences: leave-one-out on train to avoid directly revealing this row's label
+         for k,key in zip(unames,ukeys):
+             c=cnts[k].get(key,0); s=sums[k].get(key,0.0)
+             if loo: c=max(0,c-1); s=max(0.0,s-y)
+@@ -175,7 +173,7 @@
+     Xs,ys,gs,ins=sort_user(Xtr,ytr.astype(np.float32),utr,fmtr.astype(np.float64)); Xvs,yvs,gvs,invs=sort_user(Xva,yva.astype(np.float32),uva,fmva.astype(np.float64))
+     dtr=lgb.Dataset(Xs,label=ys,group=gs,init_score=ins,categorical_feature=list(range(8)),free_raw_data=False)
+     dva=lgb.Dataset(Xvs,label=yvs,group=gvs,init_score=invs,categorical_feature=list(range(8)),reference=dtr,free_raw_data=False)
+-    params={'objective':'lambdarank','metric':'ndcg','ndcg_eval_at':[5],'label_gain':[0,1],'learning_rate':0.03,'num_leaves':31,'min_data_in_leaf':120,'feature_fraction':0.90,'bagging_fraction':0.90,'bagging_freq':1,'lambda_l2':5.0,'verbosity':-1,'seed':int(seed),'feature_fraction_seed':int(seed)+11,'bagging_seed':int(seed)+17,'num_threads':4}
++    params={'objective':'rank_xendcg','metric':'ndcg','ndcg_eval_at':[5],'label_gain':[0,1],'learning_rate':0.03,'num_leaves':31,'min_data_in_leaf':120,'feature_fraction':0.90,'bagging_fraction':0.90,'bagging_freq':1,'lambda_l2':5.0,'verbosity':-1,'seed':int(seed),'feature_fraction_seed':int(seed)+11,'bagging_seed':int(seed)+17,'num_threads':4}
+     cb=[lgb.early_stopping(25,verbose=verbose)]
+     if not verbose: cb.append(lgb.log_evaluation(period=0))
+     model=lgb.train(params,dtr,num_boost_round=250,valid_sets=[dva],valid_names=['valid'],callbacks=cb)
+@@ -203,7 +201,7 @@
+         splits=load_dev(a.data_dir); target='valid'
+     else:
+         splits=load(a.data_dir); target=a.split
+-    print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}, lgb_user_pref_residual fm_weight={a.fm_weight}')
++    print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}, lgb_xendcg_residual fm_weight={a.fm_weight}')
+     fms,model,pack,tmap,enc=train_all(splits,a.data_dir,seed=a.seed,device=a.device,verbose=(a.out is None),n_models=a.n_models)
+     X,y,u=enc[target]; scores=predict(fms,model,pack,tmap,X,splits[target],u,target,device=a.device,fm_weight=a.fm_weight)
+     if a.out:

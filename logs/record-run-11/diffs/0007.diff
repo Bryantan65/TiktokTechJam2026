@@ -1,0 +1,145 @@
+# iteration 7  (parent: 5)
+# hypothesis: improve 5: node 5 is the strongest loss direction; replace uniform same-user negatives with mostly current-model hard negatives so BPR updates focus on errors likely to affect top within-user ranks.
+# result: GAUC 0.64793 | nDCG@5 0.527468 | primary 0.587699 | verdict worse
+
+--- logs/record-run-11/solutions/005_hybrid_bpr_bce.py
++++ logs/record-run-11/solutions/007_hardneg_hybrid.py
+@@ -1,9 +1,10 @@
+-"""FM trained with within-user BPR plus a small pointwise BCE anchor.
+-
+-Starts from node 2.  Pure BPR improved GAUC/nDCG, but after the one-epoch BCE
+-warmup it discards absolute label-rate information.  During BPR epochs this adds
+-BCE on the sampled positive/negative rows, keeping the ranking signal dominant
+-while anchoring score scale and easy pointwise constraints.
++"""FM with BPR+BCE using same-user hard negative sampling.
++
++Refines node 5.  Instead of pairing each positive with a uniformly sampled
++same-user negative, each BPR epoch scores the train rows with the current model
++and, for every positive, samples a few same-user negative candidates then uses
++the highest-scoring one.  This should focus updates on mistakes that affect the
++within-user top of the ranking while retaining node 5's balanced BCE anchor.
+ """
+ import argparse
+ import os
+@@ -24,8 +25,8 @@
+     def __init__(self, dim, k=16, seed=0):
+         super().__init__()
+         rng = np.random.default_rng(seed)
+-        V0 = rng.normal(0, 0.01, (dim, k)).astype(np.float32)
+-        self.V = torch.nn.Parameter(torch.from_numpy(V0))
++        self.V = torch.nn.Parameter(torch.from_numpy(
++            rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+ 
+@@ -45,37 +46,50 @@
+         return np.concatenate(out)
+ 
+ 
+-def make_pairs(users, y, rng, neg_per_pos=1):
+-    """Sample same-user (positive row, negative row) pairs for one epoch."""
+-    pos_by_u = defaultdict(list)
+-    neg_by_u = defaultdict(list)
++def build_user_groups(users, y):
++    pos_by_u, neg_by_u = defaultdict(list), defaultdict(list)
+     for i, (u, yy) in enumerate(zip(users, y)):
+         if yy > 0.5:
+             pos_by_u[u].append(i)
+         else:
+             neg_by_u[u].append(i)
+-
++    groups = []
++    for u in pos_by_u.keys():
++        if u in neg_by_u:
++            groups.append((np.asarray(pos_by_u[u], dtype=np.int64),
++                           np.asarray(neg_by_u[u], dtype=np.int64)))
++    return groups
++
++
++def make_pairs(groups, rng, train_scores=None, hard_k=8, hard_frac=0.75):
++    """Sample same-user pairs, usually choosing the hardest of hard_k negatives."""
+     left, right = [], []
+-    eligible = [u for u in pos_by_u.keys() if u in neg_by_u]
+-    rng.shuffle(eligible)
+-    for u in eligible:
+-        ps = np.asarray(pos_by_u[u], dtype=np.int64)
+-        ns = np.asarray(neg_by_u[u], dtype=np.int64)
+-        for _ in range(neg_per_pos):
+-            sampled_n = rng.choice(ns, size=len(ps), replace=True)
+-            left.append(ps)
+-            right.append(sampled_n)
+-    if not left:
+-        return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64)
++    order_groups = np.arange(len(groups))
++    rng.shuffle(order_groups)
++    for gi in order_groups:
++        ps, ns = groups[gi]
++        m = len(ps)
++        if train_scores is None or hard_k <= 1:
++            chosen = rng.choice(ns, size=m, replace=True)
++        else:
++            use_hard = rng.random(m) < hard_frac
++            chosen = rng.choice(ns, size=m, replace=True)
++            hh = int(use_hard.sum())
++            if hh > 0:
++                cand = rng.choice(ns, size=(hh, hard_k), replace=True)
++                best = np.argmax(train_scores[cand], axis=1)
++                chosen[use_hard] = cand[np.arange(hh), best]
++        left.append(ps)
++        right.append(chosen.astype(np.int64, copy=False))
+     p = np.concatenate(left)
+     n = np.concatenate(right)
+-    order = rng.permutation(len(p))
+-    return p[order], n[order]
++    perm = rng.permutation(len(p))
++    return p[perm], n[perm]
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True, neg_per_pos=1, bce_warmup=1,
+-        bce_weight=0.15):
++        seed=0, device='cpu', verbose=True, bce_warmup=1, bce_weight=0.15,
++        hard_k=8, hard_frac=0.75):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -85,9 +99,9 @@
+                             {'params': [model.b], 'weight_decay': 0.0}],
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
+     bce = torch.nn.BCEWithLogitsLoss()
+-
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     ytr_t = torch.from_numpy(ytr.astype(np.float32))
++    groups = build_user_groups(utr, ytr)
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+ 
+@@ -108,7 +122,9 @@
+                 opt.step()
+                 losses.append(loss.item())
+         else:
+-            pidx, nidx = make_pairs(utr, ytr, rng, neg_per_pos=neg_per_pos)
++            train_scores = model.predict(Xtr, device=device)
++            pidx, nidx = make_pairs(groups, rng, train_scores=train_scores,
++                                    hard_k=hard_k, hard_frac=hard_frac)
+             for i in range(0, len(pidx), bs):
+                 ps = torch.from_numpy(pidx[i:i + bs])
+                 ns = torch.from_numpy(nidx[i:i + bs])
+@@ -127,7 +143,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            phase = 'bce' if ep <= bce_warmup else 'hybrid'
++            phase = 'bce' if ep <= bce_warmup else 'hard_bpr_hybrid'
+             print(f"  epoch {ep:2d} {phase} | loss {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+@@ -177,7 +193,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== hybrid_bpr_bce (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== hardneg_hybrid (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

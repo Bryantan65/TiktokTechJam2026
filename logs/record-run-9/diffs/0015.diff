@@ -1,0 +1,114 @@
+# iteration 15  (parent: 13)
+# hypothesis: improve 13: node 13 used hour/weekday but not absolute date; add day/week/date and tab-time crosses to capture train-valid exposure drift, with the changed time member at 50% so the signal is readable.
+# result: GAUC 0.672237 | nDCG@5 0.538139 | primary 0.605188 | verdict KEPT
+
+--- logs/record-run-9/solutions/013_time_content_blend.py
++++ logs/record-run-9/solutions/015_time_date_blend.py
+@@ -1,8 +1,9 @@
+-"""Blend node-10 cached FM ensemble with a new content+history+time FM.
+-
+-The new member reads raw log_standard CSVs only to recover hourmin, then appends
+-hour/minute/weekday context to the content-history FM fields.  Existing node-10
+-members keep their original cache keys and feature spaces.
++"""Improve node 13 by adding absolute date/drift buckets to the time-aware FM.
++
++This keeps node-10 cached members unchanged, but retrains only the time member
++with richer temporal fields: hour/minute/daypart plus day index, week index,
++day-of-month, weekend, and tab-time crosses.  The new time member is blended at
++50% so its signal is readable.
+ """
+ import argparse, csv, os, sys, time
+ from collections import defaultdict, deque
+@@ -95,8 +96,7 @@
+ 
+ def read_hour_queues(data_dir):
+     qs=defaultdict(deque)
+-    files=['log_standard_4_08_to_4_21_pure.csv','log_standard_4_22_to_5_08_pure.csv']
+-    for fn in files:
++    for fn in ['log_standard_4_08_to_4_21_pure.csv','log_standard_4_22_to_5_08_pure.csv']:
+         path=os.path.join(data_dir,fn)
+         if not os.path.isfile(path): continue
+         with open(path,newline='',encoding='utf-8') as f:
+@@ -104,28 +104,31 @@
+                 date=_ival(rec,['date']); u=_ival(rec,['user_id','user']); v=_ival(rec,['video_id','photo_id','video'])
+                 a=_ival(rec,['author_id']); tab=_ival(rec,['tab']); dur=_ival(rec,['duration_ms','duration'])
+                 hm=_ival(rec,['hourmin','hour_min','time','timestamp'],0)
+-                key=(date,u,v,a,tab,dur); qs[key].append(hm)
++                qs[(date,u,v,a,tab,dur)].append(hm)
+     return qs
+ 
+-def weekday_from_date(d):
+-    try: return datetime.strptime(str(int(d)),'%Y%m%d').weekday()
+-    except Exception: return 0
+-
+-def time_feats_from_hm(hm, date):
++def _date_obj(d):
++    try: return datetime.strptime(str(int(d)),'%Y%m%d')
++    except Exception: return datetime.strptime('20220408','%Y%m%d')
++
++def time_date_feats(hm, date, tab):
+     try: hm=int(hm)
+     except Exception: hm=0
+     hour=hm//100 if hm>=100 else hm
+     minute=hm%100 if hm>=100 else 0
+     if hour<0 or hour>23: hour=0
+     mb=min(5, max(0, minute//10))
+-    # Coarse dayparts give the FM a less sparse temporal signal than raw hour alone.
+     if hour<6: part=0
+     elif hour<11: part=1
+     elif hour<14: part=2
+     elif hour<18: part=3
+     elif hour<22: part=4
+     else: part=5
+-    return [hour, mb, part, weekday_from_date(date)]
++    dt=_date_obj(date); base=datetime.strptime('20220408','%Y%m%d')
++    day_idx=max(0,(dt-base).days); week_idx=day_idx//7; weekday=dt.weekday(); dom=dt.day; weekend=1 if weekday>=5 else 0
++    # Include crosses as categorical strings so the FM can model tab-specific temporal policy drift.
++    return [hour, mb, part, weekday, day_idx, week_idx, dom, weekend,
++            f'tab{tab}_part{part}', f'tab{tab}_hour{hour}', f'w{weekday}_part{part}', f'd{day_idx}_tab{tab}']
+ 
+ def build_history_raw_features(splits, video_feats=None, add_content=False, hour_qs=None, add_time=False):
+     up_v=defaultdict(int); un_v=defaultdict(int); up_a=defaultdict(int); un_a=defaultdict(int)
+@@ -137,10 +140,10 @@
+         feats=[u,v,a,tab,dur_bucket,pos_bucket(pv),neg_bucket(nv),pos_bucket(pa),neg_bucket(na),ratio_bucket(pa,na),ratio_bucket(pv,nv)]
+         if add_content: feats.extend(video_feats.get(v,unk))
+         if add_time:
+-            hm=0; key=(int(date),int(u),int(v),int(a),int(tab),int(dur))
++            key=(int(date),int(u),int(v),int(a),int(tab),int(dur))
+             if hour_qs is not None and key in hour_qs and len(hour_qs[key]): hm=hour_qs[key].popleft()
+-            else: missing+=1
+-            feats.extend(time_feats_from_hm(hm,date)); feats.append(f'{tab}_{time_feats_from_hm(hm,date)[2]}')
++            else: hm=0; missing+=1
++            feats.extend(time_date_feats(hm,date,tab))
+         if update:
+             if y>0.5: up_v[kv]+=1; up_a[ka]+=1
+             else: un_v[kv]+=1; un_a[ka]+=1
+@@ -233,8 +236,10 @@
+ 
+ def ensemble_rank(enc,dim,Xout,uout,split,seed,device,verbose,cache_prefix,bpr_name,bce_name):
+     bpr_sum=np.zeros(len(Xout),dtype=np.float64)
+-    for ms in [seed,seed+101,seed+202]: bpr_sum+=within_user_ranks(member_pred(cache_prefix,bpr_name,train_bpr,enc,dim,Xout,split,seed,ms,device,verbose),uout)
+-    bpr_rank=bpr_sum/3.0; bce_rank=within_user_ranks(member_pred(cache_prefix,bce_name,train_bce,enc,dim,Xout,split,seed,seed+303,device,verbose),uout)
++    for ms in [seed,seed+101,seed+202]:
++        bpr_sum+=within_user_ranks(member_pred(cache_prefix,bpr_name,train_bpr,enc,dim,Xout,split,seed,ms,device,verbose),uout)
++    bpr_rank=bpr_sum/3.0
++    bce_rank=within_user_ranks(member_pred(cache_prefix,bce_name,train_bce,enc,dim,Xout,split,seed,seed+303,device,verbose),uout)
+     return 0.70*bpr_rank+0.30*bce_rank
+ 
+ def run_predict(splits,data_dir,split='valid',seed=0,device='cpu',verbose=False):
+@@ -248,12 +253,12 @@
+     node10=0.35*base_rank+0.25*hist_rank+0.40*cont_rank
+     hour_qs=read_hour_queues(data_dir)
+     enc_time,dim_time=encode_history(splits,video_feats=vf,add_content=True,hour_qs=hour_qs,add_time=True); Xtime,_,utime=enc_time[split]
+-    time_rank=ensemble_rank(enc_time,dim_time,Xtime,utime,split,seed,device,verbose,'013','bprtime','bcetime')
+-    return 0.60*node10+0.40*time_rank
++    time_rank=ensemble_rank(enc_time,dim_time,Xtime,utime,split,seed,device,verbose,'015','bprtimedate','bcetimedate')
++    return 0.50*node10+0.50*time_rank
+ 
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+hourmin')
++    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date')
+     scores=run_predict(splits,a.data_dir,split=a.split,seed=a.seed,device=a.device,verbose=a.out is None)
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')

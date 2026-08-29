@@ -1,0 +1,114 @@
+# iteration 31  (parent: 26)
+# hypothesis: draft 8: train a readable 30% IPS-weighted BPR content-FM member using random-log vs standard-log video exposure ratios to counter exposure bias (inverse propensity scoring for unbiased LTR; https://www.cs.cornell.edu/people/tj/publications/joachims_etal_17a.pdf), then blend with node 26.
+# result: GAUC 0.672317 | nDCG@5 0.537636 | primary 0.604976 | verdict KEPT
+
+--- logs/record-run-12/solutions/027_behavior_prior.py
++++ logs/record-run-12/solutions/032_ips_bpr_blend.py
+@@ -1,5 +1,5 @@
+-"""Best cached content-FM/DeepFM ensemble plus train-only user-history target priors."""
+-import argparse, csv, os, sys, time
++"""Best cached content-FM/DeepFM/behavior ensemble plus IPS-weighted BPR content-FM member."""
++import argparse, csv, os, sys
+ import numpy as np
+ import torch
+ import torch.nn.functional as F
+@@ -132,6 +132,32 @@
+             if bad>=patience: break
+     model.load_state_dict(state); return model
+ 
++def train_bpr_member_weighted(enc,dim,row_w,seed=0,k=16,lr=0.001,l2=1e-6,epochs=40,bs=8192,patience=5,repeats=2,bce_weight=0.10,device='cpu',verbose=False):
++    Xtr,ytr,utr=enc['train']; Xva,yva,uva=enc['valid']; model=TorchFM(dim,k,seed).to(device)
++    opt=torch.optim.Adam([{'params':[model.V,model.W],'weight_decay':l2},{'params':[model.b],'weight_decay':0.0}],lr=lr)
++    Xt=torch.from_numpy(Xtr.astype(np.int64)); rw=torch.from_numpy(row_w.astype(np.float32)); pos,gids,neg_by=make_pairs(ytr,utr); rng=np.random.default_rng(seed+7000); best=-1; state=None; bad=0
++    for ep in range(1,epochs+1):
++        model.train(); losses=[]
++        for _ in range(repeats):
++            perm=rng.permutation(len(pos))
++            for i in range(0,len(perm),bs):
++                sel=perm[i:i+bs]; pi=pos[sel]; ni=sample_negs(gids[sel],neg_by,rng)
++                xb=torch.cat([Xt[torch.from_numpy(pi)],Xt[torch.from_numpy(ni)]],0).to(device); m=len(pi)
++                ww=(0.5*(rw[torch.from_numpy(pi)] + rw[torch.from_numpy(ni)])).to(device)
++                opt.zero_grad(set_to_none=True); logits=model(xb); pair=F.softplus(-(logits[:m]-logits[m:]))
++                loss=(pair*ww).sum()/(ww.sum()+1e-9)
++                if bce_weight>0:
++                    lab=torch.cat([torch.ones(m,device=device),torch.zeros(m,device=device)])
++                    bw=torch.cat([rw[torch.from_numpy(pi)],rw[torch.from_numpy(ni)]],0).to(device)
++                    loss=loss+bce_weight*(F.binary_cross_entropy_with_logits(logits,lab,reduction='none')*bw).sum()/(bw.sum()+1e-9)
++                loss.backward(); opt.step(); losses.append(float(loss.detach().cpu()))
++        va=evaluate(uva,yva,model.predict(Xva,device=device)); print(f'ips-bpr seed {seed} epoch {ep} loss {np.mean(losses):.4f} primary {va["primary"]:.5f}')
++        if va['primary']>best+1e-5: best=va['primary']; bad=0; state={k_:v.detach().clone() for k_,v in model.state_dict().items()}
++        else:
++            bad+=1
++            if bad>=patience: break
++    model.load_state_dict(state); return model
++
+ def train_deep_bpr(enc,dim,seed=0,k=8,lr=0.001,l2=1e-6,epochs=14,bs=8192,patience=3,repeats=1,bce_weight=0.05,device='cpu',verbose=False):
+     Xtr,ytr,utr=enc['train']; Xva,yva,uva=enc['valid']; model=DeepFM(dim,Xtr.shape[1],k,seed).to(device)
+     opt=torch.optim.Adam([{'params':[model.V,model.W,model.D.weight]+list(model.mlp.parameters()),'weight_decay':l2},{'params':[model.b],'weight_decay':0.0}],lr=lr)
+@@ -194,13 +220,36 @@
+     for i,r in enumerate(splits[target]):
+         num=0.0; den=0.0; st=0.0
+         for name,fn,alpha,wt,d in maps:
+-            n,s=d.get(fn(r),(0,0.0)); rate=(s+alpha*global_mean)/(n+alpha)
+-            shrink=n/(n+alpha)
++            n,s=d.get(fn(r),(0,0.0)); rate=(s+alpha*global_mean)/(n+alpha); shrink=n/(n+alpha)
+             num += wt*shrink*rate; den += wt*shrink; st += wt*shrink
+-        raw[i]=global_mean if den<=0 else num/den
+-        strength[i]=st
++        raw[i]=global_mean if den<=0 else num/den; strength[i]=st
+     print('behavior prior mean/std/coverage/strength',float(raw.mean()),float(raw.std()),float((strength>0).mean()),float(strength.mean()))
+     return raw
++
++def make_ips_video_weights(splits, data_dir):
++    std={}; rand={}
++    for r in splits['train']:
++        v=norm_val(r[2]); std[v]=std.get(v,0)+1
++    paths=[os.path.join(data_dir,'log_random_4_22_to_5_08_pure.csv'), os.path.join(data_dir,'..','data','log_random_4_22_to_5_08_pure.csv')]
++    path=next((p for p in paths if os.path.isfile(p)), None)
++    if path is None:
++        print('random log not found; IPS weights all ones'); return np.ones(len(splits['train']),dtype=np.float64)
++    with open(path,newline='',encoding='utf-8') as f:
++        rdr=csv.DictReader(f); names=rdr.fieldnames or []
++        vid_col='video_id' if 'video_id' in names else ('item_id' if 'item_id' in names else None)
++        if vid_col is None:
++            print('random log has no video_id; IPS weights all ones'); return np.ones(len(splits['train']),dtype=np.float64)
++        for rec in rdr:
++            v=norm_val(rec.get(vid_col)); rand[v]=rand.get(v,0)+1
++    keys=set(std)|set(rand); K=max(1,len(keys)); S=float(sum(std.values())); R=float(sum(rand.values())); alpha=3.0
++    ratio={}
++    for k in keys:
++        pr=(rand.get(k,0)+alpha)/(R+alpha*K); ps=(std.get(k,0)+alpha)/(S+alpha*K)
++        ratio[k]=pr/ps
++    w=np.array([ratio.get(norm_val(r[2]),1.0) for r in splits['train']],dtype=np.float64)
++    w=np.clip(w,0.25,4.0); w=w/(w.mean()+1e-12)
++    print('IPS video weights random_rows/std_rows/keys mean/std/min/max',int(R),int(S),K,float(w.mean()),float(w.std()),float(w.min()),float(w.max()))
++    return w
+ 
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test','dev']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+@@ -223,13 +272,20 @@
+         dp=get_preds('024','deepfm_content_bpr_v1',train_deep_bpr,enc,dim,Xtar,s,a.device,verbose)
+         deep_bags.append(percentile_rank_by_user(dp,utar))
+     deep=np.mean(deep_bags,axis=0)
+-    vc=train_video_counts(splits,target)
+-    w=0.20 + 0.25/(1.0 + vc/5.0)
++    vc=train_video_counts(splits,target); w=0.20 + 0.25/(1.0 + vc/5.0)
+     base=(1.0-w)*fm_base + w*deep
+     prior=percentile_rank_by_user(make_behavior_prior(splits,target,content),utar)
+-    # Train-only personalized history is sparse/noisy, so use it as a small nDCG-oriented reranker.
+-    scores=0.88*base + 0.12*prior
+-    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'behavior blend 0.12')
++    node26=0.88*base + 0.12*prior
++    row_w=make_ips_video_weights(splits,a.data_dir)
++    def ips_train(enc_,dim_,seed=0,device='cpu',verbose=False):
++        return train_bpr_member_weighted(enc_,dim_,row_w,seed=seed,device=device,verbose=verbose)
++    ips_bags=[]
++    for s in (0,1,2):
++        ip=get_preds('032','ips_video_bpr_v1',ips_train,enc,dim,Xtar,s,a.device,verbose)
++        ips_bags.append(percentile_rank_by_user(ip,utar))
++    ips=np.mean(ips_bags,axis=0)
++    scores=0.70*node26 + 0.30*ips
++    print('node24 deep weight mean/min/max',float(w.mean()),float(w.min()),float(w.max()),'behavior 0.12 ips-bpr blend 0.30')
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,} predictions')
+     else: print('done')

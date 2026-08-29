@@ -1,0 +1,48 @@
+# iteration 27  (parent: 24)
+# hypothesis: improve 24: the useful hour features may be missing absolute train-valid drift, so keep node 24's four-model rank blend and add only raw date as a categorical time feature.
+# result: GAUC 0.670675 | nDCG@5 0.53773 | primary 0.604203 | verdict KEPT
+
+--- logs/record-run-10/solutions/024_dual_ranker_4way.py
++++ logs/record-run-10/solutions/027_date_feature_dual_rank.py
+@@ -1,8 +1,9 @@
+-"""Four-way rank blend: BPR FM + XE_NDCG LightGBM + LambdaRank LightGBM + BCE FM.
+-
+-Copy of node 22, adding back the node-19 lambdarank tree as a second tree
+-ranker.  All members get readable weight (>=20%) except none are hidden: BPR
+-0.40, XE_NDCG 0.20, LambdaRank 0.20, BCE 0.20.
++"""Node 24 variant: add absolute date as a categorical time feature.
++
++Keeps the dual LightGBM ranker + BPR + BCE rank blend weights from node 24
++(BPR/XENDCG/LambdaRank/BCE = 0.40/0.20/0.20/0.20) and changes only the shared
++feature set by adding the raw yyyymmdd date category. This tests whether the
++hour/dow time signal was missing train-valid drift captured by absolute day.
+ """
+ import argparse
+ import csv
+@@ -20,7 +21,7 @@
+ from data import load, FIELDS                         # noqa: E402
+ from evaluate import evaluate                         # noqa: E402
+ 
+-EXT_FIELDS = FIELDS + ['dow', 'hour', 'tod4']
++EXT_FIELDS = FIELDS + ['dow', 'hour', 'tod4', 'date_cat']
+ 
+ 
+ def yyyymmdd_to_dow(d):
+@@ -88,7 +89,7 @@
+ 
+ def row_features(row, hour):
+     return (row[1], row[2], row[3], row[4], dur_bucket(row[5]),
+-            yyyymmdd_to_dow(row[0]), int(hour), int(hour) // 4)
++            yyyymmdd_to_dow(row[0]), int(hour), int(hour) // 4, norm_int_str(row[0]))
+ 
+ 
+ def encode_ext(splits, hour_lookup):
+@@ -279,7 +280,7 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, 4way bpr/xendcg/lambdarank/bce")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, add date_cat to node24 4way blend")
+     bpr, bce, xendcg, lambdarank, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[target]
+     sbpr = bpr.predict(X, device=a.device)

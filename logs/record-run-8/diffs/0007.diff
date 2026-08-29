@@ -1,0 +1,211 @@
+# iteration 7  (parent: 3)
+# hypothesis: draft time features: append hour/hour-bucket/tab-hour features from raw log hourmin, following standard time-of-day context bucketing for recommenders (https://www.tensorflow.org/recommenders/examples/context_features); this tests whether within-user preferences drift by time of day on top of node 3.
+# result: GAUC 0.668605 | nDCG@5 0.536814 | primary 0.60271 | verdict noise
+
+--- logs/record-run-8/solutions/003_bpr_bce_fm.py
++++ logs/record-run-8/solutions/007_time_hour_bpr_bce_fm.py
+@@ -1,15 +1,16 @@
+-"""Factorization Machine trained with within-user BPR plus a small BCE term.
+-
+-Starts from 002_bpr_fm.py: same FM, same same-user positive/negative pair sampler.
+-The change is the loss: BPR remains primary, with a lightly weighted pointwise
+-BCE on the paired rows to preserve the useful calibration/static-feature signal
+-from the original baseline while still optimizing within-user ranking.
++"""BPR+BCE FM with raw-log time-of-day features.
++
++Starts from 003_bpr_bce_fm.py and changes only the feature matrix: append hour
++and coarse hour bucket read from the raw KuaiRand log CSVs.  The starter-kit
++row tuples do not contain hourmin, so we align the raw logs back to split rows by
++(date,user_id,video_id,tab) with FIFO duplicate handling.
+ """
+ import argparse
++import csv
+ import os
+ import sys
+ import time
+-from collections import defaultdict
++from collections import defaultdict, deque
+ 
+ import numpy as np
+ import torch
+@@ -18,6 +19,131 @@
+                                 '..', 'kuairand-starter-kit'))
+ from data import load, encode, FIELDS          # noqa: E402
+ from evaluate import evaluate                  # noqa: E402
++
++LOG_FILES = [
++    'log_standard_4_08_to_4_21_pure.csv',
++    'log_standard_4_22_to_5_08_pure.csv',
++]
++
++
++def _first(row, names):
++    for n in names:
++        if n in row:
++            return row[n]
++    return None
++
++
++def _to_int(x, default=0):
++    try:
++        if x is None or x == '':
++            return default
++        return int(float(x))
++    except Exception:
++        return default
++
++
++def _parse_hour(x):
++    if x is None or x == '':
++        return 0
++    s = str(x).strip()
++    try:
++        # Common KuaiRand form is HHMM as an int/string, e.g. 930 or 0930.
++        if ':' in s:
++            h = int(s.split(':', 1)[0])
++        else:
++            v = int(float(s))
++            h = v // 100 if v >= 100 else v
++        if 0 <= h <= 23:
++            return h
++    except Exception:
++        pass
++    return 0
++
++
++def key_tuple(r):
++    # data.load row: (date, user_id, video_id, author_id, tab, duration_ms, label)
++    return (_to_int(r[0]), str(r[1]), str(r[2]), _to_int(r[4]))
++
++
++def key_csv(row):
++    return (_to_int(_first(row, ['date', 'request_date', 'day'])),
++            str(_first(row, ['user_id', 'userId', 'user']) or ''),
++            str(_first(row, ['video_id', 'photo_id', 'item_id', 'videoId']) or ''),
++            _to_int(_first(row, ['tab', 'tab_id'])))
++
++
++def load_hours(data_dir, splits):
++    by_key = defaultdict(deque)
++    seen = 0
++    have_hour = False
++    for fn in LOG_FILES:
++        path = os.path.join(data_dir, fn)
++        if not os.path.exists(path):
++            path = os.path.join(data_dir, 'data', fn)
++        with open(path, 'r', newline='', encoding='utf-8') as f:
++            reader = csv.DictReader(f)
++            names = reader.fieldnames or []
++            hname = 'hourmin' if 'hourmin' in names else None
++            if hname is None:
++                for cand in ['hour_min', 'time', 'timestamp']:
++                    if cand in names:
++                        hname = cand
++                        break
++            have_hour = have_hour or (hname is not None)
++            for row in reader:
++                seen += 1
++                by_key[key_csv(row)].append(_parse_hour(row.get(hname)) if hname else 0)
++
++    out = {}
++    used = 0
++    miss = 0
++    for sp in [s for s in ('train', 'valid', 'test') if s in splits]:
++        arr = np.zeros(len(splits[sp]), dtype=np.int16)
++        for i, r in enumerate(splits[sp]):
++            q = by_key.get(key_tuple(r))
++            if q:
++                arr[i] = q.popleft()
++                used += 1
++            else:
++                miss += 1
++        out[sp] = arr
++    print(f"hour feature: have_hour={have_hour} used={used:,d} miss={miss:,d} csv_rows={seen:,d}")
++    return out
++
++
++def append_time_features(splits, enc, dim, data_dir):
++    hours = load_hours(data_dir, splits)
++    # Fit categorical ids over all provided splits, matching starter-kit encode's
++    # transductive treatment of ids while keeping only train-learnable hour bins.
++    vocabs = [dict(), dict(), dict()]
++    vals_by_split = {}
++    for sp, rows in splits.items():
++        h = hours[sp]
++        vals = []
++        for i, r in enumerate(rows):
++            hour = int(h[i])
++            h6 = hour // 4                  # six 4-hour buckets
++            tab_h6 = f"{_to_int(r[4])}_{h6}"
++            vals.append((f"h{hour}", f"b{h6}", tab_h6))
++            for j, v in enumerate(vals[-1]):
++                if v not in vocabs[j]:
++                    vocabs[j][v] = len(vocabs[j])
++        vals_by_split[sp] = vals
++    offsets = []
++    cur = dim
++    for v in vocabs:
++        offsets.append(cur)
++        cur += len(v)
++    out = {}
++    for sp in enc:
++        X, y, u = enc[sp]
++        extra = np.empty((len(X), 3), dtype=np.int64)
++        for i, vals in enumerate(vals_by_split[sp]):
++            for j, v in enumerate(vals):
++                extra[i, j] = offsets[j] + vocabs[j][v]
++        out[sp] = (np.concatenate([X.astype(np.int64), extra], axis=1), y, u)
++    print(f"added time fields: hour={len(vocabs[0])}, hour6={len(vocabs[1])}, tab_hour6={len(vocabs[2])}; dim {dim}->{cur}")
++    return out, cur
+ 
+ 
+ class TorchFM(torch.nn.Module):
+@@ -73,9 +199,10 @@
+     return pi[order], ni[order]
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True, bce_weight=0.15):
+-    enc, dim = encode(splits)
++def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
++        patience=4, seed=0, device='cpu', verbose=True, bce_weight=0.15):
++    base_enc, base_dim = encode(splits)
++    enc, dim = append_time_features(splits, base_enc, base_dim, data_dir)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+@@ -109,8 +236,6 @@
+             sp = model(xp)
+             sn = model(xn)
+             bpr = -torch.nn.functional.logsigmoid(sp - sn).mean()
+-            # Balanced pointwise term on the same paired rows; positives target 1,
+-            # sampled negatives target 0.  Using softplus avoids allocating labels.
+             bce = 0.5 * (torch.nn.functional.softplus(-sp).mean() +
+                          torch.nn.functional.softplus(sn).mean())
+             loss = bpr + bce_weight * bce
+@@ -162,11 +287,11 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+-
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None,
+-                     bce_weight=a.bce_weight)
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+['hour','hour6','tab_hour6']")
++
++    model, enc = run(splits, data_dir=a.data_dir, k=a.k, lr=a.lr,
++                     epochs=a.epochs, seed=a.seed, device=a.device,
++                     verbose=a.out is None, bce_weight=a.bce_weight)
+ 
+     X, y, users = enc[target]
+     scores = model.predict(X, device=a.device)
+@@ -175,7 +300,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== time_hour_bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

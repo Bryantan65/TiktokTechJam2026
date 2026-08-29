@@ -1,0 +1,44 @@
+# iteration 27  (parent: 24)
+# hypothesis: improve 24: the best node is still variance-limited by the FM rank ensemble; increase the core BPR+BCE FM ensemble from five to nine members while keeping the same personalized LambdaRank residual, a direct variance-reduction test despite the extra cost.
+# result: GAUC 0.671541 | nDCG@5 0.537957 | primary 0.604749 | verdict KEPT
+
+--- logs/record-run-8/solutions/024_lgb_user_pref_residual.py
++++ logs/record-run-8/solutions/027_lgb_user_pref_9fm.py
+@@ -145,10 +145,8 @@
+     X=np.zeros((len(rows),21),np.float32)
+     for i,r in enumerate(rows):
+         y=float(r[6]) if loo else 0.0; _,gkeys,ukeys=keys_for(r); vals=[]
+-        # global item/context priors: keep parent behaviour (no leave-one-out)
+         for k,key in zip(gnames,gkeys):
+             c=cnts[k].get(key,0); s=sums[k].get(key,0.0); vals += [np.log1p(c),(s+20*gc)/(c+20)]
+-        # personalized preferences: leave-one-out on train to avoid directly revealing this row's label
+         for k,key in zip(unames,ukeys):
+             c=cnts[k].get(key,0); s=sums[k].get(key,0.0)
+             if loo: c=max(0,c-1); s=max(0.0,s-y)
+@@ -181,7 +179,7 @@
+     model=lgb.train(params,dtr,num_boost_round=250,valid_sets=[dva],valid_names=['valid'],callbacks=cb)
+     return model,pack
+ 
+-def train_all(splits,data_dir,seed=0,device='cpu',verbose=False,n_models=5):
++def train_all(splits,data_dir,seed=0,device='cpu',verbose=False,n_models=9):
+     enc,dim=encode(splits); fms=[]
+     for m in range(n_models): fms.append(train_fm(enc,dim,seed=int(seed+997*m),device=device,verbose=verbose,tag=f'm{m}/seed{seed+997*m}'))
+     Xtr,_,utr=enc['train']; Xva,_,uva=enc['valid']; fmtr=fm_ens(fms,Xtr,utr,device); fmva=fm_ens(fms,Xva,uva,device)
+@@ -194,7 +192,7 @@
+     return fm_weight*fmr + (1.0-fm_weight)*corr
+ 
+ if __name__=='__main__':
+-    ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test','dev']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); ap.add_argument('--n_models',type=int,default=5); ap.add_argument('--fm_weight',type=float,default=0.50)
++    ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test','dev']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); ap.add_argument('--n_models',type=int,default=9); ap.add_argument('--fm_weight',type=float,default=0.50)
+     ap.add_argument('--k',type=int,default=16); ap.add_argument('--lr',type=float,default=0.001); ap.add_argument('--epochs',type=int,default=40); ap.add_argument('--bce_weight',type=float,default=0.15)
+     a=ap.parse_args(); torch.manual_seed(a.seed)
+     print(f'loading {a.data_dir} ...')
+@@ -203,7 +201,7 @@
+         splits=load_dev(a.data_dir); target='valid'
+     else:
+         splits=load(a.data_dir); target=a.split
+-    print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}, lgb_user_pref_residual fm_weight={a.fm_weight}')
++    print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}, lgb_user_pref_9fm n_models={a.n_models} fm_weight={a.fm_weight}')
+     fms,model,pack,tmap,enc=train_all(splits,a.data_dir,seed=a.seed,device=a.device,verbose=(a.out is None),n_models=a.n_models)
+     X,y,u=enc[target]; scores=predict(fms,model,pack,tmap,X,splits[target],u,target,device=a.device,fm_weight=a.fm_weight)
+     if a.out:

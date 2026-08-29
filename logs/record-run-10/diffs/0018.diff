@@ -1,0 +1,118 @@
+# iteration 18  (parent: 15)
+# hypothesis: improve 15: LambdaRank helped but only used raw categorical ids; add smoothed train-only leave-one-out target/count statistics for video, author, context, and user-context interactions so the tree can exploit historical propensity while preserving the BPR member and 60/40 blend.
+# result: GAUC 0.625116 | nDCG@5 0.520506 | primary 0.572812 | verdict worse
+
+--- logs/record-run-10/solutions/015_lambdarank_blend.py
++++ logs/record-run-10/solutions/018_ltr_target_stats.py
+@@ -1,8 +1,8 @@
+-"""BPR + LightGBM LambdaRank blend with day/hour features.
+-
+-Branches from 009.  The BPR FM member is unchanged; the BCE FM member is
+-replaced by a LambdaMART/LambdaRank tree model trained with user_id groups, so
+-its objective directly targets top-of-user ranking rather than pointwise logloss.
++"""BPR + LightGBM LambdaRank blend with train-only target statistics.
++
++Improves 015: keep BPR and the 60/40 within-user rank blend unchanged, but give
++LambdaRank smoothed leave-one-out historical CTR/count features for item,
++author, and user-context interactions computed from the training window only.
+ """
+ import argparse
+ import csv
+@@ -126,6 +126,59 @@
+             yyyymmdd_to_dow(row[0]), int(hour), int(hour) // 4)
+ 
+ 
++def key_at(C, i, spec):
++    if len(spec) == 1:
++        return int(C[i, spec[0]])
++    return tuple(int(C[i, j]) for j in spec)
++
++
++def append_target_stats(base_rawcat, codes, enc):
++    ytr = enc['train'][1]
++    Ctr = codes['train']
++    gmean = float(ytr.mean()) if len(ytr) else 0.0
++    # field indices: user, video, author, tab, dur, dow, hour, tod4
++    specs = [
++        (1,), (2,), (3,), (4,), (5,), (6,), (7,),
++        (0, 1), (0, 2), (0, 3), (0, 4), (0, 6),
++        (2, 3), (2, 4), (3, 6), (3, 7),
++    ]
++    stat_blocks = {name: [] for name in codes}
++    for spec in specs:
++        cnt = {}
++        sm = {}
++        for i in range(len(Ctr)):
++            k = key_at(Ctr, i, spec)
++            cnt[k] = cnt.get(k, 0) + 1
++            sm[k] = sm.get(k, 0.0) + float(ytr[i])
++        prior = 5.0 if 0 in spec else 20.0
++        for name, C in codes.items():
++            y = enc[name][1]
++            mean_feat = np.empty(len(C), dtype=np.float32)
++            cnt_feat = np.empty(len(C), dtype=np.float32)
++            loo = (name == 'train')
++            for i in range(len(C)):
++                k = key_at(C, i, spec)
++                c = cnt.get(k, 0)
++                s = sm.get(k, 0.0)
++                if loo and c > 0:
++                    c2 = c - 1
++                    s2 = s - float(y[i])
++                else:
++                    c2 = c
++                    s2 = s
++                if c2 > 0:
++                    mean_feat[i] = (s2 + prior * gmean) / (c2 + prior)
++                else:
++                    mean_feat[i] = gmean
++                cnt_feat[i] = np.log1p(float(c2))
++            stat_blocks[name].append(mean_feat)
++            stat_blocks[name].append(cnt_feat)
++    out = {}
++    for name in base_rawcat:
++        out[name] = np.column_stack([base_rawcat[name]] + stat_blocks[name]).astype(np.float32)
++    return out
++
++
+ def encode_ext(splits, hour_lookup):
+     vocabs = [{} for _ in EXT_FIELDS]
+     for name, rows in splits.items():
+@@ -138,7 +191,8 @@
+     offsets = np.cumsum([0] + [len(v) for v in vocabs[:-1]], dtype=np.int64)
+     dim = int(offsets[-1] + len(vocabs[-1]))
+     enc = {}
+-    rawcat = {}
++    base_rawcat = {}
++    codes = {}
+     for name, rows in splits.items():
+         hours = hour_lookup[name]
+         X = np.empty((len(rows), len(EXT_FIELDS)), dtype=np.int64)
+@@ -159,7 +213,9 @@
+             except Exception:
+                 dur[i] = 0.0
+         enc[name] = (X, y, users)
+-        rawcat[name] = np.column_stack([C, np.log1p(np.maximum(dur, 0.0)).astype(np.float32)])
++        codes[name] = C
++        base_rawcat[name] = np.column_stack([C, np.log1p(np.maximum(dur, 0.0)).astype(np.float32)])
++    rawcat = append_target_stats(base_rawcat, codes, enc)
+     return enc, rawcat, dim
+ 
+ 
+@@ -354,7 +410,7 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, lambdarank")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}+target_stats, lambdarank")
+ 
+     bpr, ltr, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                                 seed=a.seed, device=a.device, verbose=a.out is None)
+@@ -368,6 +424,6 @@
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+         r = evaluate(users, y, scores)
+-        print(f"\n=== lambdarank_blend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== ltr_target_stats (seed={a.seed}, device={a.device}) ===")
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

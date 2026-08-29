@@ -1,0 +1,98 @@
+# iteration 14  (parent: 9)
+# hypothesis: improve 9: with convergence at risk, average two independently trained copies of the current best node 9 model at full strength to reduce seed/checkpoint variance rather than adding a weak new mechanism.
+# result: GAUC 0.671206 | nDCG@5 0.537303 | primary 0.604255 | verdict KEPT
+
+--- logs/record-run-4/solutions/009_multitask_aux_time_softmax.py
++++ logs/record-run-4/solutions/014_node9_seed_ensemble.py
+@@ -1,8 +1,10 @@
+-"""Sampled-softmax FM with time features and auxiliary feedback tasks.
+-
+-Builds on the best time-aware listwise FM: train long_view with within-user
+-sampled softmax, and add small BCE losses for raw feedback columns (click/like/
+-follow/comment/forward/profile/hate) using separate heads sharing FM embeddings.
++"""Two-seed ensemble of the current best time/multitask sampled-softmax FM.
++
++This is node 9 unchanged at the member level, but the script trains two
++independent initializations and averages their logits.  The previous best is
++stable but per-seed predictions are not identical; averaging should reduce
++checkpoint variance and may improve within-user ranking without introducing a
++new weak mechanism at low weight.
+ """
+ import argparse
+ import csv
+@@ -182,13 +184,11 @@
+     return np.concatenate(pos_chunks), np.asarray(neg_pools, dtype=object)
+ 
+ 
+-def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096,
+-        patience=4, neg_k=8, aux_weight=0.05, seed=0, device='cpu', verbose=True):
+-    enc, aux, matched, dim = encode_with_time_aux(splits, data_dir)
++def train_one(enc, aux, matched, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096,
++              patience=4, neg_k=8, aux_weight=0.05, seed=0, device='cpu', verbose=True):
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+-    # Drop degenerate/unmatched auxiliary tasks so constant columns cannot swamp ranking.
+     valid_rows = matched['train']
+     prev = aux['train'][valid_rows].mean(0) if valid_rows.any() else np.zeros(len(AUX_NAMES))
+     keep_aux = np.where((prev > 0.001) & (prev < 0.999))[0]
+@@ -247,7 +247,7 @@
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+             kept = ','.join(AUX_NAMES[i] for i in keep_aux)
+-            print(f"  epoch {ep:2d} | mt-softmax {np.mean(losses):.4f} aux=[{kept}] | valid "
++            print(f"  seed {seed} epoch {ep:2d} | mt-softmax {np.mean(losses):.4f} aux=[{kept}] | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+@@ -261,7 +261,31 @@
+                 break
+ 
+     model.load_state_dict(best_state)
+-    return model, enc
++    return model
++
++
++class Ensemble:
++    def __init__(self, models):
++        self.models = models
++
++    def predict(self, X, device='cpu'):
++        preds = None
++        for m in self.models:
++            p = m.predict(X, device=device).astype(np.float64)
++            preds = p if preds is None else preds + p
++        return preds / float(len(self.models))
++
++
++def run(splits, data_dir, k=16, lr=0.001, epochs=40, seed=0, device='cpu', verbose=True):
++    enc, aux, matched, dim = encode_with_time_aux(splits, data_dir)
++    # Two members keeps runtime reasonable while still averaging independent FM factors and samplers.
++    member_seeds = [int(seed), int(seed) + 1009]
++    models = []
++    for s in member_seeds:
++        torch.manual_seed(s)
++        models.append(train_one(enc, aux, matched, dim, k=k, lr=lr, epochs=epochs,
++                                seed=s, device=device, verbose=verbose))
++    return Ensemble(models), enc
+ 
+ 
+ if __name__ == '__main__':
+@@ -280,7 +304,7 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES}")
++          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} two_seed_ensemble")
+ 
+     model, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                      seed=a.seed, device=a.device, verbose=a.out is None)
+@@ -291,7 +315,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== multitask_aux_time_softmax (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== node9_seed_ensemble (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

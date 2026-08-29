@@ -1,0 +1,68 @@
+# iteration 7  (parent: 6)
+# hypothesis: improve 6: node 6's BCE member complemented BPR at a readable 30%; bag three unchanged BCE FMs (cached under node-6 member keys) to reduce complement variance and raise its weight to 40%.
+# result: GAUC 0.671394 | nDCG@5 0.537629 | primary 0.604512 | verdict KEPT
+
+--- logs/record-run-9/solutions/006_bpr_bag_bce_rankblend.py
++++ logs/record-run-9/solutions/007_bpr_bce_bag_weight.py
+@@ -1,9 +1,9 @@
+-"""Bagged same-user BPR FM blended with a pointwise BCE FM.
+-
+-Node 2 showed the best signal from BPR.  This keeps BPR as the dominant signal,
+-but reduces seed noise by averaging three independently initialized BPR FMs and
+-adds a 30% pointwise BCE rank signal so users/items with weak pairwise coverage
+-retain the stable baseline ordering.  Member split predictions are cached.
++"""Bagged BPR/BCE FM blend with more stable BCE complement.
++
++Improves node 6 by keeping the same three cached BPR members, but also bagging
++three BCE members before blending.  Node 6 showed BCE rank signal complements
++BPR despite lower standalone score; reducing BCE seed noise should make a larger
++40% complementary weight safer.  Uses node-6 cache names for unchanged members.
+ """
+ import argparse
+ import os
+@@ -94,7 +94,7 @@
+             opt.step()
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  BCE epoch {ep:2d} valid {va['primary']:.6f} {time.time()-t0:.1f}s")
++            print(f"  BCE seed {seed} epoch {ep:2d} valid {va['primary']:.6f} {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -162,7 +162,6 @@
+         if n == 1:
+             out[idx] = 0.5
+         else:
+-            # Higher model score should receive a higher blended score.
+             ord2 = np.argsort(scores[idx], kind='mergesort')
+             r = np.empty(n, dtype=np.float64)
+             r[ord2] = np.arange(n, dtype=np.float64) / (n - 1.0)
+@@ -173,6 +172,7 @@
+ def cached_member_pred(name, train_fn, enc, dim, Xout, split, outer_seed, member_seed,
+                        device, verbose):
+     os.makedirs('pred_cache', exist_ok=True)
++    # Reuse node-6 predictions for unchanged member definitions.
+     cache_path = os.path.join('pred_cache',
+                               f'006_{name}_split{split}_outer{outer_seed}_mseed{member_seed}.npy')
+     if os.path.isfile(cache_path):
+@@ -196,11 +196,15 @@
+         bpr_rank_sum += within_user_ranks(p, uout)
+     bpr_rank = bpr_rank_sum / len(bpr_seeds)
+ 
+-    bce_pred = cached_member_pred('bce', train_bce, enc, dim, Xout, split, seed,
+-                                  seed + 303, device, verbose)
+-    bce_rank = within_user_ranks(bce_pred, uout)
+-
+-    return 0.70 * bpr_rank + 0.30 * bce_rank
++    bce_seeds = [seed + 303, seed + 404, seed + 505]
++    bce_rank_sum = np.zeros(len(Xout), dtype=np.float64)
++    for ms in bce_seeds:
++        p = cached_member_pred('bce', train_bce, enc, dim, Xout, split, seed, ms,
++                               device, verbose)
++        bce_rank_sum += within_user_ranks(p, uout)
++    bce_rank = bce_rank_sum / len(bce_seeds)
++
++    return 0.60 * bpr_rank + 0.40 * bce_rank
+ 
+ 
+ if __name__ == '__main__':

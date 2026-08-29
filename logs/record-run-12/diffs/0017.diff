@@ -1,0 +1,148 @@
+# iteration 17  (parent: 11)
+# hypothesis: draft 9: append categorical video side information (music/tag/type/upload/size/music_type) to the FM fields and train the same BPR/BCE rank-fusion ensemble; FMs are designed to exploit sparse side information for recommendation/cold-start style generalisation (https://www.csie.ntu.edu.tw/~b97053/paper/Rendle2010FM.pdf). This is a new mechanism, not another node-11 blend tweak.
+# result: GAUC 0.67186 | nDCG@5 0.537872 | primary 0.604866 | verdict KEPT
+
+--- logs/record-run-12/solutions/011_bpr_bce_seedbag_rank.py
++++ logs/record-run-12/solutions/018_content_features_rank.py
+@@ -1,12 +1,14 @@
+-"""Seed-bagged BPR/BCE FM blend using per-user rank fusion.
+-
+-Refines node 8 without changing any member training.  Instead of per-user
+-z-scored score averaging, convert each member's scores to within-user percentile
+-ranks and blend those ranks at 70/30 BPR/BCE, then average over member seeds
+-0/1/2.  Cache names are unchanged from 007/008, so existing member predictions
+-are reused; if caches are absent the script trains the six members standalone.
++"""FM rank ensemble with item content side features.
++
++Draft direction 9.  Starting from node 11's BPR/BCE rank-fusion ensemble, append
++categorical video metadata from video_features_basic_pure.csv to the FM fields:
++music_id, tag, video_type, upload_type, server_width, server_height, music_type.
++This tests whether user-content interactions generalise better than opaque
++video_id alone.  Member predictions are cached with new names because the
++feature space changed.
+ """
+ import argparse
++import csv
+ import os
+ import sys
+ import time
+@@ -18,6 +20,8 @@
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'kuairand-starter-kit'))
+ from data import load, encode, FIELDS          # noqa: E402
+ from evaluate import evaluate                  # noqa: E402
++
++CONTENT_FIELDS = ['music_id', 'tag', 'video_type', 'upload_type', 'server_width', 'server_height', 'music_type']
+ 
+ 
+ class TorchFM(torch.nn.Module):
+@@ -41,6 +45,72 @@
+             xb = torch.from_numpy(X[i:i + bs].astype(np.int64)).to(device)
+             out.append(self(xb).cpu().numpy())
+         return np.concatenate(out)
++
++
++def norm_val(v):
++    if v is None or v == '':
++        return '__MISS__'
++    s = str(v).strip()
++    return s if s else '__MISS__'
++
++
++def load_video_content(data_dir):
++    path = os.path.join(data_dir, 'video_features_basic_pure.csv')
++    mp = {}
++    if not os.path.isfile(path):
++        print('WARNING: no video_features_basic_pure.csv found; all content missing')
++        return mp
++    with open(path, newline='', encoding='utf-8') as f:
++        rdr = csv.DictReader(f)
++        # tolerate either video_id or item_id naming, but the public file uses video_id
++        vid_col = 'video_id' if 'video_id' in (rdr.fieldnames or []) else ('item_id' if 'item_id' in (rdr.fieldnames or []) else None)
++        if vid_col is None:
++            print('WARNING: video feature file has no video_id/item_id; all content missing')
++            return mp
++        for rec in rdr:
++            vid = norm_val(rec.get(vid_col))
++            vals = []
++            for c in CONTENT_FIELDS:
++                v = norm_val(rec.get(c))
++                # Tags can be long multi-tags; preserving the exact token is still categorical side info.
++                vals.append(v)
++            mp[vid] = tuple(vals)
++    print('loaded video content rows', len(mp))
++    return mp
++
++
++def append_content_features(splits, enc, base_dim, data_dir):
++    content = load_video_content(data_dir)
++    rows_all = []
++    for sp in ['train', 'valid', 'test']:
++        if sp in splits:
++            rows_all.extend(splits[sp])
++    # Build category maps from all exposed rows only, unsupervised.  Missing gets a real category.
++    maps = [{ '__MISS__': 0 } for _ in CONTENT_FIELDS]
++    for r in rows_all:
++        vals = content.get(norm_val(r[2]), None)
++        if vals is None:
++            vals = ('__MISS__',) * len(CONTENT_FIELDS)
++        for j, v in enumerate(vals):
++            if v not in maps[j]:
++                maps[j][v] = len(maps[j])
++    offsets = []
++    off = base_dim
++    for m in maps:
++        offsets.append(off); off += len(m)
++    print('content cardinalities', {CONTENT_FIELDS[i]: len(maps[i]) for i in range(len(CONTENT_FIELDS))}, 'new_dim', off)
++
++    out = {}
++    for sp, (X, y, u) in enc.items():
++        C = np.empty((len(X), len(CONTENT_FIELDS)), dtype=np.int64)
++        for i, r in enumerate(splits[sp]):
++            vals = content.get(norm_val(r[2]), None)
++            if vals is None:
++                vals = ('__MISS__',) * len(CONTENT_FIELDS)
++            for j, v in enumerate(vals):
++                C[i, j] = offsets[j] + maps[j].get(v, 0)
++        out[sp] = (np.concatenate([X.astype(np.int64), C], axis=1), y, u)
++    return out, off
+ 
+ 
+ def train_bce_member(enc, dim, seed=0, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False):
+@@ -149,7 +219,6 @@
+         end = start + 1
+         while end < n and us[end] == us[start]: end += 1
+         idx = order[start:end]
+-        # ascending rank, so larger original score gets larger fused score
+         ord2 = idx[np.argsort(scores[idx], kind='mergesort')]
+         m = len(ord2)
+         if m <= 1:
+@@ -162,7 +231,7 @@
+ 
+ def get_member_preds(name, train_fn, enc, dim, Xtar, seed, device, verbose):
+     os.makedirs('pred_cache', exist_ok=True)
+-    cache_path = os.path.join('pred_cache', f'007_{name}_seed{seed}_n{len(Xtar)}.npy')
++    cache_path = os.path.join('pred_cache', f'018_{name}_seed{seed}_n{len(Xtar)}.npy')
+     if os.path.isfile(cache_path):
+         print(f'loading cached {name} seed {seed} predictions {cache_path}')
+         return np.load(cache_path).astype(np.float64)
+@@ -189,15 +258,16 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+-    enc, dim = encode(splits)
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+{CONTENT_FIELDS}")
++    enc0, dim0 = encode(splits)
++    enc, dim = append_content_features(splits, enc0, dim0, a.data_dir)
+     Xtar, _, utar = enc[target]
+     verbose = (a.out is None)
+ 
+     blended = []
+     for member_seed in (0, 1, 2):
+-        bpr = get_member_preds('bpr_anchor_v1', train_bpr_member, enc, dim, Xtar, member_seed, a.device, verbose)
+-        bce = get_member_preds('bce_v1', train_bce_member, enc, dim, Xtar, member_seed, a.device, verbose)
++        bpr = get_member_preds('content_bpr_anchor_v1', train_bpr_member, enc, dim, Xtar, member_seed, a.device, verbose)
++        bce = get_member_preds('content_bce_v1', train_bce_member, enc, dim, Xtar, member_seed, a.device, verbose)
+         blended.append(0.70 * percentile_rank_by_user(bpr, utar) + 0.30 * percentile_rank_by_user(bce, utar))
+     scores = np.mean(blended, axis=0)
+ 

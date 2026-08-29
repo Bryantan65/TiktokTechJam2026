@@ -1,0 +1,65 @@
+# iteration 17  (parent: 15)
+# hypothesis: improve 15: LambdaRank is the best new mechanism; keep the BPR member and 60/40 rank blend fixed, but set LightGBM lambdarank_truncation_level=5 and modestly increase tree capacity so the tree member optimizes the actual nDCG@5 cutoff rather than a broader ranking.
+# result: GAUC 0.669195 | nDCG@5 0.536835 | primary 0.603015 | verdict noise
+
+--- logs/record-run-10/solutions/015_lambdarank_blend.py
++++ logs/record-run-10/solutions/017_lambdarank_top5_blend.py
+@@ -1,8 +1,9 @@
+-"""BPR + LightGBM LambdaRank blend with day/hour features.
+-
+-Branches from 009.  The BPR FM member is unchanged; the BCE FM member is
+-replaced by a LambdaMART/LambdaRank tree model trained with user_id groups, so
+-its objective directly targets top-of-user ranking rather than pointwise logloss.
++"""BPR + LightGBM LambdaRank blend, top-5 focused LambdaRank.
++
++Improves 015: keep the BPR FM member and final 60/40 rank blend unchanged,
++but make the LambdaRank member focus its pair construction on the metric cutoff
++with lambdarank_truncation_level=5 and a slightly larger tree, instead of the
++broader default truncation.
+ """
+ import argparse
+ import csv
+@@ -279,9 +280,10 @@
+         'metric': 'ndcg',
+         'ndcg_eval_at': [5],
+         'label_gain': [0, 1],
+-        'learning_rate': 0.04,
+-        'num_leaves': 63,
+-        'min_data_in_leaf': 80,
++        'lambdarank_truncation_level': 5,
++        'learning_rate': 0.035,
++        'num_leaves': 95,
++        'min_data_in_leaf': 60,
+         'feature_fraction': 0.85,
+         'bagging_fraction': 0.85,
+         'bagging_freq': 1,
+@@ -295,10 +297,10 @@
+         'data_random_seed': int(seed) + 23,
+         'force_col_wise': True,
+     }
+-    callbacks = [lgb.early_stopping(30, verbose=verbose)]
++    callbacks = [lgb.early_stopping(40, verbose=verbose)]
+     if verbose:
+         callbacks.append(lgb.log_evaluation(20))
+-    model = lgb.train(params, dtrain, num_boost_round=300,
++    model = lgb.train(params, dtrain, num_boost_round=450,
+                       valid_sets=[dvalid], valid_names=['valid'], callbacks=callbacks)
+     return model
+ 
+@@ -354,7 +356,7 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, lambdarank")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={EXT_FIELDS}, lambdarank_top5")
+ 
+     bpr, ltr, enc, rawcat = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                                 seed=a.seed, device=a.device, verbose=a.out is None)
+@@ -368,6 +370,6 @@
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+         r = evaluate(users, y, scores)
+-        print(f"\n=== lambdarank_blend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== lambdarank_top5_blend (seed={a.seed}, device={a.device}) ===")
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

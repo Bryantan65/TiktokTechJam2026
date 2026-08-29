@@ -1,0 +1,107 @@
+# iteration 15  (parent: 9)
+# hypothesis: improve 9: node 9 optimizes one listwise row per positive, but primary includes unweighted per-user nDCG@5; reweight positives by 1/sqrt(user positive count), normalized to mean 1, to trade a little GAUC weighting for better top-5 user balance.
+# result: GAUC 0.669426 | nDCG@5 0.537 | primary 0.603213 | verdict noise
+
+--- logs/record-run-4/solutions/009_multitask_aux_time_softmax.py
++++ logs/record-run-4/solutions/015_user_balanced_softmax.py
+@@ -1,8 +1,10 @@
+-"""Sampled-softmax FM with time features and auxiliary feedback tasks.
+-
+-Builds on the best time-aware listwise FM: train long_view with within-user
+-sampled softmax, and add small BCE losses for raw feedback columns (click/like/
+-follow/comment/forward/profile/hate) using separate heads sharing FM embeddings.
++"""User-balanced sampled-softmax FM with time features and auxiliary tasks.
++
++Node 9 trains one sampled-softmax row per positive, which weights users in
++proportion to their number of positives.  GAUC uses positive-count weighting,
++but nDCG@5 is averaged per user; this variant mildly reweights each positive by
++1/sqrt(user_positive_count), normalized to mean 1, to keep most GAUC signal while
++putting more training mass on users where one top-5 mistake matters more.
+ """
+ import argparse
+ import csv
+@@ -163,7 +165,7 @@
+     users = np.asarray(users)
+     order = np.argsort(users, kind='mergesort')
+     us = users[order]
+-    pos_chunks, neg_pools = [], []
++    pos_chunks, neg_pools, weights = [], [], []
+     i = 0
+     while i < len(order):
+         j = i + 1
+@@ -176,10 +178,14 @@
+             pos_chunks.append(pos.astype(np.int64, copy=False))
+             neg = neg.astype(np.int64, copy=False)
+             neg_pools.extend([neg] * len(pos))
++            weights.extend([1.0 / np.sqrt(float(len(pos)))] * len(pos))
+         i = j
+     if not pos_chunks:
+         raise RuntimeError('no users with both positive and negative rows')
+-    return np.concatenate(pos_chunks), np.asarray(neg_pools, dtype=object)
++    pos_idx = np.concatenate(pos_chunks)
++    weights = np.asarray(weights, dtype=np.float32)
++    weights = weights / max(float(weights.mean()), 1e-12)
++    return pos_idx, np.asarray(neg_pools, dtype=object), weights
+ 
+ 
+ def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096,
+@@ -188,7 +194,6 @@
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+-    # Drop degenerate/unmatched auxiliary tasks so constant columns cannot swamp ranking.
+     valid_rows = matched['train']
+     prev = aux['train'][valid_rows].mean(0) if valid_rows.any() else np.zeros(len(AUX_NAMES))
+     keep_aux = np.where((prev > 0.001) & (prev < 0.999))[0]
+@@ -206,7 +211,7 @@
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     aux_t = torch.from_numpy(aux_tr.astype(np.float32))
+-    pos_idx, neg_pools = make_pair_sampler(ytr, utr)
++    pos_idx, neg_pools, pos_w = make_pair_sampler(ytr, utr)
+     rng = np.random.default_rng(seed)
+ 
+     best, best_state, bad = -1.0, None, 0
+@@ -226,12 +231,14 @@
+ 
+             xp = Xtr_t[torch.from_numpy(pidx)].to(device)
+             xn = Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
++            wb = torch.from_numpy(pos_w[psel]).to(device)
+             opt.zero_grad(set_to_none=True)
+             sp = model(xp).view(bsz, 1)
+             sn = model(xn).view(bsz, neg_k)
+             logits = torch.cat([sp, sn], dim=1)
+             target = torch.zeros(bsz, dtype=torch.long, device=device)
+-            loss = torch.nn.functional.cross_entropy(logits, target)
++            ce = torch.nn.functional.cross_entropy(logits, target, reduction='none')
++            loss = (ce * wb).mean()
+ 
+             if aux_weight > 0.0 and len(keep_aux):
+                 xc = Xtr_t[torch.from_numpy(cand_idx.reshape(-1))].to(device)
+@@ -247,7 +254,7 @@
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+             kept = ','.join(AUX_NAMES[i] for i in keep_aux)
+-            print(f"  epoch {ep:2d} | mt-softmax {np.mean(losses):.4f} aux=[{kept}] | valid "
++            print(f"  epoch {ep:2d} | userbal-mt-softmax {np.mean(losses):.4f} aux=[{kept}] | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+@@ -280,7 +287,7 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES}")
++          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} user_balanced")
+ 
+     model, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                      seed=a.seed, device=a.device, verbose=a.out is None)
+@@ -291,7 +298,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== multitask_aux_time_softmax (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== user_balanced_softmax (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

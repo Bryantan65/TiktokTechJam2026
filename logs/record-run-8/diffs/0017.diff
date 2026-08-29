@@ -1,0 +1,219 @@
+# iteration 17  (parent: 15)
+# hypothesis: improve 15: the independent LambdaRank ranker degraded the strong FM ensemble; use the FM rank ensemble as LightGBM init_score and feature so LambdaRank learns residual top-k corrections rather than replacing the incumbent ranking. Citation: https://lightgbm.readthedocs.io/en/latest/Advanced-Topics.html#continued-training-with-input-score
+# result: GAUC 0.671405 | nDCG@5 0.537934 | primary 0.604669 | verdict KEPT
+
+--- logs/record-run-8/solutions/015_lgb_lambdarank_blend_fixpath.py
++++ logs/record-run-8/solutions/017_lgb_residual_lambdarank_blend.py
+@@ -1,4 +1,10 @@
+-"""Debug node 14: same FM rank ensemble + LightGBM LambdaRank blend, with robust imports."""
++"""FM rank ensemble plus residual LightGBM LambdaRank.
++
++Node 15 trained LambdaRank independently, then mixed it with the strong FM rank
++ensemble; the tree ranker pulled the blend below node 13.  This version gives
++LambdaRank the FM ensemble as an init_score and as a feature, so the trees learn
++ranking corrections around the incumbent rather than an unrelated ranking.
++"""
+ import argparse
+ import os
+ import sys
+@@ -163,19 +169,17 @@
+     gsum = sum(float(r[6]) for r in rows)
+     gcnt = len(rows)
+     gctr = gsum / max(gcnt, 1)
+-    names = ['user', 'video', 'author', 'tab', 'dur', 'user_tab', 'author_tab']
++    names = ['video', 'author', 'tab', 'dur', 'author_tab']
+     sums = {k: defaultdict(float) for k in names}
+     cnts = {k: defaultdict(int) for k in names}
+     for r in rows:
+         y = float(r[6])
+         dur_bucket = int(min(20, max(0, int(r[5]) // 5000)))
+         keys = {
+-            'user': r[1],
+             'video': r[2],
+             'author': r[3],
+             'tab': r[4],
+             'dur': dur_bucket,
+-            'user_tab': (r[1], r[4]),
+             'author_tab': (r[3], r[4]),
+         }
+         for k, key in keys.items():
+@@ -185,28 +189,35 @@
+ 
+ 
+ def stats_for_rows(rows, gctr, sums, cnts):
+-    feats = np.zeros((len(rows), 15), dtype=np.float32)
+-    names = ['user', 'video', 'author', 'tab', 'dur', 'user_tab', 'author_tab']
++    feats = np.zeros((len(rows), 11), dtype=np.float32)
++    names = ['video', 'author', 'tab', 'dur', 'author_tab']
+     for i, r in enumerate(rows):
+         dur_ms = float(r[5])
+         dur_bucket = int(min(20, max(0, int(r[5]) // 5000)))
+-        keys = [r[1], r[2], r[3], r[4], dur_bucket, (r[1], r[4]), (r[3], r[4])]
++        keys = [r[2], r[3], r[4], dur_bucket, (r[3], r[4])]
+         vals = []
+         for name, key in zip(names, keys):
+             c = cnts[name].get(key, 0)
+             s = sums[name].get(key, 0.0)
+             vals.append(np.log1p(c))
+             vals.append((s + 20.0 * gctr) / (c + 20.0))
+-        feats[i, :14] = vals
+-        feats[i, 14] = np.log1p(max(dur_ms, 0.0))
++        feats[i, :10] = vals
++        feats[i, 10] = np.log1p(max(dur_ms, 0.0))
+     return feats
+ 
+ 
+-def lgb_matrix(enc_X, rows, gctr, sums, cnts):
+-    return np.hstack([enc_X.astype(np.int32), stats_for_rows(rows, gctr, sums, cnts)]).astype(np.float32)
+-
+-
+-def sort_groups_by_user(X, y, users):
++def lgb_matrix(enc_X, rows, gctr, sums, cnts, fm_rank):
++    # Drop user_id from the tree features: it cannot affect within-user ranking
++    # except via noisy memorisation.  Keep item/context categorical IDs plus
++    # smoothed item/context rates and the incumbent FM rank.
++    return np.hstack([
++        enc_X[:, 1:].astype(np.int32),
++        stats_for_rows(rows, gctr, sums, cnts),
++        fm_rank.reshape(-1, 1).astype(np.float32),
++    ]).astype(np.float32)
++
++
++def sort_groups_by_user(X, y, users, init_score):
+     users_arr = np.asarray(users)
+     order = np.argsort(users_arr, kind='mergesort')
+     su = users_arr[order]
+@@ -222,41 +233,43 @@
+         last = u
+     if cnt:
+         group.append(cnt)
+-    return X[order], y[order], group
+-
+-
+-def train_lgb_ranker(enc, splits, seed=0, verbose=True):
++    return X[order], y[order], group, init_score[order]
++
++
++def train_lgb_residual_ranker(enc, splits, fm_train_rank, fm_valid_rank, seed=0, verbose=True):
+     gctr, sums, cnts = make_stat_maps(splits['train'])
+     Xtr_e, ytr, utr = enc['train']
+     Xva_e, yva, uva = enc['valid']
+-    Xtr = lgb_matrix(Xtr_e, splits['train'], gctr, sums, cnts)
+-    Xva = lgb_matrix(Xva_e, splits['valid'], gctr, sums, cnts)
+-    Xtr_s, ytr_s, gtr = sort_groups_by_user(Xtr, ytr.astype(np.float32), utr)
+-    Xva_s, yva_s, gva = sort_groups_by_user(Xva, yva.astype(np.float32), uva)
+-    dtr = lgb.Dataset(Xtr_s, label=ytr_s, group=gtr, categorical_feature=list(range(len(FIELDS))), free_raw_data=False)
+-    dva = lgb.Dataset(Xva_s, label=yva_s, group=gva, categorical_feature=list(range(len(FIELDS))), reference=dtr, free_raw_data=False)
++    Xtr = lgb_matrix(Xtr_e, splits['train'], gctr, sums, cnts, fm_train_rank)
++    Xva = lgb_matrix(Xva_e, splits['valid'], gctr, sums, cnts, fm_valid_rank)
++    Xtr_s, ytr_s, gtr, init_tr = sort_groups_by_user(Xtr, ytr.astype(np.float32), utr, fm_train_rank.astype(np.float64))
++    Xva_s, yva_s, gva, init_va = sort_groups_by_user(Xva, yva.astype(np.float32), uva, fm_valid_rank.astype(np.float64))
++    dtr = lgb.Dataset(Xtr_s, label=ytr_s, group=gtr, init_score=init_tr,
++                      categorical_feature=[0, 1, 2, 3], free_raw_data=False)
++    dva = lgb.Dataset(Xva_s, label=yva_s, group=gva, init_score=init_va,
++                      categorical_feature=[0, 1, 2, 3], reference=dtr, free_raw_data=False)
+     params = {
+         'objective': 'lambdarank',
+         'metric': 'ndcg',
+         'ndcg_eval_at': [5],
+         'label_gain': [0, 1],
+-        'learning_rate': 0.05,
+-        'num_leaves': 63,
+-        'min_data_in_leaf': 80,
+-        'feature_fraction': 0.85,
+-        'bagging_fraction': 0.85,
++        'learning_rate': 0.03,
++        'num_leaves': 31,
++        'min_data_in_leaf': 120,
++        'feature_fraction': 0.90,
++        'bagging_fraction': 0.90,
+         'bagging_freq': 1,
+-        'lambda_l2': 2.0,
++        'lambda_l2': 5.0,
+         'verbosity': -1,
+         'seed': int(seed),
+         'feature_fraction_seed': int(seed) + 11,
+         'bagging_seed': int(seed) + 17,
+         'num_threads': 4,
+     }
+-    callbacks = [lgb.early_stopping(30, verbose=verbose)]
++    callbacks = [lgb.early_stopping(25, verbose=verbose)]
+     if not verbose:
+         callbacks.append(lgb.log_evaluation(period=0))
+-    model = lgb.train(params, dtr, num_boost_round=300, valid_sets=[dva], valid_names=['valid'], callbacks=callbacks)
++    model = lgb.train(params, dtr, num_boost_round=250, valid_sets=[dva], valid_names=['valid'], callbacks=callbacks)
+     return model, (gctr, sums, cnts)
+ 
+ 
+@@ -269,16 +282,25 @@
+         fm_models.append(train_one_fm(enc, dim, k=k, lr=lr, epochs=epochs, seed=s,
+                                       device=device, verbose=verbose,
+                                       bce_weight=bce_weight, tag=f"m{m}/seed{s}"))
+-    lgb_model, stat_pack = train_lgb_ranker(enc, splits, seed=seed + 4242, verbose=verbose)
++    Xtr, ytr, utr = enc['train']
++    Xva, yva, uva = enc['valid']
++    fm_train_rank = fm_rank_ensemble(fm_models, Xtr, utr, device=device)
++    fm_valid_rank = fm_rank_ensemble(fm_models, Xva, uva, device=device)
++    lgb_model, stat_pack = train_lgb_residual_ranker(enc, splits, fm_train_rank, fm_valid_rank,
++                                                     seed=seed + 4242, verbose=verbose)
+     return fm_models, lgb_model, stat_pack, enc
+ 
+ 
+-def predict_blend(fm_models, lgb_model, stat_pack, enc_X, rows, users, device='cpu', fm_weight=0.70):
++def predict_residual_blend(fm_models, lgb_model, stat_pack, enc_X, rows, users,
++                           device='cpu', fm_weight=0.50):
+     fm_rank = fm_rank_ensemble(fm_models, enc_X, users, device=device)
+     gctr, sums, cnts = stat_pack
+-    Xl = lgb_matrix(enc_X, rows, gctr, sums, cnts)
+-    lgb_rank = user_percentile_scores(lgb_model.predict(Xl, num_iteration=lgb_model.best_iteration), users)
+-    return fm_weight * fm_rank + (1.0 - fm_weight) * lgb_rank
++    Xl = lgb_matrix(enc_X, rows, gctr, sums, cnts, fm_rank)
++    delta = lgb_model.predict(Xl, num_iteration=lgb_model.best_iteration)
++    # The booster was trained with fm_rank as init_score; add its learned tree
++    # correction back to the same init score, then rank-normalise per user.
++    corrected_rank = user_percentile_scores(fm_rank + delta, users)
++    return fm_weight * fm_rank + (1.0 - fm_weight) * corrected_rank
+ 
+ 
+ if __name__ == '__main__':
+@@ -293,7 +315,7 @@
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     ap.add_argument('--bce_weight', type=float, default=0.15)
+     ap.add_argument('--n_models', type=int, default=5)
+-    ap.add_argument('--fm_weight', type=float, default=0.70)
++    ap.add_argument('--fm_weight', type=float, default=0.50)
+     a = ap.parse_args()
+ 
+     torch.manual_seed(a.seed)
+@@ -305,24 +327,25 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}, fm_models={a.n_models}, fm_weight={a.fm_weight}")
++    print({k_: len(v) for k_, v in splits.items()},
++          f"fields={FIELDS}, residual_lgb, fm_models={a.n_models}, fm_weight={a.fm_weight}")
+ 
+     fm_models, lgb_model, stat_pack, enc = train_all(
+         splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device,
+         verbose=a.out is None, bce_weight=a.bce_weight, n_models=a.n_models)
+     X, y, users = enc[target]
+-    scores = predict_blend(fm_models, lgb_model, stat_pack, X, splits[target], users,
+-                           device=a.device, fm_weight=a.fm_weight)
++    scores = predict_residual_blend(fm_models, lgb_model, stat_pack, X, splits[target], users,
++                                    device=a.device, fm_weight=a.fm_weight)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== lgb_lambdarank_blend_fixpath (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== lgb_residual_lambdarank_blend (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]
+-                r = evaluate(us, ys, predict_blend(fm_models, lgb_model, stat_pack, Xs, splits[sp], us,
+-                                                   device=a.device, fm_weight=a.fm_weight))
++                r = evaluate(us, ys, predict_residual_blend(fm_models, lgb_model, stat_pack, Xs, splits[sp], us,
++                                                            device=a.device, fm_weight=a.fm_weight))
+                 print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

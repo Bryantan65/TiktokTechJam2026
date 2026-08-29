@@ -1,0 +1,51 @@
+# iteration 25  (parent: 24)
+# hypothesis: improve 24: the added user-balanced BPR member gave the clearest recent gain, so average three weaker independent user-balanced members to stabilize and amplify that complementary per-user nDCG signal without dominating the label-BPR ensemble.
+# result: GAUC 0.672435 | nDCG@5 0.538372 | primary 0.605403 | verdict KEPT
+
+--- logs/record-run-3/solutions/024_time_watch_userbalanced.py
++++ logs/record-run-3/solutions/025_more_userbalanced.py
+@@ -1,9 +1,10 @@
+-"""Time FM BPR ensemble with weak user-balanced BPR diversity.
+-
+-Improve node 23: GAUC-weighted training over-represents users with many positives,
+-while nDCG@5 is averaged per user.  Preserve the seven node-17 label-BPR members
+-and watch-confidence member, and add one weak member whose same-user BPR pairs are
+-weighted so each mixed-label user contributes roughly equally.
++"""Time/watch FM BPR ensemble with three weak user-balanced BPR members.
++
++Improve node 24: the first user-balanced same-user BPR member moved both GAUC
++and nDCG upward.  Keep the node-24 recipe but reduce per-member weight and use
++three independently initialized user-balanced members (total weight 1.5) to make
++that complementary signal less seed-specific without letting it dominate the
++GAUC-weighted label ensemble.
+ """
+ import argparse
+ import csv
+@@ -207,8 +208,9 @@
+         torch.manual_seed(s); models.append(train_one(enc, dim, k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag=f"label{j+1}/7")); weights.append(1.0)
+     s = seed + 7079; torch.manual_seed(s)
+     models.append(train_one(enc, dim, play_train=play_meta['train'], watch_conf=True, k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag="watchconf1/1")); weights.append(0.75)
+-    s = seed + 8089; torch.manual_seed(s)
+-    models.append(train_one(enc, dim, user_balanced=True, k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag="userbal1/1")); weights.append(0.75)
++    for j, s in enumerate([seed+8089, seed+9091, seed+10093]):
++        torch.manual_seed(s)
++        models.append(train_one(enc, dim, user_balanced=True, k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag=f"userbal{j+1}/3")); weights.append(0.50)
+     return models, np.asarray(weights, dtype=np.float64), enc
+ 
+ 
+@@ -241,13 +243,13 @@
+     a = ap.parse_args(); torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time; ensemble=7label+0.75watchconf+0.75userbal")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time; ensemble=7label+0.75watchconf+3x0.50userbal")
+     models, weights, enc = train_ensemble(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[a.split]; scores = ensemble_predict(models, weights, X, users, device=a.device)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== time_watch_userbalanced (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== more_userbalanced (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]; r = evaluate(us, ys, ensemble_predict(models, weights, Xs, us, device=a.device))
+             print(f"  {sp:5s} GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")

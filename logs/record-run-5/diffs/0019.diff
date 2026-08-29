@@ -1,0 +1,140 @@
+# iteration 19  (parent: 15)
+# hypothesis: improve 15: node 15 optimizes equal-per-positive BPR, which matches GAUC but underweights the per-user nDCG half of the primary; reweight positives by a 50/50 mixture of positive-weighted and user-balanced losses. This is still the successful time+BPR direction, but better aligned with primary's mixed aggregation.
+# result: GAUC 0.669688 | nDCG@5 0.53723 | primary 0.603459 | verdict noise
+
+--- logs/record-run-5/solutions/015_bpr_weekday_hour_tabcross_fm.py
++++ logs/record-run-5/solutions/019_primary_weighted_bpr_time_fm.py
+@@ -1,9 +1,9 @@
+-"""3-model multi-negative BPR FM with weekday/hour and tab-hour cross features.
+-
+-Parent 13 is the current best. This refinement keeps the successful reusable
+-weekday and hour features, and adds a compact tab-by-hour categorical cross
+-(5*24 buckets) so the linear/FM model can learn tab-specific diurnal propensities
+-rather than relying only on a low-rank tab-hour interaction.
++"""3-model time FM with primary-aligned user-weighted multi-negative BPR.
++
++Node 15 samples every positive equally, which matches GAUC's positive-count
++weighting but underweights nDCG@5's per-user averaging. This version keeps the
++same features/model/ensemble and only reweights each positive's BPR loss by a
++50/50 mixture of positive-weighted and user-balanced weighting.
+ """
+ import argparse
+ import csv
+@@ -81,7 +81,6 @@
+             reader = csv.DictReader(f)
+             for r in reader:
+                 d = int(float(_get(r, 'date')))
+-                # author_id is in the processed tuple but not in log_standard.
+                 key = (
+                     d,
+                     int(float(_get(r, 'user_id'))),
+@@ -107,7 +106,6 @@
+         X, y, u = enc[sp]
+         feats = np.empty((len(rows), 3), dtype=np.int64)
+         for i, row in enumerate(rows):
+-            # tuple: date, user_id, video_id, author_id, tab, duration_ms, label
+             tab = int(row[4])
+             key = (int(row[0]), int(row[1]), int(row[2]), tab, int(row[5]))
+             if raw_time.get(key):
+@@ -130,22 +128,35 @@
+     return out, final_dim
+ 
+ 
+-def make_user_pair_pools(y, users):
++def make_user_pair_pools(y, users, mix=0.5, max_weight=5.0):
+     by_user = {}
+     for i, (uu, yy) in enumerate(zip(users, y)):
+         if uu not in by_user:
+             by_user[uu] = [[], []]  # neg, pos
+         by_user[uu][1 if yy > 0.5 else 0].append(i)
+ 
++    eligible = [(negs, poss) for negs, poss in by_user.values()
++                if len(poss) and len(negs)]
++    mean_pos = float(np.mean([len(poss) for _, poss in eligible])) if eligible else 1.0
++
+     pos_rows = []
+     neg_pools = []
+-    for negs, poss in by_user.values():
+-        if len(poss) and len(negs):
+-            neg_arr = np.asarray(negs, dtype=np.int64)
+-            for p in poss:
+-                pos_rows.append(p)
+-                neg_pools.append(neg_arr)
+-    return np.asarray(pos_rows, dtype=np.int64), neg_pools
++    weights = []
++    for negs, poss in eligible:
++        neg_arr = np.asarray(negs, dtype=np.int64)
++        # mix=0 is node-15 equal-per-positive BPR; mix=1 is equal total weight
++        # per user. A 0.5 mix mirrors primary=(GAUC weighted by positives +
++        # nDCG averaged by users)/2 without changing the sampled pairs.
++        uw = (1.0 - mix) + mix * (mean_pos / float(len(poss)))
++        uw = min(max_weight, max(0.2, uw))
++        for p in poss:
++            pos_rows.append(p)
++            neg_pools.append(neg_arr)
++            weights.append(uw)
++    w = np.asarray(weights, dtype=np.float32)
++    if len(w):
++        w /= (float(np.mean(w)) + 1e-12)
++    return np.asarray(pos_rows, dtype=np.int64), neg_pools, w
+ 
+ 
+ def train_one(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
+@@ -154,7 +165,7 @@
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+-    pos_rows, neg_pools = make_user_pair_pools(ytr, utr)
++    pos_rows, neg_pools, row_weights = make_user_pair_pools(ytr, utr, mix=0.5)
+     if len(pos_rows) == 0:
+         raise RuntimeError('no same-user positive/negative pairs in training data')
+ 
+@@ -164,6 +175,7 @@
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
++    w_t = torch.from_numpy(row_weights.astype(np.float32))
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+ 
+@@ -180,18 +192,20 @@
+             sel = order[i:i + bs]
+             xp = Xtr_t[torch.from_numpy(pos_rows[sel])].to(device)
+             xn = Xtr_t[torch.from_numpy(neg_rows[sel].reshape(-1))].to(device)
++            wb = w_t[torch.from_numpy(sel)].to(device)
+ 
+             opt.zero_grad(set_to_none=True)
+             sp = model(xp).view(-1, 1)
+             sn = model(xn).view(len(sel), neg_k)
+-            loss = F.softplus(-(sp - sn)).mean()
++            pair_loss = F.softplus(-(sp - sn)).mean(dim=1)
++            loss = (pair_loss * wb).mean()
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | multineg_bpr_tab_hour {np.mean(losses):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | primary_weighted_bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -246,7 +260,7 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+['weekday','hour','tab_hour']")
++          f"fields={FIELDS}+['weekday','hour','tab_hour']; user-weighted BPR")
+ 
+     models, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                       neg_k=a.neg_k, seed=a.seed, device=a.device,
+@@ -259,7 +273,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_weekday_hour_tabcross_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== primary_weighted_bpr_time_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, predict_ensemble(models, Xs, device=a.device))

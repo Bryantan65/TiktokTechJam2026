@@ -1,0 +1,103 @@
+# iteration 16  (parent: 13)
+# hypothesis: improve 13: BPR optimizes AUC while nDCG@5 cares most about the very top; keep the five BPR+BCE members unchanged but square each within-user percentile rank before averaging to emphasize consensus top items. Citation: https://arxiv.org/abs/1205.2618
+# result: GAUC 0.671453 | nDCG@5 0.537836 | primary 0.604644 | verdict KEPT
+
+--- logs/record-run-8/solutions/013_rank5_ensemble_bpr_bce_fm.py
++++ logs/record-run-8/solutions/016_rank5_power2_ensemble_bpr_bce_fm.py
+@@ -1,10 +1,10 @@
+-"""Five-member rank ensemble of the best BPR+BCE FM.
+-
+-Parent 12 averaged logits from three independently seeded BPR+BCE FMs.  This
+-keeps the same successful training objective, trains five members, and combines
+-members by within-user percentile ranks.  Since both target metrics are within-
+-user rankings, rank averaging removes seed-to-seed score-scale noise before the
+-ensemble vote.
++"""Five-member BPR+BCE FM ensemble with top-focused rank aggregation.
++
++Node 13 averaged within-user percentile ranks from five independently seeded
++BPR+BCE FMs.  This keeps the trained members/objective unchanged, but squares
++each member's percentile rank before averaging.  The nonlinear Borda vote gives
++more separation to items that several members put near the top, which may help
++nDCG@5 while preserving the within-user rank-normalisation benefit.
+ """
+ import argparse
+ import os
+@@ -15,8 +15,24 @@
+ import numpy as np
+ import torch
+ 
+-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+-                                '..', 'kuairand-starter-kit'))
++
++def _add_starter_to_path():
++    here = os.path.abspath(os.path.dirname(__file__))
++    candidates = [
++        os.path.join(os.getcwd(), 'kuairand-starter-kit'),
++        os.path.join(here, '..', 'kuairand-starter-kit'),
++        os.path.join(here, '..', '..', 'kuairand-starter-kit'),
++        os.path.join(here, '..', '..', '..', 'kuairand-starter-kit'),
++    ]
++    for p in candidates:
++        p = os.path.abspath(p)
++        if os.path.isdir(p):
++            sys.path.insert(0, p)
++            return
++    sys.path.insert(0, 'kuairand-starter-kit')
++
++
++_add_starter_to_path()
+ from data import load, encode, FIELDS          # noqa: E402
+ from evaluate import evaluate                  # noqa: E402
+ 
+@@ -155,11 +171,14 @@
+ 
+ 
+ @torch.no_grad()
+-def predict_ensemble(models, X, users, device='cpu'):
++def predict_ensemble(models, X, users, device='cpu', rank_power=2.0):
+     pred = np.zeros(len(X), dtype=np.float64)
+     for model in models:
+         raw = model.predict(X, device=device)
+-        pred += user_percentile_scores(raw, users)
++        r = user_percentile_scores(raw, users)
++        if rank_power != 1.0:
++            r = np.power(r, rank_power)
++        pred += r
+     pred /= float(len(models))
+     return pred
+ 
+@@ -176,6 +195,7 @@
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     ap.add_argument('--bce_weight', type=float, default=0.15)
+     ap.add_argument('--n_models', type=int, default=5)
++    ap.add_argument('--rank_power', type=float, default=2.0)
+     a = ap.parse_args()
+ 
+     torch.manual_seed(a.seed)
+@@ -187,22 +207,22 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}, rank ensemble={a.n_models}")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}, rank ensemble={a.n_models}, power={a.rank_power}")
+ 
+     models, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+                       device=a.device, verbose=a.out is None,
+                       bce_weight=a.bce_weight, n_models=a.n_models)
+     X, y, users = enc[target]
+-    scores = predict_ensemble(models, X, users, device=a.device)
++    scores = predict_ensemble(models, X, users, device=a.device, rank_power=a.rank_power)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== rank5_ensemble_bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== rank5_power2_ensemble_bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]
+-                r = evaluate(us, ys, predict_ensemble(models, Xs, us, device=a.device))
++                r = evaluate(us, ys, predict_ensemble(models, Xs, us, device=a.device, rank_power=a.rank_power))
+                 print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

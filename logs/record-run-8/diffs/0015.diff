@@ -1,0 +1,86 @@
+# iteration 15  (parent: 14)
+# hypothesis: debug 14: node 14 crashed before training because the starter-kit path used os.path.dirname with two arguments; keep the LambdaRank 30% blend unchanged and only fix the import path.
+# result: GAUC 0.669816 | nDCG@5 0.537378 | primary 0.603597 | verdict KEPT
+
+--- logs/record-run-8/solutions/014_lgb_lambdarank_blend.py
++++ logs/record-run-8/solutions/015_lgb_lambdarank_blend_fixpath.py
+@@ -1,9 +1,4 @@
+-"""Blend the rank-ensemble BPR+BCE FM with a LightGBM LambdaRank model.
+-
+-The FM part is node 13.  The extra member is deliberately given 30% of the
+-within-user rank vote so this is a readable test of a listwise tree ranker rather
+-than an almost-invisible low-weight ensemble addition.
+-"""
++"""Debug node 14: same FM rank ensemble + LightGBM LambdaRank blend, with robust imports."""
+ import argparse
+ import os
+ import sys
+@@ -14,7 +9,24 @@
+ import torch
+ import lightgbm as lgb
+ 
+-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__), '..'), 'kuairand-starter-kit'))
++
++def _add_starter_to_path():
++    here = os.path.abspath(os.path.dirname(__file__))
++    candidates = [
++        os.path.join(os.getcwd(), 'kuairand-starter-kit'),
++        os.path.join(here, '..', 'kuairand-starter-kit'),
++        os.path.join(here, '..', '..', 'kuairand-starter-kit'),
++        os.path.join(here, '..', '..', '..', 'kuairand-starter-kit'),
++    ]
++    for p in candidates:
++        p = os.path.abspath(p)
++        if os.path.isdir(p):
++            sys.path.insert(0, p)
++            return
++    sys.path.insert(0, 'kuairand-starter-kit')
++
++
++_add_starter_to_path()
+ from data import load, encode, FIELDS          # noqa: E402
+ from evaluate import evaluate                  # noqa: E402
+ 
+@@ -151,17 +163,9 @@
+     gsum = sum(float(r[6]) for r in rows)
+     gcnt = len(rows)
+     gctr = gsum / max(gcnt, 1)
+-    specs = {
+-        'user': 1,
+-        'video': 2,
+-        'author': 3,
+-        'tab': 4,
+-        'dur': None,
+-        'user_tab': None,
+-        'author_tab': None,
+-    }
+-    sums = {k: defaultdict(float) for k in specs}
+-    cnts = {k: defaultdict(int) for k in specs}
++    names = ['user', 'video', 'author', 'tab', 'dur', 'user_tab', 'author_tab']
++    sums = {k: defaultdict(float) for k in names}
++    cnts = {k: defaultdict(int) for k in names}
+     for r in rows:
+         y = float(r[6])
+         dur_bucket = int(min(20, max(0, int(r[5]) // 5000)))
+@@ -182,11 +186,11 @@
+ 
+ def stats_for_rows(rows, gctr, sums, cnts):
+     feats = np.zeros((len(rows), 15), dtype=np.float32)
++    names = ['user', 'video', 'author', 'tab', 'dur', 'user_tab', 'author_tab']
+     for i, r in enumerate(rows):
+         dur_ms = float(r[5])
+         dur_bucket = int(min(20, max(0, int(r[5]) // 5000)))
+         keys = [r[1], r[2], r[3], r[4], dur_bucket, (r[1], r[4]), (r[3], r[4])]
+-        names = ['user', 'video', 'author', 'tab', 'dur', 'user_tab', 'author_tab']
+         vals = []
+         for name, key in zip(names, keys):
+             c = cnts[name].get(key, 0)
+@@ -314,7 +318,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== lgb_lambdarank_blend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== lgb_lambdarank_blend_fixpath (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

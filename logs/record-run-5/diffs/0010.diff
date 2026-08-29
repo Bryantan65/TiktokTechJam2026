@@ -1,0 +1,129 @@
+# iteration 10  (parent: 6)
+# hypothesis: improve 6: the best multi-negative BPR is just below target and has meaningful seed wobble, so average three independent K=4 BPR FMs to reduce variance without diluting the mechanism in a low-weight ensemble.
+# result: GAUC 0.670451 | nDCG@5 0.53693 | primary 0.60369 | verdict KEPT
+
+--- logs/record-run-5/solutions/006_multineg_bpr_fm.py
++++ logs/record-run-5/solutions/010_ensemble3_multineg_bpr_fm.py
+@@ -1,9 +1,9 @@
+-"""FM trained with within-user multi-negative BPR loss.
++"""Equal-weight ensemble of the best multi-negative BPR FM.
+ 
+-Debug of 005_hard_bpr_fm.py: hard max over sampled negatives collapsed, likely
+-because early noisy high scores become adversarial false negatives. Keep the extra
+-same-user negative sampling, but average the BPR loss over all sampled negatives
+-instead of taking the max, so every comparison is a standard random BPR pair.
++The best single BPR model is just below target and has seed variation. This script
++trains three independent K=4 multi-negative BPR FMs per requested seed and averages
++their logits, making the tested signal readable (100% this mechanism, not a tiny
++blend with something else).
+ """
+ import argparse
+ import os
+@@ -63,9 +63,9 @@
+     return np.asarray(pos_rows, dtype=np.int64), neg_pools
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        neg_k=4, seed=0, device='cpu', verbose=True):
+-    enc, dim = encode(splits)
++def train_one(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
++              patience=4, neg_k=4, seed=0, device='cpu', verbose=True,
++              tag='m'):
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+@@ -83,7 +83,6 @@
+     best, best_state, bad = -1.0, None, 0
+ 
+     for ep in range(1, epochs + 1):
+-        # Sample several independent in-user random negatives per positive.
+         neg_rows = np.empty((len(pos_rows), neg_k), dtype=np.int64)
+         for j, pool in enumerate(neg_pools):
+             neg_rows[j] = pool[rng.integers(len(pool), size=neg_k)]
+@@ -100,7 +99,6 @@
+             opt.zero_grad(set_to_none=True)
+             sp = model(xp).view(-1, 1)
+             sn = model(xn).view(len(sel), neg_k)
+-            # Average standard BPR over K random same-user negatives; no hard max.
+             loss = F.softplus(-(sp - sn)).mean()
+             loss.backward()
+             opt.step()
+@@ -108,7 +106,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | multineg_bpr {np.mean(losses):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | multineg_bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -119,11 +117,32 @@
+             bad += 1
+             if bad >= patience:
+                 if verbose:
+-                    print(f"  early stop at epoch {ep}")
++                    print(f"  {tag} early stop at epoch {ep}")
+                 break
+ 
+     model.load_state_dict(best_state)
+-    return model, enc
++    return model
++
++
++def run(splits, k=16, lr=0.001, epochs=40, neg_k=4, seed=0, device='cpu',
++        verbose=True, n_models=3):
++    enc, dim = encode(splits)
++    models = []
++    # Widely spaced deterministic seeds give independent initializations and
++    # negative samples while keeping the script reproducible for the harness seed.
++    seeds = [seed + 1009 * i for i in range(n_models)]
++    for i, s in enumerate(seeds):
++        torch.manual_seed(s)
++        models.append(train_one(enc, dim, k=k, lr=lr, epochs=epochs, neg_k=neg_k,
++                                seed=s, device=device, verbose=verbose,
++                                tag=f"ens{i+1}/{n_models}"))
++    return models, enc
++
++
++@torch.no_grad()
++def predict_ensemble(models, X, device='cpu'):
++    preds = [m.predict(X, device=device).astype(np.float64) for m in models]
++    return np.mean(preds, axis=0)
+ 
+ 
+ if __name__ == '__main__':
+@@ -135,6 +154,7 @@
+     ap.add_argument('--lr', type=float, default=0.001)
+     ap.add_argument('--epochs', type=int, default=40)
+     ap.add_argument('--neg_k', type=int, default=4)
++    ap.add_argument('--n_models', type=int, default=3)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+@@ -144,20 +164,21 @@
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, neg_k=a.neg_k,
+-                     seed=a.seed, device=a.device, verbose=a.out is None)
++    models, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, neg_k=a.neg_k,
++                      seed=a.seed, device=a.device, verbose=a.out is None,
++                      n_models=a.n_models)
+ 
+     X, y, users = enc[a.split]
+-    scores = model.predict(X, device=a.device)
++    scores = predict_ensemble(models, X, device=a.device)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== multineg_bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== ensemble3_multineg_bpr_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+-            r = evaluate(us, ys, model.predict(Xs, device=a.device))
++            r = evaluate(us, ys, predict_ensemble(models, Xs, device=a.device))
+             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+                   f"| primary {r['primary']:.4f}")
+ 

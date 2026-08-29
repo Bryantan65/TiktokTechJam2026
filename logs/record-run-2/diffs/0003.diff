@@ -1,0 +1,44 @@
+# iteration 3  (parent: 2)
+# hypothesis: debug 2: 002 failed before training because encode() supplies users as a list; convert users and labels to NumPy arrays before sorting/fancy indexing. This tests the intended same-user BPR implementation rather than a loader bug.
+# result: GAUC 0.669683 | nDCG@5 0.536928 | primary 0.603305 | verdict noise
+
+--- logs/record-run-2/solutions/002_bpr_fm.py
++++ logs/record-run-2/solutions/003_bpr_fm_fix.py
+@@ -1,9 +1,7 @@
+ """FM trained with a within-user BPR pairwise ranking loss.
+ 
+-This keeps the baseline FM model/features/optimizer, but replaces pointwise BCE with
+-Bayesian Personalized Ranking: for each train user having both positive and
+-negative impressions, sample (positive row, negative row) pairs from that same
+-user and minimize softplus(-(s_pos - s_neg)).
++Bugfix of 002: encode() returns users as a Python list, so convert users/y to
++NumPy arrays before sorting and fancy indexing.
+ """
+ import argparse
+ import os
+@@ -46,6 +44,8 @@
+ 
+ def build_user_pos_neg(y, users):
+     """Return list of (positive_indices, negative_indices) for mixed-label users."""
++    y = np.asarray(y)
++    users = np.asarray(users)
+     order = np.argsort(users, kind='mergesort')
+     us = users[order]
+     groups = []
+@@ -72,7 +72,6 @@
+     for pos, neg in groups:
+         p = pos.copy()
+         rng.shuffle(p)
+-        # Replacement is intentional: many users have fewer negatives than positives.
+         n = rng.choice(neg, size=len(p), replace=(len(neg) < len(p)))
+         pos_parts.append(p)
+         neg_parts.append(n.astype(np.int64))
+@@ -166,7 +165,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_fm_fix (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

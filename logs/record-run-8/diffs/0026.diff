@@ -1,0 +1,91 @@
+# iteration 26  (parent: 24)
+# hypothesis: improve 24: expose the five individual FM rank members plus their disagreement to the LambdaRank residual, instead of only the averaged FM rank, so the tree can learn when the ensemble is uncertain and correct top-k ordering.
+# result: GAUC 0.671425 | nDCG@5 0.537929 | primary 0.604677 | verdict KEPT
+
+--- logs/record-run-8/solutions/024_lgb_user_pref_residual.py
++++ logs/record-run-8/solutions/026_lgb_member_uncertainty.py
+@@ -122,10 +122,12 @@
+         o=np.argsort(scores[idx],kind='mergesort'); r=np.empty(n,np.float64); r[o]=np.arange(n)/float(n-1); out[idx]=r
+     return out
+ 
+-def fm_ens(ms,X,u,device='cpu'):
+-    z=np.zeros(len(X),np.float64)
+-    for m in ms: z+=pct(m.predict(X,device=device),u)
+-    return z/len(ms)
++def fm_rank_cols(ms,X,u,device='cpu'):
++    cols=[]
++    for m in ms: cols.append(pct(m.predict(X,device=device),u))
++    M=np.vstack(cols).T.astype(np.float64); mean=M.mean(1)
++    extra=np.vstack([mean, M.std(1), M.max(1)-M.min(1)]).T
++    return mean, np.hstack([M,extra]).astype(np.float32)
+ 
+ def keys_for(r):
+     db=int(min(20,max(0,int(r[5])//5000)))
+@@ -145,10 +147,8 @@
+     X=np.zeros((len(rows),21),np.float32)
+     for i,r in enumerate(rows):
+         y=float(r[6]) if loo else 0.0; _,gkeys,ukeys=keys_for(r); vals=[]
+-        # global item/context priors: keep parent behaviour (no leave-one-out)
+         for k,key in zip(gnames,gkeys):
+             c=cnts[k].get(key,0); s=sums[k].get(key,0.0); vals += [np.log1p(c),(s+20*gc)/(c+20)]
+-        # personalized preferences: leave-one-out on train to avoid directly revealing this row's label
+         for k,key in zip(unames,ukeys):
+             c=cnts[k].get(key,0); s=sums[k].get(key,0.0)
+             if loo: c=max(0,c-1); s=max(0.0,s-y)
+@@ -156,8 +156,8 @@
+         X[i,:20]=vals; X[i,20]=np.log1p(max(float(r[5]),0.0))
+     return X
+ 
+-def lgb_mat(encX,rows,pack,fmr,tf,loo=False):
+-    return np.hstack([encX[:,1:].astype(np.int32),tf.astype(np.float32),stat_feats(rows,pack,loo=loo),fmr.reshape(-1,1).astype(np.float32)]).astype(np.float32)
++def lgb_mat(encX,rows,pack,fmcols,tf,loo=False):
++    return np.hstack([encX[:,1:].astype(np.int32),tf.astype(np.float32),stat_feats(rows,pack,loo=loo),fmcols.astype(np.float32)]).astype(np.float32)
+ 
+ def sort_user(X,y,u,init):
+     ua=np.asarray(u); o=np.argsort(ua,kind='mergesort'); su=ua[o]; gr=[]; last=None; c=0
+@@ -168,10 +168,10 @@
+     if c: gr.append(c)
+     return X[o],y[o],gr,init[o]
+ 
+-def train_lgb(enc,splits,fmtr,fmva,tmap,seed=0,verbose=False):
++def train_lgb(enc,splits,fmtr,fmva,cols_tr,cols_va,tmap,seed=0,verbose=False):
+     pack=stat_maps(splits['train']); Xte,ytr,utr=enc['train']; Xve,yva,uva=enc['valid']
+-    Xtr=lgb_mat(Xte,splits['train'],pack,fmtr,time_feats(splits['train'],tmap['train']),loo=True)
+-    Xva=lgb_mat(Xve,splits['valid'],pack,fmva,time_feats(splits['valid'],tmap['valid']),loo=False)
++    Xtr=lgb_mat(Xte,splits['train'],pack,cols_tr,time_feats(splits['train'],tmap['train']),loo=True)
++    Xva=lgb_mat(Xve,splits['valid'],pack,cols_va,time_feats(splits['valid'],tmap['valid']),loo=False)
+     Xs,ys,gs,ins=sort_user(Xtr,ytr.astype(np.float32),utr,fmtr.astype(np.float64)); Xvs,yvs,gvs,invs=sort_user(Xva,yva.astype(np.float32),uva,fmva.astype(np.float64))
+     dtr=lgb.Dataset(Xs,label=ys,group=gs,init_score=ins,categorical_feature=list(range(8)),free_raw_data=False)
+     dva=lgb.Dataset(Xvs,label=yvs,group=gvs,init_score=invs,categorical_feature=list(range(8)),reference=dtr,free_raw_data=False)
+@@ -184,18 +184,18 @@
+ def train_all(splits,data_dir,seed=0,device='cpu',verbose=False,n_models=5):
+     enc,dim=encode(splits); fms=[]
+     for m in range(n_models): fms.append(train_fm(enc,dim,seed=int(seed+997*m),device=device,verbose=verbose,tag=f'm{m}/seed{seed+997*m}'))
+-    Xtr,_,utr=enc['train']; Xva,_,uva=enc['valid']; fmtr=fm_ens(fms,Xtr,utr,device); fmva=fm_ens(fms,Xva,uva,device)
+-    tmap=build_time_maps(data_dir,splits); model,pack=train_lgb(enc,splits,fmtr,fmva,tmap,seed=seed+4242,verbose=verbose)
++    Xtr,_,utr=enc['train']; Xva,_,uva=enc['valid']
++    fmtr,cols_tr=fm_rank_cols(fms,Xtr,utr,device); fmva,cols_va=fm_rank_cols(fms,Xva,uva,device)
++    tmap=build_time_maps(data_dir,splits); model,pack=train_lgb(enc,splits,fmtr,fmva,cols_tr,cols_va,tmap,seed=seed+4242,verbose=verbose)
+     return fms,model,pack,tmap,enc
+ 
+ def predict(fms,model,pack,tmap,encX,rows,users,sp,device='cpu',fm_weight=0.50):
+-    fmr=fm_ens(fms,encX,users,device); X=lgb_mat(encX,rows,pack,fmr,time_feats(rows,tmap.get(sp,[])),loo=False)
++    fmr,cols=fm_rank_cols(fms,encX,users,device); X=lgb_mat(encX,rows,pack,cols,time_feats(rows,tmap.get(sp,[])),loo=False)
+     corr=pct(fmr + model.predict(X,num_iteration=model.best_iteration), users)
+     return fm_weight*fmr + (1.0-fm_weight)*corr
+ 
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test','dev']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); ap.add_argument('--n_models',type=int,default=5); ap.add_argument('--fm_weight',type=float,default=0.50)
+-    ap.add_argument('--k',type=int,default=16); ap.add_argument('--lr',type=float,default=0.001); ap.add_argument('--epochs',type=int,default=40); ap.add_argument('--bce_weight',type=float,default=0.15)
+     a=ap.parse_args(); torch.manual_seed(a.seed)
+     print(f'loading {a.data_dir} ...')
+     if a.split=='dev':
+@@ -203,7 +203,7 @@
+         splits=load_dev(a.data_dir); target='valid'
+     else:
+         splits=load(a.data_dir); target=a.split
+-    print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}, lgb_user_pref_residual fm_weight={a.fm_weight}')
++    print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}, lgb_member_uncertainty fm_weight={a.fm_weight}')
+     fms,model,pack,tmap,enc=train_all(splits,a.data_dir,seed=a.seed,device=a.device,verbose=(a.out is None),n_models=a.n_models)
+     X,y,u=enc[target]; scores=predict(fms,model,pack,tmap,X,splits[target],u,target,device=a.device,fm_weight=a.fm_weight)
+     if a.out:

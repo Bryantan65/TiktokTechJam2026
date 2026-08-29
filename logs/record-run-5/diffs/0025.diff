@@ -1,0 +1,209 @@
+# iteration 25  (parent: 15)
+# hypothesis: draft different model/features: add leakage-safe smoothed video/author target-CTR bins with train leave-one-out to node 15, giving the FM compact popularity-quality priors that raw sparse IDs may not learn reliably. This is a final high-signal standalone feature test from the current best rather than another weak blend.
+# result: GAUC 0.670998 | nDCG@5 0.537354 | primary 0.604176 | verdict KEPT
+
+--- logs/record-run-5/solutions/015_bpr_weekday_hour_tabcross_fm.py
++++ logs/record-run-5/solutions/025_bpr_time_targetctr_fm.py
+@@ -1,9 +1,9 @@
+-"""3-model multi-negative BPR FM with weekday/hour and tab-hour cross features.
+-
+-Parent 13 is the current best. This refinement keeps the successful reusable
+-weekday and hour features, and adds a compact tab-by-hour categorical cross
+-(5*24 buckets) so the linear/FM model can learn tab-specific diurnal propensities
+-rather than relying only on a low-rank tab-hour interaction.
++"""Node15 time+BPR FM plus leakage-safe item/author target-CTR bins.
++
++Smoothed video and author CTR bins are computed from train labels. For train rows
++we use leave-one-out statistics so the row's own label is not encoded; for
++valid/test we use full train statistics. The features are compact categorical
++priors intended to help rare/cold IDs beyond raw video_id/author_id embeddings.
+ """
+ import argparse
+ import csv
+@@ -49,7 +49,7 @@
+ 
+ 
+ def yyyymmdd_to_weekday(d):
+-    return datetime.strptime(str(int(d)), '%Y%m%d').weekday()  # Monday=0
++    return datetime.strptime(str(int(d)), '%Y%m%d').weekday()
+ 
+ 
+ def parse_hour(hourmin):
+@@ -81,7 +81,6 @@
+             reader = csv.DictReader(f)
+             for r in reader:
+                 d = int(float(_get(r, 'date')))
+-                # author_id is in the processed tuple but not in log_standard.
+                 key = (
+                     d,
+                     int(float(_get(r, 'user_id'))),
+@@ -94,20 +93,90 @@
+     return lookup
+ 
+ 
+-def encode_with_time(splits, data_dir):
++def build_stats(rows, key_idx):
++    cnt = defaultdict(int)
++    pos = defaultdict(int)
++    for r in rows:
++        k = int(r[key_idx])
++        y = 1 if float(r[6]) > 0.5 else 0
++        cnt[k] += 1
++        pos[k] += y
++    return cnt, pos
++
++
++def smoothed_ctr_value(k, cnt, pos, global_mean, alpha, subtract_y=None):
++    c = cnt.get(k, 0)
++    p = pos.get(k, 0)
++    if subtract_y is not None and c > 0:
++        c -= 1
++        p -= int(subtract_y)
++    return (p + alpha * global_mean) / (c + alpha)
++
++
++def make_quantile_edges(values, n_bins=10):
++    if len(values) == 0:
++        return np.linspace(0.0, 1.0, n_bins + 1)[1:-1]
++    qs = np.linspace(0.0, 1.0, n_bins + 1)[1:-1]
++    edges = np.quantile(np.asarray(values, dtype=np.float64), qs)
++    # np.searchsorted handles duplicate edges; keep them, which intentionally
++    # collapses low-variance ranges into fewer effective buckets.
++    return edges.astype(np.float64)
++
++
++def ctr_bin(x, edges):
++    return int(np.searchsorted(edges, float(x), side='right'))
++
++
++def build_target_ctr_features(splits, n_bins=10, alpha_video=20.0, alpha_author=20.0):
++    train = splits['train']
++    ytr = np.asarray([1 if float(r[6]) > 0.5 else 0 for r in train], dtype=np.int8)
++    global_mean = float(ytr.mean()) if len(ytr) else 0.5
++    vcnt, vpos = build_stats(train, 2)
++    acnt, apos = build_stats(train, 3)
++
++    # Use leave-one-out values for train to choose balanced, non-leaky bins.
++    v_train_vals = []
++    a_train_vals = []
++    for r in train:
++        y = 1 if float(r[6]) > 0.5 else 0
++        v_train_vals.append(smoothed_ctr_value(int(r[2]), vcnt, vpos, global_mean, alpha_video, y))
++        a_train_vals.append(smoothed_ctr_value(int(r[3]), acnt, apos, global_mean, alpha_author, y))
++    v_edges = make_quantile_edges(v_train_vals, n_bins)
++    a_edges = make_quantile_edges(a_train_vals, n_bins)
++
++    feats = {}
++    for sp, rows in splits.items():
++        arr = np.empty((len(rows), 2), dtype=np.int64)
++        is_train = (sp == 'train')
++        for i, r in enumerate(rows):
++            y = 1 if float(r[6]) > 0.5 else 0
++            sub = y if is_train else None
++            vv = smoothed_ctr_value(int(r[2]), vcnt, vpos, global_mean, alpha_video, sub)
++            av = smoothed_ctr_value(int(r[3]), acnt, apos, global_mean, alpha_author, sub)
++            arr[i, 0] = ctr_bin(vv, v_edges)
++            arr[i, 1] = ctr_bin(av, a_edges)
++        feats[sp] = arr
++    return feats
++
++
++def encode_with_time_ctr(splits, data_dir):
+     enc, dim = encode(splits)
+     raw_time = build_raw_time_lookup(data_dir)
++    ctr_feats = build_target_ctr_features(splits, n_bins=10, alpha_video=20.0, alpha_author=20.0)
+     out = {}
+     missing = 0
+     off_dow = dim
+     off_hour = off_dow + 7
+     off_tab_hour = off_hour + 24
+-    final_dim = off_tab_hour + 5 * 24
++    off_vctr = off_tab_hour + 5 * 24
++    off_actr = off_vctr + 10
++    final_dim = off_actr + 10
++    ctr_offsets = np.asarray([off_vctr, off_actr], dtype=np.int64)
++
+     for sp, rows in splits.items():
+         X, y, u = enc[sp]
+-        feats = np.empty((len(rows), 3), dtype=np.int64)
++        time_feats = np.empty((len(rows), 3), dtype=np.int64)
+         for i, row in enumerate(rows):
+-            # tuple: date, user_id, video_id, author_id, tab, duration_ms, label
+             tab = int(row[4])
+             key = (int(row[0]), int(row[1]), int(row[2]), tab, int(row[5]))
+             if raw_time.get(key):
+@@ -120,10 +189,11 @@
+                 tab_bucket = 0
+             if tab_bucket > 4:
+                 tab_bucket = 4
+-            feats[i, 0] = off_dow + dow
+-            feats[i, 1] = off_hour + hour
+-            feats[i, 2] = off_tab_hour + tab_bucket * 24 + hour
+-        X2 = np.concatenate([X.astype(np.int64), feats], axis=1)
++            time_feats[i, 0] = off_dow + dow
++            time_feats[i, 1] = off_hour + hour
++            time_feats[i, 2] = off_tab_hour + tab_bucket * 24 + hour
++        c = ctr_feats[sp] + ctr_offsets.reshape(1, -1)
++        X2 = np.concatenate([X.astype(np.int64), time_feats, c], axis=1)
+         out[sp] = (X2, y, u)
+     if missing:
+         print(f"warning: {missing} rows missing raw hourmin; used hour=0 fallback")
+@@ -148,8 +218,8 @@
+     return np.asarray(pos_rows, dtype=np.int64), neg_pools
+ 
+ 
+-def train_one(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
+-              patience=4, neg_k=4, seed=0, device='cpu', verbose=True,
++def train_one(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=30, bs=8192,
++              patience=3, neg_k=4, seed=0, device='cpu', verbose=True,
+               tag='m'):
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -191,7 +261,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | multineg_bpr_tab_hour {np.mean(losses):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | targetctr_bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -209,9 +279,9 @@
+     return model
+ 
+ 
+-def run(splits, data_dir, k=16, lr=0.001, epochs=40, neg_k=4, seed=0,
++def run(splits, data_dir, k=16, lr=0.001, epochs=30, neg_k=4, seed=0,
+         device='cpu', verbose=True, n_models=3):
+-    enc, dim = encode_with_time(splits, data_dir)
++    enc, dim = encode_with_time_ctr(splits, data_dir)
+     models = []
+     seeds = [seed + 1009 * i for i in range(n_models)]
+     for i, s in enumerate(seeds):
+@@ -235,7 +305,7 @@
+     ap.add_argument('--out', default=None)
+     ap.add_argument('--k', type=int, default=16)
+     ap.add_argument('--lr', type=float, default=0.001)
+-    ap.add_argument('--epochs', type=int, default=40)
++    ap.add_argument('--epochs', type=int, default=30)
+     ap.add_argument('--neg_k', type=int, default=4)
+     ap.add_argument('--n_models', type=int, default=3)
+     ap.add_argument('--seed', type=int, default=0)
+@@ -246,7 +316,7 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+['weekday','hour','tab_hour']")
++          f"fields={FIELDS}+['weekday','hour','tab_hour','video_ctr','author_ctr']; targetctr")
+ 
+     models, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                       neg_k=a.neg_k, seed=a.seed, device=a.device,
+@@ -259,7 +329,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_weekday_hour_tabcross_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_time_targetctr_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, predict_ensemble(models, Xs, device=a.device))

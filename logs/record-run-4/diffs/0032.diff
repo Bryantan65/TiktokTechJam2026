@@ -1,0 +1,69 @@
+# iteration 32  (parent: 31)
+# hypothesis: improve 31: the row-order user-trend residual improved nDCG; add a second tiny trend term based on target date position so single-impression users and cross-day drift get the same train-learned rising/falling-user correction.
+# result: GAUC 0.671393 | nDCG@5 0.537645 | primary 0.604519 | verdict KEPT
+
+--- logs/record-run-4/solutions/031_user_trend_position.py
++++ logs/record-run-4/solutions/032_user_trend_datepos.py
+@@ -1,4 +1,4 @@
+-"""Sampled-softmax multitask FM plus time/recent history; add train-learned user trend x target row-position residual."""
++"""Sampled-softmax multitask FM plus time/recent history; add train-learned user trend x target row/date-position residual."""
+ import argparse, csv, datetime as _dt, os, sys, time
+ from collections import defaultdict, deque
+ import numpy as np
+@@ -40,6 +40,10 @@
+ 
+ def _dow_from_date(d):
+     try: return _dt.datetime.strptime(str(int(d)), '%Y%m%d').weekday()
++    except Exception: return 0
++
++def _date_ord(d):
++    try: return _dt.datetime.strptime(str(int(d)), '%Y%m%d').toordinal()
+     except Exception: return 0
+ 
+ def _raw_maps(data_dir):
+@@ -137,17 +141,25 @@
+         trend[u]=float(np.clip(_logit(recent)-_logit(overall), -2.0, 2.0))
+     return trend
+ 
+-def trend_position_adjust(rows, trend, weight=0.06):
++def trend_position_adjust(rows, trend, weight=0.06, date_weight=0.04):
+     byu=defaultdict(list)
++    ords=np.array([_date_ord(r[0]) for r in rows], dtype=np.float32)
++    nonzero=ords[ords>0]
++    if len(nonzero):
++        lo=float(nonzero.min()); hi=float(nonzero.max()); span=max(hi-lo,1.0)
++        date_pos=np.where(ords>0, (ords-lo)/span - 0.5, 0.0).astype(np.float32)
++    else:
++        date_pos=np.zeros(len(rows), dtype=np.float32)
+     for i,r in enumerate(rows): byu[_to_int(r[1])].append(i)
+     out=np.zeros(len(rows),dtype=np.float32)
+     for u,idxs in byu.items():
+         tr=trend.get(u,0.0); n=len(idxs)
+-        if n <= 1 or tr == 0.0: continue
++        if tr == 0.0: continue
+         denom=max(n-1,1)
+         for j,i in enumerate(idxs):
+-            pos=j/denom - 0.5
+-            out[i]=np.float32(np.clip(weight*tr*pos, -0.08, 0.08))
++            rel=(j/denom - 0.5) if n > 1 else 0.0
++            val=tr*(weight*rel + date_weight*float(date_pos[i]))
++            out[i]=np.float32(np.clip(val, -0.10, 0.10))
+     return out
+ 
+ def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096, patience=4, neg_k=16, aux_weight=0.05, seed=0, device='cpu', verbose=True):
+@@ -184,13 +196,13 @@
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test']); ap.add_argument('--out',default=None)
+     ap.add_argument('--k',type=int,default=16); ap.add_argument('--lr',type=float,default=0.001); ap.add_argument('--epochs',type=int,default=40); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+-    torch.manual_seed(a.seed); print(f"loading {a.data_dir} ..."); splits=load(a.data_dir); print({k_:len(v) for k_,v in splits.items()}, f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} recent_history neg16 user_trend_position")
++    torch.manual_seed(a.seed); print(f"loading {a.data_dir} ..."); splits=load(a.data_dir); print({k_:len(v) for k_,v in splits.items()}, f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} recent_history neg16 user_trend_datepos")
+     model,enc,hist,trends=run(splits,a.data_dir,k=a.k,lr=a.lr,epochs=a.epochs,seed=a.seed,device=a.device,verbose=a.out is None)
+     X,y,users=enc[a.split]; scores=model.predict(X,device=a.device)+history_adjust(splits[a.split],hist)+trend_position_adjust(splits[a.split],trends)
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== user_trend_position_neg16 (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== user_trend_datepos_neg16 (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid','test'):
+             Xs,ys,us=enc[sp]; pred=model.predict(Xs,device=a.device)+history_adjust(splits[sp],hist)+trend_position_adjust(splits[sp],trends); r=evaluate(us,ys,pred)
+             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")

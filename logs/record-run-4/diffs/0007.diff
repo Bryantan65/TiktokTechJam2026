@@ -1,0 +1,196 @@
+# iteration 7  (parent: 5)
+# hypothesis: draft time features: add hour-of-day/day-of-week/hour×tab categorical context from raw log CSVs to the current best sampled-softmax FM; temporal context is a standard recommender feature for user behavior variation (https://dl.acm.org/doi/10.1145/3397271.3401100).
+# result: GAUC 0.671081 | nDCG@5 0.537548 | primary 0.604314 | verdict KEPT
+
+--- logs/record-run-4/solutions/005_sampled_softmax_neg8_fm.py
++++ logs/record-run-4/solutions/007_time_features_softmax8.py
+@@ -1,14 +1,15 @@
+-"""FM trained with a sampled within-user softmax ranking loss, using more negatives.
+-
+-Node 3 showed the sampled listwise objective can beat pointwise BCE but was noisy.
+-This variant keeps the same model/training loop and samples 8 same-user negatives
+-per positive instead of 4, giving the softmax a harder/more complete candidate
+-set for top-rank separation.
++"""Sampled-softmax FM with raw-log time context features.
++
++Adds hour-of-day and day-of-week categorical fields read from the original log CSVs
++while keeping the best listwise same-user sampled softmax objective.
+ """
+ import argparse
++import csv
++import datetime as _dt
+ import os
+ import sys
+ import time
++from collections import defaultdict, deque
+ 
+ import numpy as np
+ import torch
+@@ -23,8 +24,8 @@
+     def __init__(self, dim, k=16, seed=0):
+         super().__init__()
+         rng = np.random.default_rng(seed)
+-        V0 = rng.normal(0, 0.01, (dim, k)).astype(np.float32)
+-        self.V = torch.nn.Parameter(torch.from_numpy(V0))
++        self.V = torch.nn.Parameter(torch.from_numpy(
++            rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+ 
+@@ -44,8 +45,92 @@
+         return np.concatenate(out)
+ 
+ 
++def _to_int(x, default=0):
++    try:
++        if x is None or x == '':
++            return default
++        return int(float(x))
++    except Exception:
++        return default
++
++
++def _get(row, *names):
++    for n in names:
++        if n in row:
++            return row[n]
++    return None
++
++
++def _dow_from_date(d):
++    try:
++        return _dt.datetime.strptime(str(int(d)), '%Y%m%d').weekday()
++    except Exception:
++        return 0
++
++
++def _raw_time_maps(data_dir):
++    """Build queues mapping each raw row identity to (hour, dow, hour_tab)."""
++    names = ['log_standard_4_08_to_4_21_pure.csv',
++             'log_standard_4_22_to_5_08_pure.csv']
++    full = defaultdict(deque)
++    nodur = defaultdict(deque)
++    for name in names:
++        path = os.path.join(data_dir, name)
++        if not os.path.exists(path):
++            continue
++        with open(path, newline='', encoding='utf-8') as f:
++            reader = csv.DictReader(f)
++            for r in reader:
++                date = _to_int(_get(r, 'date'))
++                user = _to_int(_get(r, 'user_id', 'user'))
++                video = _to_int(_get(r, 'video_id', 'item_id', 'photo_id'))
++                author = _to_int(_get(r, 'author_id'))
++                tab = _to_int(_get(r, 'tab'))
++                dur = _to_int(_get(r, 'duration_ms', 'duration'))
++                # The starter-kit binary target for KuaiRand-Pure is long_view.
++                lab = _to_int(_get(r, 'long_view', 'label', 'is_click'))
++                hm = _to_int(_get(r, 'hourmin', 'hour_min', 'time'))
++                hour = (hm // 100) % 24 if hm >= 100 else hm % 24
++                dow = _dow_from_date(date)
++                htab = hour * 8 + max(0, min(tab, 7))
++                extra = (hour, dow, htab)
++                k_full = (date, user, video, author, tab, dur, lab)
++                k_nodur = (date, user, video, author, tab, lab)
++                full[k_full].append(extra)
++                nodur[k_nodur].append(extra)
++    return full, nodur
++
++
++def encode_with_time(splits, data_dir):
++    """Use starter-kit encoding for base fields, then append time fields."""
++    enc, dim = encode(splits)
++    full, nodur = _raw_time_maps(data_dir)
++    offsets = np.array([dim, dim + 24, dim + 24 + 7], dtype=np.int64)
++    extra_dim = 24 + 7 + 24 * 8
++    out = {}
++    for sp, rows in splits.items():
++        Xb, y, users = enc[sp]
++        extra = np.zeros((len(rows), 3), dtype=np.int64)
++        for i, row in enumerate(rows):
++            date, user, video, author, tab, dur, lab = row
++            k_full = (_to_int(date), _to_int(user), _to_int(video),
++                      _to_int(author), _to_int(tab), _to_int(dur), _to_int(lab))
++            q = full.get(k_full)
++            if q:
++                extra[i] = q.popleft()
++                continue
++            k_nodur = (_to_int(date), _to_int(user), _to_int(video),
++                       _to_int(author), _to_int(tab), _to_int(lab))
++            q = nodur.get(k_nodur)
++            if q:
++                extra[i] = q.popleft()
++            # else leave zeros: safe fallback if raw CSV columns differ.
++        Xt = np.concatenate([Xb.astype(np.int64), extra + offsets], axis=1)
++        out[sp] = (Xt, y, users)
++    return out, dim + extra_dim
++
++
+ def make_pair_sampler(y, users):
+-    """Return positive indices and per-positive negative pools, same user only."""
+     y = np.asarray(y)
+     users = np.asarray(users)
+     order = np.argsort(users, kind='mergesort')
+@@ -70,9 +155,9 @@
+     return np.concatenate(pos_chunks), np.asarray(neg_pools, dtype=object)
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096, patience=4,
+-        neg_k=8, seed=0, device='cpu', verbose=True):
+-    enc, dim = encode(splits)
++def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096,
++        patience=4, neg_k=8, seed=0, device='cpu', verbose=True):
++    enc, dim = encode_with_time(splits, data_dir)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+@@ -100,10 +185,10 @@
+                 nidx[t] = pool[rng.integers(len(pool), size=neg_k)]
+ 
+             xp = Xtr_t[torch.from_numpy(pidx)].to(device)
+-            xn_flat = Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
++            xn = Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
+             opt.zero_grad(set_to_none=True)
+             sp = model(xp).view(bsz, 1)
+-            sn = model(xn_flat).view(bsz, neg_k)
++            sn = model(xn).view(bsz, neg_k)
+             logits = torch.cat([sp, sn], dim=1)
+             target = torch.zeros(bsz, dtype=torch.long, device=device)
+             loss = torch.nn.functional.cross_entropy(logits, target)
+@@ -113,10 +198,9 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | sampled_softmax_k8 {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | softmax8+time {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+-
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -146,11 +230,10 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+-
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
+-
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+hour,dow,hour_tab")
++
++    model, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
++                     seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[a.split]
+     scores = model.predict(X, device=a.device)
+ 
+@@ -158,7 +241,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== sampled_softmax_neg8_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== time_features_softmax8 (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

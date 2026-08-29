@@ -1,0 +1,113 @@
+# iteration 8  (parent: 7)
+# hypothesis: improve 7: node 7 improved both GAUC and nDCG but still has seed wobble; average the same 70/30 BPR+BCE per-user-z blend over member seeds 0/1/2, reusing 007 caches where available. If the complementarity is real, seed bagging should reduce variance and lift the mean.
+# result: GAUC 0.67021 | nDCG@5 0.53707 | primary 0.60364 | verdict KEPT
+
+--- logs/record-run-12/solutions/007_bpr_bce_ensemble.py
++++ logs/record-run-12/solutions/008_bpr_bce_seedbag.py
+@@ -1,9 +1,9 @@
+-"""Blend BPR-FM with the pointwise BCE FM baseline.
+-
+-The BPR member is node 2 (current best).  A pointwise BCE FM optimizes a
+-slightly different proxy and may rank some users differently, so this script
+-trains both members (or loads cached predictions) and averages per-user
+-z-scored validation/test scores with 70% weight on BPR and 30% on BCE.
++"""Seed-bagged blend of BPR-FM and pointwise BCE FM.
++
++Refines node 7 by keeping the same readable 70/30 per-user z-score blend, but
++averaging that blend over member seeds 0, 1 and 2.  The base-member code and
++cache names are unchanged from 007, so cached predictions are reused when
++available; with an empty cache the script trains the six members standalone.
+ """
+ import argparse
+ import os
+@@ -44,12 +44,11 @@
+ 
+ 
+ def train_bce_member(enc, dim, seed=0, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False):
+-    Xtr, ytr, utr = enc['train']; Xva, yva, uva = enc['valid']
++    Xtr, ytr, _ = enc['train']; Xva, yva, uva = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}], lr=lr, betas=(0.9, 0.999), eps=1e-8)
+-    X_t = torch.from_numpy(Xtr.astype(np.int64))
+-    y_t = torch.from_numpy(ytr.astype(np.float32))
++    X_t = torch.from_numpy(Xtr.astype(np.int64)); y_t = torch.from_numpy(ytr.astype(np.float32))
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+     n = len(Xtr)
+@@ -65,7 +64,7 @@
+             loss.backward(); opt.step(); losses.append(float(loss.detach().cpu()))
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  bce epoch {ep:2d} loss {np.mean(losses):.4f} primary {va['primary']:.4f} {time.time()-t0:.1f}s")
++            print(f"  bce seed {seed} epoch {ep:2d} loss {np.mean(losses):.4f} primary {va['primary']:.4f} {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -135,7 +134,7 @@
+                 loss.backward(); opt.step(); losses.append(float(loss.detach().cpu()))
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  bpr epoch {ep:2d} loss {np.mean(losses):.4f} primary {va['primary']:.4f} {time.time()-t0:.1f}s")
++            print(f"  bpr seed {seed} epoch {ep:2d} loss {np.mean(losses):.4f} primary {va['primary']:.4f} {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -161,10 +160,7 @@
+         idx = order[start:end]
+         vals = scores[idx]
+         sd = vals.std()
+-        if sd < 1e-12:
+-            out[idx] = 0.0
+-        else:
+-            out[idx] = (vals - vals.mean()) / sd
++        out[idx] = 0.0 if sd < 1e-12 else (vals - vals.mean()) / sd
+         start = end
+     return out
+ 
+@@ -173,9 +169,9 @@
+     os.makedirs('pred_cache', exist_ok=True)
+     cache_path = os.path.join('pred_cache', f'007_{name}_seed{seed}_n{len(Xtar)}.npy')
+     if os.path.isfile(cache_path):
+-        print(f'loading cached {name} predictions {cache_path}')
+-        return np.load(cache_path)
+-    print(f'training {name} member')
++        print(f'loading cached {name} seed {seed} predictions {cache_path}')
++        return np.load(cache_path).astype(np.float64)
++    print(f'training {name} seed {seed} member')
+     model = train_fn(enc, dim, seed=seed, device=device, verbose=verbose)
+     preds = model.predict(Xtar, device=device).astype(np.float64)
+     np.save(cache_path, preds)
+@@ -191,7 +187,9 @@
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+ 
+-    torch.manual_seed(a.seed)
++    # The external seed is intentionally not used for member selection: this is
++    # a fixed seed-bagged predictor, and the member seeds are recorded here.
++    torch.manual_seed(0)
+     print(f"loading {a.data_dir} ...")
+     if a.split == 'dev':
+         from devdata import load as load_dev
+@@ -200,14 +198,15 @@
+         splits = load(a.data_dir); target = a.split
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+     enc, dim = encode(splits)
+-    Xtar, ytar, utar = enc[target]
++    Xtar, _, utar = enc[target]
+     verbose = (a.out is None)
+ 
+-    bpr = get_member_preds('bpr_anchor_v1', train_bpr_member, enc, dim, Xtar, a.seed, a.device, verbose)
+-    bce = get_member_preds('bce_v1', train_bce_member, enc, dim, Xtar, a.seed, a.device, verbose)
+-
+-    # Per-user z-scoring avoids one member's score scale dominating the blend; only within-user ranks matter.
+-    scores = 0.70 * zscore_by_user(bpr, utar) + 0.30 * zscore_by_user(bce, utar)
++    blended = []
++    for member_seed in (0, 1, 2):
++        bpr = get_member_preds('bpr_anchor_v1', train_bpr_member, enc, dim, Xtar, member_seed, a.device, verbose)
++        bce = get_member_preds('bce_v1', train_bce_member, enc, dim, Xtar, member_seed, a.device, verbose)
++        blended.append(0.70 * zscore_by_user(bpr, utar) + 0.30 * zscore_by_user(bce, utar))
++    scores = np.mean(blended, axis=0)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

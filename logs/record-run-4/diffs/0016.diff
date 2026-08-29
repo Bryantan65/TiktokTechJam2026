@@ -1,0 +1,370 @@
+# iteration 16  (parent: 11)
+# hypothesis: improve 11: the learned DIN-style history branch was flat/unstable, so debug the same user-behaviour direction with a low-variance train-only memorized affinity adjustment for repeated authors/videos/tabs on top of node 9. This tests whether history signal exists without adding sequence-model capacity; CWM search note: watch-time censoring is a survival-style direction but too risky for this final
+# result: GAUC 0.671245 | nDCG@5 0.537599 | primary 0.604422 | verdict KEPT
+
+--- logs/record-run-4/solutions/011_din_seq_attention.py
++++ logs/record-run-4/solutions/016_history_stats_blend.py
+@@ -1,9 +1,9 @@
+-"""Time-aware sampled-softmax FM with DIN-style positive-history attention.
+-
+-Adds a user's recent positive train-history (video, author) sequence.  The main
+-long_view score is FM + a target-attention score between the current item and
+-that user's recent positive items, trained with the same within-user sampled
+-softmax objective as the best time/multitask FM.
++"""Sampled-softmax multitask FM plus simple user-history statistical affinities.
++
++The DIN attempt was too high-variance, but the underlying signal may be a small
++memorized preference for authors/videos/tabs the user has previously watched.
++This keeps the node-9 model intact and adds a conservative logit-space
++adjustment from train-only per-user history statistics.
+ """
+ import argparse
+ import csv
+@@ -26,16 +26,14 @@
+              'is_forward', 'is_profile_enter', 'is_hate')
+ 
+ 
+-class DINSeqFM(torch.nn.Module):
++class MultiTaskFM(torch.nn.Module):
+     def __init__(self, dim, k=16, n_aux=0, seed=0):
+         super().__init__()
+         rng = np.random.default_rng(seed)
+-        self.k = k
+         self.V = torch.nn.Parameter(torch.from_numpy(
+             rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+-        self.seq_scale = torch.nn.Parameter(torch.ones((), dtype=torch.float32))
+         self.n_aux = int(n_aux)
+         if self.n_aux:
+             self.W_aux = torch.nn.Parameter(torch.zeros(self.n_aux, dim, dtype=torch.float32))
+@@ -46,23 +44,9 @@
+         S = E.sum(1)
+         return 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
+ 
+-    def _seq_score(self, X, Hv, Ha, Hm):
+-        # Query = current target video + author; history = previous positive video + author.
+-        q = self.V[X[:, 1]] + self.V[X[:, 2]]                         # [B,k]
+-        h = self.V[Hv] + self.V[Ha]                                    # [B,L,k]
+-        m = Hm.float()
+-        att = (h * q.unsqueeze(1)).sum(-1) / (self.k ** 0.5)            # [B,L]
+-        att = att.masked_fill(~Hm, -1.0e4)
+-        w = torch.softmax(att, dim=1) * m
+-        w = w / w.sum(1, keepdim=True).clamp_min(1.0e-6)
+-        ctx = (h * w.unsqueeze(-1)).sum(1)
+-        return (q * ctx).sum(1)
+-
+-    def forward(self, X, Hv=None, Ha=None, Hm=None):
+-        base = self.b + self.W[X].sum(1) + self._inter(X)
+-        if Hv is None:
+-            return base
+-        return base + self.seq_scale * self._seq_score(X, Hv, Ha, Hm)
++    def forward(self, X):
++        inter = self._inter(X)
++        return self.b + self.W[X].sum(1) + inter
+ 
+     def aux_forward(self, X):
+         inter = self._inter(X).view(-1, 1)
+@@ -70,15 +54,12 @@
+         return self.b_aux.view(1, -1) + lin + inter
+ 
+     @torch.no_grad()
+-    def predict(self, X, Hv, Ha, Hm, bs=100_000, device='cpu'):
++    def predict(self, X, bs=200_000, device='cpu'):
+         self.eval()
+         out = []
+         for i in range(0, len(X), bs):
+             xb = torch.from_numpy(X[i:i + bs].astype(np.int64)).to(device)
+-            hv = torch.from_numpy(Hv[i:i + bs].astype(np.int64)).to(device)
+-            ha = torch.from_numpy(Ha[i:i + bs].astype(np.int64)).to(device)
+-            hm = torch.from_numpy(Hm[i:i + bs].astype(bool)).to(device)
+-            out.append(self(xb, hv, ha, hm).cpu().numpy())
++            out.append(self(xb).cpu().numpy())
+         return np.concatenate(out)
+ 
+ 
+@@ -139,49 +120,8 @@
+     return full, nodur
+ 
+ 
+-def _build_histories(enc, L=10):
+-    seq = {}
+-    train_hist = defaultdict(list)
+-
+-    # Training rows get only previous train positives; update after creating features.
+-    X, y, users = enc['train']
+-    Hv = np.zeros((len(X), L), dtype=np.int64)
+-    Ha = np.zeros((len(X), L), dtype=np.int64)
+-    Hm = np.zeros((len(X), L), dtype=bool)
+-    for i in range(len(X)):
+-        u = int(users[i])
+-        h = train_hist[u]
+-        if h:
+-            recent = h[-L:]
+-            st = L - len(recent)
+-            Hv[i, st:] = [p[0] for p in recent]
+-            Ha[i, st:] = [p[1] for p in recent]
+-            Hm[i, st:] = True
+-        if y[i] > 0.5:
+-            h.append((int(X[i, 1]), int(X[i, 2])))
+-    seq['train'] = (Hv, Ha, Hm)
+-
+-    # Validation/test do not consume their own labels: both use the frozen train history.
+-    frozen = train_hist
+-    for sp in ('valid', 'test'):
+-        X, y, users = enc[sp]
+-        Hv = np.zeros((len(X), L), dtype=np.int64)
+-        Ha = np.zeros((len(X), L), dtype=np.int64)
+-        Hm = np.zeros((len(X), L), dtype=bool)
+-        for i in range(len(X)):
+-            h = frozen.get(int(users[i]), [])
+-            if h:
+-                recent = h[-L:]
+-                st = L - len(recent)
+-                Hv[i, st:] = [p[0] for p in recent]
+-                Ha[i, st:] = [p[1] for p in recent]
+-                Hm[i, st:] = True
+-        seq[sp] = (Hv, Ha, Hm)
+-    return seq
+-
+-
+-def encode_with_time_aux_seq(splits, data_dir, hist_len=10):
+-    enc0, dim = encode(splits)
++def encode_with_time_aux(splits, data_dir):
++    enc, dim = encode(splits)
+     full, nodur = _raw_maps(data_dir)
+     sizes = np.array([24, 7, 24 * 8], dtype=np.int64)
+     offsets = dim + np.concatenate([[0], np.cumsum(sizes)[:-1]]).astype(np.int64)
+@@ -189,7 +129,7 @@
+     aux_out = {}
+     matched = {}
+     for sp, rows in splits.items():
+-        Xb, y, users = enc0[sp]
++        Xb, y, users = enc[sp]
+         extra = np.zeros((len(rows), len(sizes)), dtype=np.int64)
+         aux = np.zeros((len(rows), len(AUX_NAMES)), dtype=np.float32)
+         ok = np.zeros(len(rows), dtype=bool)
+@@ -216,8 +156,7 @@
+         out[sp] = (Xt, y, users)
+         aux_out[sp] = aux
+         matched[sp] = ok
+-    seq = _build_histories(out, L=hist_len)
+-    return out, aux_out, matched, seq, int(dim + sizes.sum())
++    return out, aux_out, matched, int(dim + sizes.sum())
+ 
+ 
+ def make_pair_sampler(y, users):
+@@ -244,14 +183,90 @@
+     return np.concatenate(pos_chunks), np.asarray(neg_pools, dtype=object)
+ 
+ 
++def _clip01(x):
++    return min(max(float(x), 1e-4), 1.0 - 1e-4)
++
++
++def _logit(p):
++    p = _clip01(p)
++    return np.log(p / (1.0 - p))
++
++
++def build_history_stats(train_rows):
++    """Train-only user-conditioned counts for conservative post-fit affinities."""
++    up = defaultdict(float); uc = defaultdict(float)
++    uap = defaultdict(float); uac = defaultdict(float)
++    uvp = defaultdict(float); uvc = defaultdict(float)
++    utp = defaultdict(float); utc = defaultdict(float)
++    gp = 0.0; gc = 0.0
++    for r in train_rows:
++        user = _to_int(r[1]); video = _to_int(r[2]); author = _to_int(r[3])
++        tab = _to_int(r[4]); lab = float(_to_int(r[6]))
++        gp += lab; gc += 1.0
++        up[user] += lab; uc[user] += 1.0
++        ka = (user, author); kv = (user, video); kt = (user, tab)
++        uap[ka] += lab; uac[ka] += 1.0
++        uvp[kv] += lab; uvc[kv] += 1.0
++        utp[kt] += lab; utc[kt] += 1.0
++    global_rate = gp / max(gc, 1.0)
++    return {
++        'global': global_rate,
++        'up': up, 'uc': uc,
++        'uap': uap, 'uac': uac,
++        'uvp': uvp, 'uvc': uvc,
++        'utp': utp, 'utc': utc,
++    }
++
++
++def history_adjust(rows, stats):
++    """Small logit adjustments from user-author/video/tab historical rates.
++
++    Smoothing to the user's own train rate prevents global activity bias from
++    acting as a user-side constant, while confidence keeps one-off histories
++    from dominating the FM logits.
++    """
++    g = stats['global']
++    out = np.zeros(len(rows), dtype=np.float32)
++    for i, r in enumerate(rows):
++        user = _to_int(r[1]); video = _to_int(r[2]); author = _to_int(r[3]); tab = _to_int(r[4])
++        uc = stats['uc'].get(user, 0.0)
++        ur = (stats['up'].get(user, 0.0) + 8.0 * g) / (uc + 8.0)
++        base = _logit(ur)
++        adj = 0.0
++
++        # Same author by the same user: relatively common and should affect ranking.
++        ka = (user, author)
++        ca = stats['uac'].get(ka, 0.0)
++        if ca > 0.0:
++            ra = (stats['uap'].get(ka, 0.0) + 2.5 * ur) / (ca + 2.5)
++            conf = np.sqrt(ca / (ca + 4.0))
++            adj += 0.45 * conf * (_logit(ra) - base)
++
++        # Exact repeated video is rarer; use it, but downweight so duplicates do not overfit.
++        kv = (user, video)
++        cv = stats['uvc'].get(kv, 0.0)
++        if cv > 0.0:
++            rv = (stats['uvp'].get(kv, 0.0) + 1.5 * ur) / (cv + 1.5)
++            conf = np.sqrt(cv / (cv + 3.0))
++            adj += 0.30 * conf * (_logit(rv) - base)
++
++        # User-tab preference is a low-variance sequential/context statistic beyond tab main effect.
++        kt = (user, tab)
++        ct = stats['utc'].get(kt, 0.0)
++        if ct > 0.0:
++            rt = (stats['utp'].get(kt, 0.0) + 4.0 * ur) / (ct + 4.0)
++            conf = np.sqrt(ct / (ct + 8.0))
++            adj += 0.20 * conf * (_logit(rt) - base)
++
++        out[i] = np.float32(np.clip(adj, -1.0, 1.0))
++    return out
++
++
+ def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096,
+-        patience=4, neg_k=8, aux_weight=0.05, hist_len=10, seed=0,
+-        device='cpu', verbose=True):
+-    enc, aux, matched, seq, dim = encode_with_time_aux_seq(splits, data_dir, hist_len=hist_len)
++        patience=4, neg_k=8, aux_weight=0.05, seed=0, device='cpu', verbose=True):
++    enc, aux, matched, dim = encode_with_time_aux(splits, data_dir)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+-    Hvtr, Hatr, Hmtr = seq['train']
+-    Hvva, Hava, Hmva = seq['valid']
+ 
+     valid_rows = matched['train']
+     prev = aux['train'][valid_rows].mean(0) if valid_rows.any() else np.zeros(len(AUX_NAMES))
+@@ -260,8 +275,8 @@
+         aux_weight = 0.0
+     aux_tr = aux['train'][:, keep_aux] if len(keep_aux) else np.zeros((len(Xtr), 0), dtype=np.float32)
+ 
+-    model = DINSeqFM(dim, k=k, n_aux=len(keep_aux), seed=seed).to(device)
+-    params = [{'params': [model.V, model.W, model.seq_scale], 'weight_decay': l2},
++    model = MultiTaskFM(dim, k=k, n_aux=len(keep_aux), seed=seed).to(device)
++    params = [{'params': [model.V, model.W], 'weight_decay': l2},
+               {'params': [model.b], 'weight_decay': 0.0}]
+     if len(keep_aux):
+         params.append({'params': [model.W_aux], 'weight_decay': l2})
+@@ -269,9 +284,6 @@
+     opt = torch.optim.Adam(params, lr=lr, betas=(0.9, 0.999), eps=1e-8)
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+-    Hvtr_t = torch.from_numpy(Hvtr.astype(np.int64))
+-    Hatr_t = torch.from_numpy(Hatr.astype(np.int64))
+-    Hmtr_t = torch.from_numpy(Hmtr.astype(bool))
+     aux_t = torch.from_numpy(aux_tr.astype(np.float32))
+     pos_idx, neg_pools = make_pair_sampler(ytr, utr)
+     rng = np.random.default_rng(seed)
+@@ -291,29 +303,18 @@
+                 nidx[t] = pool[rng.integers(len(pool), size=neg_k)]
+             cand_idx = np.concatenate([pidx.reshape(-1, 1), nidx], axis=1)
+ 
+-            pidx_t = torch.from_numpy(pidx)
+-            nflat = nidx.reshape(-1)
+-            nidx_t = torch.from_numpy(nflat)
+-            xp = Xtr_t[pidx_t].to(device)
+-            xpn_hv = Hvtr_t[pidx_t].to(device)
+-            xpn_ha = Hatr_t[pidx_t].to(device)
+-            xpn_hm = Hmtr_t[pidx_t].to(device)
+-            xn = Xtr_t[nidx_t].to(device)
+-            xnn_hv = Hvtr_t[nidx_t].to(device)
+-            xnn_ha = Hatr_t[nidx_t].to(device)
+-            xnn_hm = Hmtr_t[nidx_t].to(device)
+-
++            xp = Xtr_t[torch.from_numpy(pidx)].to(device)
++            xn = Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
+             opt.zero_grad(set_to_none=True)
+-            sp = model(xp, xpn_hv, xpn_ha, xpn_hm).view(bsz, 1)
+-            sn = model(xn, xnn_hv, xnn_ha, xnn_hm).view(bsz, neg_k)
++            sp = model(xp).view(bsz, 1)
++            sn = model(xn).view(bsz, neg_k)
+             logits = torch.cat([sp, sn], dim=1)
+             target = torch.zeros(bsz, dtype=torch.long, device=device)
+             loss = torch.nn.functional.cross_entropy(logits, target)
+ 
+             if aux_weight > 0.0 and len(keep_aux):
+-                flat_idx = cand_idx.reshape(-1)
+-                xc = Xtr_t[torch.from_numpy(flat_idx)].to(device)
+-                ya = aux_t[torch.from_numpy(flat_idx)].to(device)
++                xc = Xtr_t[torch.from_numpy(cand_idx.reshape(-1))].to(device)
++                ya = aux_t[torch.from_numpy(cand_idx.reshape(-1))].to(device)
+                 aux_logits = model.aux_forward(xc)
+                 aux_loss = torch.nn.functional.binary_cross_entropy_with_logits(aux_logits, ya)
+                 loss = loss + aux_weight * aux_loss
+@@ -322,14 +323,12 @@
+             opt.step()
+             losses.append(loss.item())
+ 
+-        va_pred = model.predict(Xva, Hvva, Hava, Hmva, device=device)
+-        va = evaluate(uva, yva, va_pred)
++        va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+             kept = ','.join(AUX_NAMES[i] for i in keep_aux)
+-            cover = float(Hmva.any(1).mean())
+-            print(f"  epoch {ep:2d} | din-softmax {np.mean(losses):.4f} scale={model.seq_scale.item():.3f} "
+-                  f"hist_cover={cover:.3f} aux=[{kept}] | valid GAUC {va['GAUC']:.4f} "
+-                  f"nDCG@5 {va['nDCG@5']:.4f} primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
++            print(f"  epoch {ep:2d} | mt-softmax {np.mean(losses):.4f} aux=[{kept}] | valid "
++                  f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
++                  f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -341,7 +340,8 @@
+                 break
+ 
+     model.load_state_dict(best_state)
+-    return model, enc, seq
++    hist = build_history_stats(splits['train'])
++    return model, enc, hist
+ 
+ 
+ if __name__ == '__main__':
+@@ -360,23 +360,22 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+hour,dow,hour_tab+DIN_hist aux={AUX_NAMES}")
+-
+-    model, enc, seq = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+-                          seed=a.seed, device=a.device, verbose=a.out is None)
++          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES} history_stats_blend")
++
++    model, enc, hist = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
++                           seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[a.split]
+-    Hv, Ha, Hm = seq[a.split]
+-    scores = model.predict(X, Hv, Ha, Hm, device=a.device)
++    scores = model.predict(X, device=a.device) + history_adjust(splits[a.split], hist)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== din_seq_attention (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== history_stats_blend (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+-            Hvs, Has, Hms = seq[sp]
+-            r = evaluate(us, ys, model.predict(Xs, Hvs, Has, Hms, device=a.device))
++            pred = model.predict(Xs, device=a.device) + history_adjust(splits[sp], hist)
++            r = evaluate(us, ys, pred)
+             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+                   f"| primary {r['primary']:.4f}")
+ 

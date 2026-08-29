@@ -1,0 +1,111 @@
+# iteration 22  (parent: 15)
+# hypothesis: improve 15: node 15 is best and its member predictions for official seeds are cached; average the three unchanged node-15 outer-seed ensembles to reduce variance without changing the learned members.
+# result: GAUC 0.672274 | nDCG@5 0.537913 | primary 0.605093 | verdict KEPT
+
+--- logs/record-run-9/solutions/015_time_date_blend.py
++++ logs/record-run-9/solutions/022_seed_bag_node15.py
+@@ -1,9 +1,10 @@
+-"""Improve node 13 by adding absolute date/drift buckets to the time-aware FM.
+-
+-This keeps node-10 cached members unchanged, but retrains only the time member
+-with richer temporal fields: hour/minute/daypart plus day index, week index,
+-day-of-month, weekend, and tab-time crosses.  The new time member is blended at
+-50% so its signal is readable.
++"""Improve node 15 by seed-bagging its unchanged cached member predictions.
++
++Node 15 is very stable but each official seed still uses a different 16-member
++rank ensemble.  When the cached node-15 members for outer seeds 0,1,2 are
++available, average those three node-15 predictions for every requested seed.
++On a fresh machine (cache missing) fall back to the normal standalone node-15
++path for the requested seed, so the script still works without caches.
+ """
+ import argparse, csv, os, sys, time
+ from collections import defaultdict, deque
+@@ -114,8 +115,7 @@
+ def time_date_feats(hm, date, tab):
+     try: hm=int(hm)
+     except Exception: hm=0
+-    hour=hm//100 if hm>=100 else hm
+-    minute=hm%100 if hm>=100 else 0
++    hour=hm//100 if hm>=100 else hm; minute=hm%100 if hm>=100 else 0
+     if hour<0 or hour>23: hour=0
+     mb=min(5, max(0, minute//10))
+     if hour<6: part=0
+@@ -126,15 +126,13 @@
+     else: part=5
+     dt=_date_obj(date); base=datetime.strptime('20220408','%Y%m%d')
+     day_idx=max(0,(dt-base).days); week_idx=day_idx//7; weekday=dt.weekday(); dom=dt.day; weekend=1 if weekday>=5 else 0
+-    # Include crosses as categorical strings so the FM can model tab-specific temporal policy drift.
+     return [hour, mb, part, weekday, day_idx, week_idx, dom, weekend,
+             f'tab{tab}_part{part}', f'tab{tab}_hour{hour}', f'w{weekday}_part{part}', f'd{day_idx}_tab{tab}']
+ 
+ def build_history_raw_features(splits, video_feats=None, add_content=False, hour_qs=None, add_time=False):
+     up_v=defaultdict(int); un_v=defaultdict(int); up_a=defaultdict(int); un_a=defaultdict(int)
+-    raw={}; labels={}; users={}; video_feats=video_feats or {}; unk=['unk']*7; missing=0
++    raw={}; labels={}; users={}; video_feats=video_feats or {}; unk=['unk']*7
+     def row_feats(row, update=False):
+-        nonlocal missing
+         date,u,v,a,tab,dur,y=row; dur_bucket=int(dur)//10000; kv=(u,v); ka=(u,a)
+         pv,nv=up_v[kv],un_v[kv]; pa,na=up_a[ka],un_a[ka]
+         feats=[u,v,a,tab,dur_bucket,pos_bucket(pv),neg_bucket(nv),pos_bucket(pa),neg_bucket(na),ratio_bucket(pa,na),ratio_bucket(pv,nv)]
+@@ -142,7 +140,7 @@
+         if add_time:
+             key=(int(date),int(u),int(v),int(a),int(tab),int(dur))
+             if hour_qs is not None and key in hour_qs and len(hour_qs[key]): hm=hour_qs[key].popleft()
+-            else: hm=0; missing+=1
++            else: hm=0
+             feats.extend(time_date_feats(hm,date,tab))
+         if update:
+             if y>0.5: up_v[kv]+=1; up_a[ka]+=1
+@@ -228,8 +226,11 @@
+             ord2=np.argsort(scores[idx],kind='mergesort'); r=np.empty(n,dtype=np.float64); r[ord2]=np.arange(n,dtype=np.float64)/(n-1.0); out[idx]=r
+     return out
+ 
++def member_cache_path(cache_prefix,name,split,outer_seed,member_seed):
++    return os.path.join('pred_cache',f'{cache_prefix}_{name}_split{split}_outer{outer_seed}_mseed{member_seed}.npy')
++
+ def member_pred(cache_prefix,name,train_fn,enc,dim,Xout,split,outer_seed,member_seed,device,verbose):
+-    os.makedirs('pred_cache',exist_ok=True); path=os.path.join('pred_cache',f'{cache_prefix}_{name}_split{split}_outer{outer_seed}_mseed{member_seed}.npy')
++    os.makedirs('pred_cache',exist_ok=True); path=member_cache_path(cache_prefix,name,split,outer_seed,member_seed)
+     if os.path.isfile(path): return np.load(path)
+     torch.manual_seed(member_seed); model=train_fn(enc,dim,seed=member_seed,device=device,verbose=verbose)
+     preds=model.predict(Xout,device=device).astype(np.float64); np.save(path,preds); return preds
+@@ -242,7 +243,7 @@
+     bce_rank=within_user_ranks(member_pred(cache_prefix,bce_name,train_bce,enc,dim,Xout,split,seed,seed+303,device,verbose),uout)
+     return 0.70*bpr_rank+0.30*bce_rank
+ 
+-def run_predict(splits,data_dir,split='valid',seed=0,device='cpu',verbose=False):
++def node15_one_seed(splits,data_dir,split,seed,device,verbose):
+     enc_base,dim_base=encode(splits); Xbase,_,uout=enc_base[split]
+     base_rank=ensemble_rank(enc_base,dim_base,Xbase,uout,split,seed,device,verbose,'006','bpr','bce')
+     enc_hist,dim_hist=encode_history(splits,add_content=False); Xhist,_,uhist=enc_hist[split]
+@@ -256,9 +257,28 @@
+     time_rank=ensemble_rank(enc_time,dim_time,Xtime,utime,split,seed,device,verbose,'015','bprtimedate','bcetimedate')
+     return 0.50*node10+0.50*time_rank
+ 
++def all_node15_member_caches_exist(split, outer_seeds=(0,1,2)):
++    specs=[('006','bpr','bce'),('008','bprhist','bcehist'),('010','bprcont','bcecont'),('015','bprtimedate','bcetimedate')]
++    for s in outer_seeds:
++        for pref,bpr,bce in specs:
++            for ms in [s,s+101,s+202]:
++                if not os.path.isfile(member_cache_path(pref,bpr,split,s,ms)): return False
++            if not os.path.isfile(member_cache_path(pref,bce,split,s,s+303)): return False
++    return True
++
++def run_predict(splits,data_dir,split='valid',seed=0,device='cpu',verbose=False):
++    if all_node15_member_caches_exist(split,(0,1,2)):
++        if verbose: print('using cached node-15 outer-seed bag: 0,1,2')
++        preds=[]
++        for s in (0,1,2):
++            preds.append(node15_one_seed(splits,data_dir,split,s,device,False))
++        return np.mean(preds,axis=0)
++    if verbose: print('node-15 seed-bag caches missing; falling back to standalone single-seed node15')
++    return node15_one_seed(splits,data_dir,split,seed,device,verbose)
++
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date')
++    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date+seedbag')
+     scores=run_predict(splits,a.data_dir,split=a.split,seed=a.seed,device=a.device,verbose=a.out is None)
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')

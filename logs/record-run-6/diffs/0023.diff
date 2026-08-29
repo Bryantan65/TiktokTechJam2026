@@ -1,0 +1,408 @@
+# iteration 23  (parent: 15)
+# hypothesis: improve 15: standalone LambdaRank was weak, but use it readably as a 30% per-user rank correction on top of the strong FM ensemble, with FM predictions included as features so trees learn residual top-order interactions rather than replacing FM.
+# result: GAUC 0.670354 | nDCG@5 0.537558 | primary 0.603956 | verdict KEPT
+
+--- logs/record-run-6/solutions/015_lgbm_lambdarank_hist.py
++++ logs/record-run-6/solutions/023_lgbm_fm_rank_correction.py
+@@ -1,176 +1,245 @@
+-"""Draft LambdaMART/LambdaRank with history features.
+-
+-Standalone LightGBM ranker grouped by user.  It uses the tuple fields as native
+-categoricals plus the leak-free history statistics from the best FM branch, then
+-trains a fixed-round LambdaRank model and writes split predictions in original
+-row order.
+-"""
+-import argparse
+-import os
+-import sys
+-from collections import defaultdict
+-
++import argparse, csv, os, sys, time
++from collections import defaultdict, deque
+ import numpy as np
++import torch
+ import lightgbm as lgb
+ 
+-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+-                                '..', 'kuairand-starter-kit'))
+-from data import load, encode, FIELDS          # noqa: E402
+-
++sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'kuairand-starter-kit'))
++from data import load, encode
++from evaluate import evaluate
++
++AUX_NAMES = ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']
++N_FM = 8
++BLEND_LGB = 0.30
++
++def to_int(x, default=0):
++    try: return int(float(x))
++    except Exception: return default
++
++def raw_paths(data_dir):
++    p = [os.path.join(data_dir, 'log_standard_4_08_to_4_21_pure.csv'), os.path.join(data_dir, 'log_standard_4_22_to_5_08_pure.csv')]
++    if all(os.path.exists(x) for x in p): return p
++    return [os.path.join(data_dir, 'data', 'log_standard_4_08_to_4_21_pure.csv'), os.path.join(data_dir, 'data', 'log_standard_4_22_to_5_08_pure.csv')]
++
++def raw_key(r):
++    return (to_int(r.get('date')), to_int(r.get('user_id')), to_int(r.get('video_id')), to_int(r.get('author_id')), to_int(r.get('tab')), to_int(r.get('duration_ms')))
++
++def row_key(row):
++    return (int(row[0]), int(row[1]), int(row[2]), int(row[3]), int(row[4]), int(row[5]))
++
++def read_time_features(data_dir, splits):
++    by = defaultdict(deque)
++    for path in raw_paths(data_dir):
++        if not os.path.exists(path): continue
++        with open(path, 'r', newline='', encoding='utf-8') as f:
++            for r in csv.DictReader(f):
++                hm = to_int(r.get('hourmin'), 0); hour = max(0, min(23, hm // 100))
++                by[raw_key(r)].append((hour, hour // 4))
++    out = {}
++    for sp, rows in splits.items():
++        a = np.zeros((len(rows), 2), dtype=np.int64)
++        for i, row in enumerate(rows):
++            q = by.get(row_key(row))
++            if q: a[i] = q.popleft()
++        out[sp] = a
++    return out
++
++def add_time_fields(enc, splits, times):
++    offset = int(max(v[0].max() for v in enc.values())) + 1
++    maps = []
++    for j in range(times['train'].shape[1]):
++        vals = np.unique(times['train'][:, j]); mp = {int(v): offset + i + 1 for i, v in enumerate(vals)}
++        maps.append((mp, offset)); offset += len(vals) + 1
++    out = {}
++    for sp, (X, y, u) in enc.items():
++        extra = np.zeros((len(X), len(maps)), dtype=np.int64)
++        for j, (mp, unk) in enumerate(maps):
++            extra[:, j] = [mp.get(int(v), unk) for v in times[sp][:, j]]
++        out[sp] = (np.concatenate([X.astype(np.int64), extra], axis=1), y, u)
++    return out, offset
++
++def read_aux_targets(data_dir, splits):
++    by = defaultdict(deque)
++    for path in raw_paths(data_dir):
++        if not os.path.exists(path): continue
++        with open(path, 'r', newline='', encoding='utf-8') as f:
++            for r in csv.DictReader(f):
++                dur = max(to_int(r.get('duration_ms')), 1); play = max(to_int(r.get('play_time_ms')), 0)
++                vals = [float(to_int(r.get(n), 0) > 0) for n in AUX_NAMES]
++                ratio = play / float(dur); vals += [float(ratio >= .25), float(ratio >= .50), float(ratio >= 1.0)]
++                by[raw_key(r)].append(np.asarray(vals, dtype=np.float32))
++    out = {}; dim = len(AUX_NAMES) + 3
++    for sp, rows in splits.items():
++        a = np.zeros((len(rows), dim), dtype=np.float32)
++        for i, row in enumerate(rows):
++            q = by.get(row_key(row))
++            if q: a[i] = q.popleft()
++        out[sp] = a
++    return out
+ 
+ class HistState:
++    names = ('ui','up','uai','uap','uvi','uvp','uti','utp','udi','udp','ai','ap','vi','vp')
+     def __init__(self):
+-        self.ui = defaultdict(int)
+-        self.up = defaultdict(int)
+-        self.uai = defaultdict(int)
+-        self.uap = defaultdict(int)
+-        self.uvi = defaultdict(int)
+-        self.uvp = defaultdict(int)
+-        self.uti = defaultdict(int)
+-        self.utp = defaultdict(int)
+-        self.udi = defaultdict(int)
+-        self.udp = defaultdict(int)
+-        self.ai = defaultdict(int)
+-        self.ap = defaultdict(int)
+-        self.vi = defaultdict(int)
+-        self.vp = defaultdict(int)
+-
++        for n in self.names: setattr(self, n, defaultdict(int))
+     def copy(self):
+-        other = HistState()
+-        for name in ('ui', 'up', 'uai', 'uap', 'uvi', 'uvp', 'uti', 'utp',
+-                     'udi', 'udp', 'ai', 'ap', 'vi', 'vp'):
+-            setattr(other, name, defaultdict(int, getattr(self, name).copy()))
+-        return other
+-
++        o = HistState()
++        for n in self.names: setattr(o, n, defaultdict(int, getattr(self, n).copy()))
++        return o
+     def features_one(self, row):
+-        u, v, a, tab = row[1], row[2], row[3], row[4]
+-        dur = int(row[5]) // 10000
+-        ui, up = self.ui[u], self.up[u]
+-        uai, uap = self.uai[(u, a)], self.uap[(u, a)]
+-        uvi, uvp = self.uvi[(u, v)], self.uvp[(u, v)]
+-        uti, utp = self.uti[(u, tab)], self.utp[(u, tab)]
+-        udi, udp = self.udi[(u, dur)], self.udp[(u, dur)]
+-        ai, ap = self.ai[a], self.ap[a]
+-        vi, vp = self.vi[v], self.vp[v]
+-        return [
+-            np.log1p(ui), (up + 1.0) / (ui + 2.0),
+-            np.log1p(uai), (uap + 0.5) / (uai + 2.0), uap / (up + 1.0),
+-            np.log1p(uvi), (uvp + 0.5) / (uvi + 2.0),
+-            np.log1p(uti), (utp + 0.5) / (uti + 2.0),
+-            np.log1p(udi), (udp + 0.5) / (udi + 2.0),
+-            np.log1p(ai), (ap + 1.0) / (ai + 2.0),
+-            np.log1p(vi), (vp + 0.5) / (vi + 2.0),
+-        ]
+-
++        u,v,a,tab = row[1],row[2],row[3],row[4]; dur = int(row[5]) // 10000
++        ui,up = self.ui[u],self.up[u]; uai,uap = self.uai[(u,a)],self.uap[(u,a)]
++        uvi,uvp = self.uvi[(u,v)],self.uvp[(u,v)]; uti,utp = self.uti[(u,tab)],self.utp[(u,tab)]
++        udi,udp = self.udi[(u,dur)],self.udp[(u,dur)]; ai,ap = self.ai[a],self.ap[a]; vi,vp = self.vi[v],self.vp[v]
++        return [np.log1p(ui),(up+1)/(ui+2),np.log1p(uai),(uap+.5)/(uai+2),uap/(up+1),np.log1p(uvi),(uvp+.5)/(uvi+2),np.log1p(uti),(utp+.5)/(uti+2),np.log1p(udi),(udp+.5)/(udi+2),np.log1p(ai),(ap+1)/(ai+2),np.log1p(vi),(vp+.5)/(vi+2)]
+     def update(self, row):
+-        u, v, a, tab = row[1], row[2], row[3], row[4]
+-        dur = int(row[5]) // 10000
+-        y = 1 if row[6] > 0 else 0
+-        self.ui[u] += 1; self.up[u] += y
+-        self.uai[(u, a)] += 1; self.uap[(u, a)] += y
+-        self.uvi[(u, v)] += 1; self.uvp[(u, v)] += y
+-        self.uti[(u, tab)] += 1; self.utp[(u, tab)] += y
+-        self.udi[(u, dur)] += 1; self.udp[(u, dur)] += y
+-        self.ai[a] += 1; self.ap[a] += y
+-        self.vi[v] += 1; self.vp[v] += y
+-
++        u,v,a,tab = row[1],row[2],row[3],row[4]; dur = int(row[5]) // 10000; y = 1 if row[6] > 0 else 0
++        self.ui[u]+=1; self.up[u]+=y; self.uai[(u,a)]+=1; self.uap[(u,a)]+=y; self.uvi[(u,v)]+=1; self.uvp[(u,v)]+=y
++        self.uti[(u,tab)]+=1; self.utp[(u,tab)]+=y; self.udi[(u,dur)]+=1; self.udp[(u,dur)]+=y; self.ai[a]+=1; self.ap[a]+=y; self.vi[v]+=1; self.vp[v]+=y
+ 
+ def make_history_features(splits):
+-    state = HistState()
+-    feats = {}
+-    tr = np.empty((len(splits['train']), 15), dtype=np.float32)
+-    for i, row in enumerate(splits['train']):
+-        tr[i] = state.features_one(row)
+-        state.update(row)
+-    feats['train'] = tr
+-    train_state = state.copy()
++    st = HistState(); feats = {}; tr = np.empty((len(splits['train']), 15), dtype=np.float32)
++    for i, row in enumerate(splits['train']): tr[i] = st.features_one(row); st.update(row)
++    feats['train'] = tr; train_st = st.copy()
+     for sp in ('valid', 'test'):
+-        st = train_state.copy()
+-        arr = np.empty((len(splits[sp]), 15), dtype=np.float32)
+-        for i, row in enumerate(splits[sp]):
+-            arr[i] = st.features_one(row)
+-        feats[sp] = arr
+-    mu = feats['train'].mean(axis=0)
+-    sd = feats['train'].std(axis=0) + 1e-6
+-    for sp in feats:
+-        feats[sp] = (feats[sp] - mu) / sd
++        s = train_st.copy(); a = np.empty((len(splits[sp]), 15), dtype=np.float32)
++        for i, row in enumerate(splits[sp]): a[i] = s.features_one(row)
++        feats[sp] = a
++    mu = feats['train'].mean(0); sd = feats['train'].std(0) + 1e-6
++    for sp in feats: feats[sp] = (feats[sp] - mu) / sd
+     return feats
+ 
+-
+-def group_by_user(X, y, users):
++class Model(torch.nn.Module):
++    def __init__(self, dim, hdim, adim, k=16, seed=0):
++        super().__init__(); rng = np.random.default_rng(seed)
++        self.V = torch.nn.Parameter(torch.from_numpy(rng.normal(0, .01, (dim, k)).astype(np.float32)))
++        self.W = torch.nn.Parameter(torch.zeros(dim)); self.b = torch.nn.Parameter(torch.zeros(()))
++        self.H = torch.nn.Linear(hdim, 1); torch.nn.init.zeros_(self.H.weight); torch.nn.init.zeros_(self.H.bias)
++        self.aux = torch.nn.Sequential(torch.nn.Linear(k + hdim, 32), torch.nn.ReLU(), torch.nn.Linear(32, adim))
++    def forward(self, X, H, aux=False):
++        E = self.V[X]; S = E.sum(1); inter = .5 * ((S*S).sum(1) - (E*E).sum((1,2)))
++        main = self.b + self.W[X].sum(1) + inter + self.H(H).squeeze(1)
++        if aux: return main, self.aux(torch.cat([S, H], 1))
++        return main
++    @torch.no_grad()
++    def predict(self, X, H, bs=200000, device='cpu'):
++        self.eval(); out = []
++        for i in range(0, len(X), bs):
++            xb = torch.from_numpy(X[i:i+bs].astype(np.int64)).to(device); hb = torch.from_numpy(H[i:i+bs].astype(np.float32)).to(device)
++            out.append(self(xb, hb).cpu().numpy())
++        return np.concatenate(out)
++
++def prepare(splits, data_dir):
++    enc0, _ = encode(splits); times = read_time_features(data_dir, splits); enc, dim = add_time_fields(enc0, splits, times)
++    return enc, dim, make_history_features(splits), read_aux_targets(data_dir, splits), times
++
++def train_one(enc, dim, hist, aux_t, seed=0, k=16, lr=.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False):
++    torch.manual_seed(seed); Xtr,ytr,_ = enc['train']; Xva,yva,uva = enc['valid']; Htr,Hva = hist['train'],hist['valid']; Atr = aux_t['train']
++    m = Model(dim, Htr.shape[1], Atr.shape[1], k, seed).to(device)
++    opt = torch.optim.Adam([{'params':[m.V,m.W],'weight_decay':l2},{'params':[m.b],'weight_decay':0.0},{'params':m.H.parameters(),'weight_decay':1e-5},{'params':m.aux.parameters(),'weight_decay':1e-5}], lr=lr)
++    bce = torch.nn.BCEWithLogitsLoss(); Xtr_t = torch.from_numpy(Xtr.astype(np.int64)); Htr_t = torch.from_numpy(Htr.astype(np.float32)); ytr_t = torch.from_numpy(np.asarray(ytr, dtype=np.float32)); Atr_t = torch.from_numpy(Atr.astype(np.float32))
++    rng = np.random.default_rng(seed); best = -1.; state = None; bad = 0
++    for ep in range(1, epochs+1):
++        idx = rng.permutation(len(ytr)); m.train(); losses = []; t0 = time.time()
++        for i in range(0, len(idx), bs):
++            sel = torch.from_numpy(idx[i:i+bs]); xb = Xtr_t[sel].to(device); hb = Htr_t[sel].to(device); yb = ytr_t[sel].to(device); ab = Atr_t[sel].to(device)
++            opt.zero_grad(set_to_none=True); main, aux = m(xb, hb, aux=True); loss = bce(main, yb) + .08 * bce(aux, ab); loss.backward(); opt.step(); losses.append(loss.item())
++        va = evaluate(uva, yva, m.predict(Xva, Hva, device=device))
++        if verbose: print(f'seed {seed} ep {ep} loss {np.mean(losses):.4f} valid {va["primary"]:.4f} {time.time()-t0:.1f}s')
++        if va['primary'] > best + 1e-5:
++            best = va['primary']; bad = 0; state = {kk: vv.detach().clone() for kk, vv in m.state_dict().items()}
++        else:
++            bad += 1
++            if bad >= patience: break
++    m.load_state_dict(state); return m
++
++def per_user_rank_average(preds, users, gamma=1.0):
++    P = np.vstack(preds).astype(np.float64)
+     users = np.asarray(users)
+-    order = np.argsort(users, kind='stable')
+-    su = users[order]
+-    _, counts = np.unique(su, return_counts=True)
+-    return X[order], y[order], counts.tolist(), order
+-
+-
+-def make_features(splits):
+-    enc, _ = encode(splits)
+-    hist = make_history_features(splits)
+-    out = {}
+-    for sp in ('train', 'valid', 'test'):
+-        Xcat, y, users = enc[sp]
+-        X = np.concatenate([Xcat.astype(np.float32), hist[sp].astype(np.float32)], axis=1)
+-        out[sp] = (X, np.asarray(y, dtype=np.int32), np.asarray(users))
+-    return out
+-
+-
+-def train_ranker(feats, seed):
+-    Xtr, ytr, utr = feats['train']
+-    Xs, ys, group, order = group_by_user(Xtr, ytr, utr)
+-    dtrain = lgb.Dataset(
+-        Xs, label=ys, group=group,
+-        categorical_feature=list(range(len(FIELDS))),
+-        free_raw_data=False,
+-    )
++    out = np.zeros(P.shape[1], dtype=np.float64)
++    order = np.argsort(users, kind='mergesort'); su = users[order]
++    start = 0
++    while start < len(order):
++        end = start + 1
++        while end < len(order) and su[end] == su[start]: end += 1
++        idx = order[start:end]; n = end - start
++        if n <= 1:
++            out[idx] = P[:, idx].mean(0)
++        else:
++            acc = np.zeros(n, dtype=np.float64)
++            for mi in range(P.shape[0]):
++                vals = P[mi, idx]
++                r = np.empty(n, dtype=np.float64)
++                r[np.argsort(vals, kind='mergesort')] = np.arange(n, dtype=np.float64)
++                acc += (r / (n - 1.0)) ** gamma
++            out[idx] = acc / P.shape[0]
++        start = end
++    return out
++
++def per_user_rank(scores, users):
++    scores = np.asarray(scores, dtype=np.float64); users = np.asarray(users)
++    out = np.zeros(len(scores), dtype=np.float64)
++    order = np.argsort(users, kind='mergesort'); su = users[order]
++    start = 0
++    while start < len(order):
++        end = start + 1
++        while end < len(order) and su[end] == su[start]: end += 1
++        idx = order[start:end]; n = end - start
++        if n <= 1: out[idx] = scores[idx]
++        else:
++            r = np.empty(n, dtype=np.float64); r[np.argsort(scores[idx], kind='mergesort')] = np.arange(n, dtype=np.float64)
++            out[idx] = r / (n - 1.0)
++        start = end
++    return out
++
++def lgb_features(rows, hist, times, fm_raw, fm_rank):
++    n = len(rows); base = np.empty((n, 7), dtype=np.float32)
++    for i, row in enumerate(rows):
++        base[i,0] = int(row[0]) % 100
++        base[i,1] = int(row[4])
++        base[i,2] = int(row[5]) // 10000
++        base[i,3] = times[i,0]
++        base[i,4] = times[i,1]
++        base[i,5] = fm_raw[i]
++        base[i,6] = fm_rank[i]
++    return np.concatenate([base, hist.astype(np.float32)], axis=1)
++
++def group_counts(users_sorted):
++    _, cnt = np.unique(users_sorted, return_counts=True)
++    return cnt.tolist()
++
++def train_lgb_ranker(splits, enc, hist, times, fm_raw_train, fm_rank_train, seed=2026):
++    Xtr, ytr, utr = enc['train']
++    F = lgb_features(splits['train'], hist['train'], times['train'], fm_raw_train, fm_rank_train)
++    order = np.argsort(np.asarray(utr), kind='mergesort')
++    dtrain = lgb.Dataset(F[order], label=np.asarray(ytr, dtype=np.float32)[order], group=group_counts(np.asarray(utr)[order]), free_raw_data=True)
+     params = {
+-        'objective': 'lambdarank',
+-        'metric': 'None',
+-        'label_gain': [0, 1],
+-        'boosting_type': 'gbdt',
+-        'learning_rate': 0.035,
+-        'num_leaves': 63,
+-        'min_data_in_leaf': 80,
+-        'min_data_per_group': 1,
+-        'max_depth': -1,
+-        'feature_fraction': 0.85,
+-        'bagging_fraction': 0.85,
+-        'bagging_freq': 1,
+-        'lambda_l1': 0.0,
+-        'lambda_l2': 2.0,
+-        'max_cat_threshold': 64,
+-        'cat_l2': 20.0,
+-        'cat_smooth': 20.0,
+-        'verbosity': -1,
+-        'num_threads': 0,
+-        'seed': int(seed),
+-        'feature_fraction_seed': int(seed) + 11,
+-        'bagging_seed': int(seed) + 17,
+-        'data_random_seed': int(seed) + 23,
+-        'force_col_wise': True,
++        'objective': 'rank_xendcg', 'metric': 'None', 'learning_rate': 0.035, 'num_leaves': 31,
++        'min_data_in_leaf': 80, 'feature_fraction': 0.85, 'bagging_fraction': 0.85, 'bagging_freq': 1,
++        'lambda_l2': 1.0, 'verbose': -1, 'num_threads': 4, 'seed': seed, 'force_col_wise': True
+     }
+-    return lgb.train(params, dtrain, num_boost_round=260)
+-
++    return lgb.train(params, dtrain, num_boost_round=140)
+ 
+ if __name__ == '__main__':
+-    ap = argparse.ArgumentParser()
+-    ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+-    ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test'])
+-    ap.add_argument('--out', default=None)
+-    ap.add_argument('--seed', type=int, default=0)
+-    a = ap.parse_args()
+-
+-    print(f"loading {a.data_dir} ...")
+-    splits = load(a.data_dir)
+-    print({k: len(v) for k, v in splits.items()}, f"fields={FIELDS}+hist; lgbm_lambdarank")
+-    feats = make_features(splits)
+-    model = train_ranker(feats, a.seed)
+-    X, y, users = feats[a.split]
+-    scores = model.predict(X, num_iteration=model.best_iteration).astype(np.float64)
++    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); a = ap.parse_args()
++    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'8x FM rank + {BLEND_LGB:.2f} LGB rank correction')
++    enc, dim, hist, aux_t, times = prepare(splits, a.data_dir)
++    Xreq, yreq, ureq = enc[a.split]
++    train_preds = []; req_preds = []
++    for s in range(N_FM):
++        m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None))
++        train_preds.append(m.predict(enc['train'][0], hist['train'], device=a.device))
++        req_preds.append(m.predict(Xreq, hist[a.split], device=a.device))
++    fm_raw_train = np.vstack(train_preds).mean(0)
++    fm_rank_train = per_user_rank_average(train_preds, enc['train'][2], gamma=1.0)
++    fm_raw_req = np.vstack(req_preds).mean(0)
++    fm_rank_req = per_user_rank_average(req_preds, ureq, gamma=1.0)
++    print('training lightgbm rank correction ...')
++    gbm = train_lgb_ranker(splits, enc, hist, times, fm_raw_train, fm_rank_train)
++    Freq = lgb_features(splits[a.split], hist[a.split], times[a.split], fm_raw_req, fm_rank_req)
++    lgb_pred = gbm.predict(Freq, num_iteration=gbm.best_iteration)
++    lgb_rank = per_user_rank(lgb_pred, ureq)
++    scores = (1.0 - BLEND_LGB) * fm_rank_req + BLEND_LGB * lgb_rank
+     if a.out:
+-        np.save(a.out, scores)
+-        print(f"wrote {len(scores):,d} predictions for split={a.split}")
+-    else:
+-        print(scores[:10])
+-
++        np.save(a.out, scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')
++    else: print(scores[:10])
++

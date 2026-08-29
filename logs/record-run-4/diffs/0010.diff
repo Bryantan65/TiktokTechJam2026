@@ -1,0 +1,198 @@
+# iteration 10  (parent: 9)
+# hypothesis: improve 9: sparse action heads barely moved the model; add a dense standardized log(play_time_ms/duration_ms) SmoothL1 auxiliary head so the shared FM factors learn watch-time signal more directly while keeping long_view sampled-softmax dominant.
+# result: GAUC 0.671056 | nDCG@5 0.537385 | primary 0.604221 | verdict KEPT
+
+--- logs/record-run-4/solutions/009_multitask_aux_time_softmax.py
++++ logs/record-run-4/solutions/010_multitask_playtime_aux.py
+@@ -1,8 +1,9 @@
+-"""Sampled-softmax FM with time features and auxiliary feedback tasks.
+-
+-Builds on the best time-aware listwise FM: train long_view with within-user
+-sampled softmax, and add small BCE losses for raw feedback columns (click/like/
+-follow/comment/forward/profile/hate) using separate heads sharing FM embeddings.
++"""Sampled-softmax FM with time features and dense play-time auxiliary task.
++
++This refines the sparse-action multi-task draft: the primary long_view loss is
++unchanged, but auxiliary supervision uses a dense standardized log watch-ratio
++regression target from play_time_ms/duration_ms, plus the previous sparse action
++BCE heads at low weight.
+ """
+ import argparse
+ import csv
+@@ -37,6 +38,8 @@
+         if self.n_aux:
+             self.W_aux = torch.nn.Parameter(torch.zeros(self.n_aux, dim, dtype=torch.float32))
+             self.b_aux = torch.nn.Parameter(torch.zeros(self.n_aux, dtype=torch.float32))
++        self.W_play = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
++        self.b_play = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+ 
+     def _inter(self, X):
+         E = self.V[X]
+@@ -51,6 +54,10 @@
+         inter = self._inter(X).view(-1, 1)
+         lin = self.W_aux[:, X].sum(2).t()
+         return self.b_aux.view(1, -1) + lin + inter
++
++    def play_forward(self, X):
++        inter = self._inter(X)
++        return self.b_play + self.W_play[X].sum(1) + inter
+ 
+     @torch.no_grad()
+     def predict(self, X, bs=200_000, device='cpu'):
+@@ -111,7 +118,14 @@
+                 htab = hour * 8 + tab_clip
+                 extra = (hour, dow, htab)
+                 aux = tuple(float(_to_int(_get(r, n), 0)) for n in AUX_NAMES)
+-                val = (extra, aux)
++                play = float(_to_int(_get(r, 'play_time_ms', 'play_time', 'playtime_ms', 'watch_time_ms'), 0))
++                # Dense target: log watch ratio capped to reduce autoplay/outlier domination.
++                if dur > 0 and play > 0:
++                    ratio = min(play / float(dur), 5.0)
++                    play_t = np.log1p(ratio)
++                else:
++                    play_t = 0.0
++                val = (extra, aux, float(play_t))
+                 k_full = (date, user, video, author, tab, dur, lab)
+                 k_nodur = (date, user, video, author, tab, lab)
+                 full[k_full].append(val)
+@@ -126,11 +140,13 @@
+     offsets = dim + np.concatenate([[0], np.cumsum(sizes)[:-1]]).astype(np.int64)
+     out = {}
+     aux_out = {}
++    play_out = {}
+     matched = {}
+     for sp, rows in splits.items():
+         Xb, y, users = enc[sp]
+         extra = np.zeros((len(rows), len(sizes)), dtype=np.int64)
+         aux = np.zeros((len(rows), len(AUX_NAMES)), dtype=np.float32)
++        play = np.zeros(len(rows), dtype=np.float32)
+         ok = np.zeros(len(rows), dtype=bool)
+         for i, row in enumerate(rows):
+             date, user, video, author, tab, dur, lab = row
+@@ -138,24 +154,27 @@
+                       _to_int(author), _to_int(tab), _to_int(dur), _to_int(lab))
+             q = full.get(k_full)
+             if q:
+-                e, a = q.popleft()
++                e, a, p = q.popleft()
+                 extra[i] = e
+                 aux[i] = a
++                play[i] = p
+                 ok[i] = True
+                 continue
+             k_nodur = (_to_int(date), _to_int(user), _to_int(video),
+                        _to_int(author), _to_int(tab), _to_int(lab))
+             q = nodur.get(k_nodur)
+             if q:
+-                e, a = q.popleft()
++                e, a, p = q.popleft()
+                 extra[i] = e
+                 aux[i] = a
++                play[i] = p
+                 ok[i] = True
+         Xt = np.concatenate([Xb.astype(np.int64), extra + offsets], axis=1)
+         out[sp] = (Xt, y, users)
+         aux_out[sp] = aux
++        play_out[sp] = play
+         matched[sp] = ok
+-    return out, aux_out, matched, int(dim + sizes.sum())
++    return out, aux_out, play_out, matched, int(dim + sizes.sum())
+ 
+ 
+ def make_pair_sampler(y, users):
+@@ -183,12 +202,12 @@
+ 
+ 
+ def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096,
+-        patience=4, neg_k=8, aux_weight=0.05, seed=0, device='cpu', verbose=True):
+-    enc, aux, matched, dim = encode_with_time_aux(splits, data_dir)
++        patience=4, neg_k=8, aux_weight=0.03, play_weight=0.05,
++        seed=0, device='cpu', verbose=True):
++    enc, aux, play, matched, dim = encode_with_time_aux(splits, data_dir)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+-    # Drop degenerate/unmatched auxiliary tasks so constant columns cannot swamp ranking.
+     valid_rows = matched['train']
+     prev = aux['train'][valid_rows].mean(0) if valid_rows.any() else np.zeros(len(AUX_NAMES))
+     keep_aux = np.where((prev > 0.001) & (prev < 0.999))[0]
+@@ -196,9 +215,22 @@
+         aux_weight = 0.0
+     aux_tr = aux['train'][:, keep_aux] if len(keep_aux) else np.zeros((len(Xtr), 0), dtype=np.float32)
+ 
++    play_tr = play['train'].copy().astype(np.float32)
++    if valid_rows.any():
++        mu = float(play_tr[valid_rows].mean())
++        sd = float(play_tr[valid_rows].std())
++    else:
++        mu, sd = float(play_tr.mean()), float(play_tr.std())
++    if sd < 1e-6:
++        play_weight = 0.0
++        sd = 1.0
++    play_tr = (play_tr - mu) / sd
++
+     model = MultiTaskFM(dim, k=k, n_aux=len(keep_aux), seed=seed).to(device)
+     params = [{'params': [model.V, model.W], 'weight_decay': l2},
+-              {'params': [model.b], 'weight_decay': 0.0}]
++              {'params': [model.b], 'weight_decay': 0.0},
++              {'params': [model.W_play], 'weight_decay': l2},
++              {'params': [model.b_play], 'weight_decay': 0.0}]
+     if len(keep_aux):
+         params.append({'params': [model.W_aux], 'weight_decay': l2})
+         params.append({'params': [model.b_aux], 'weight_decay': 0.0})
+@@ -206,6 +238,7 @@
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     aux_t = torch.from_numpy(aux_tr.astype(np.float32))
++    play_t = torch.from_numpy(play_tr.astype(np.float32))
+     pos_idx, neg_pools = make_pair_sampler(ytr, utr)
+     rng = np.random.default_rng(seed)
+ 
+@@ -233,12 +266,18 @@
+             target = torch.zeros(bsz, dtype=torch.long, device=device)
+             loss = torch.nn.functional.cross_entropy(logits, target)
+ 
++            flat_idx = cand_idx.reshape(-1)
++            xc = Xtr_t[torch.from_numpy(flat_idx)].to(device)
+             if aux_weight > 0.0 and len(keep_aux):
+-                xc = Xtr_t[torch.from_numpy(cand_idx.reshape(-1))].to(device)
+-                ya = aux_t[torch.from_numpy(cand_idx.reshape(-1))].to(device)
++                ya = aux_t[torch.from_numpy(flat_idx)].to(device)
+                 aux_logits = model.aux_forward(xc)
+                 aux_loss = torch.nn.functional.binary_cross_entropy_with_logits(aux_logits, ya)
+                 loss = loss + aux_weight * aux_loss
++            if play_weight > 0.0:
++                yp = play_t[torch.from_numpy(flat_idx)].to(device)
++                predp = model.play_forward(xc)
++                play_loss = torch.nn.functional.smooth_l1_loss(predp, yp, beta=1.0)
++                loss = loss + play_weight * play_loss
+ 
+             loss.backward()
+             opt.step()
+@@ -247,7 +286,7 @@
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+             kept = ','.join(AUX_NAMES[i] for i in keep_aux)
+-            print(f"  epoch {ep:2d} | mt-softmax {np.mean(losses):.4f} aux=[{kept}] | valid "
++            print(f"  epoch {ep:2d} | loss {np.mean(losses):.4f} aux=[{kept}] play_mu={mu:.3f} play_sd={sd:.3f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+@@ -280,7 +319,7 @@
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()},
+-          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES}")
++          f"fields={FIELDS}+hour,dow,hour_tab aux={AUX_NAMES}+play_ratio")
+ 
+     model, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
+                      seed=a.seed, device=a.device, verbose=a.out is None)
+@@ -291,7 +330,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== multitask_aux_time_softmax (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== multitask_playtime_aux (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

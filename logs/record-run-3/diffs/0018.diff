@@ -1,0 +1,252 @@
+# iteration 18  (parent: 17)
+# hypothesis: draft direction 3: add multi-task auxiliary feedback heads sharing the FM embeddings while preserving the BPR ranking head, motivated by multi-task recommendation architectures such as MMoE https://dl.acm.org/doi/10.1145/3219819.3220007. Auxiliary BCE on click/like/follow/comment/forward/hate/profile-enter should regularize item/user factors with richer engagement signals.
+# result: GAUC 0.671631 | nDCG@5 0.538 | primary 0.604816 | verdict KEPT
+
+--- logs/record-run-3/solutions/017_time_context_keyfix.py
++++ logs/record-run-3/solutions/018_bpr7_time_multitask_aux.py
+@@ -1,9 +1,8 @@
+-"""Seven-member same-user BPR FM ensemble with correctly keyed temporal context.
+-
+-Debugs node 14: the raw interaction logs do not contain author_id, so the
+-(date,user,video,author,tab,duration) lookup missed almost every row and fell
+-back to hour=0.  This version aligns raw hourmin by fields actually present in
+-both sources: (date,user,video,tab,duration_ms,long_view), FIFO for duplicates.
++"""BPR7 time-context FM with small auxiliary multi-task regularization.
++
++Draft direction 3 on top of node 17: use raw train-only feedback signals as
++auxiliary BCE tasks sharing the FM interaction embeddings, while keeping the
++same-user BPR objective and prediction head unchanged.
+ """
+ import argparse
+ import csv
+@@ -21,21 +20,31 @@
+ from evaluate import evaluate  # noqa: E402
+ 
+ RAW_LOGS = ['log_standard_4_08_to_4_21_pure.csv', 'log_standard_4_22_to_5_08_pure.csv']
+-
+-
+-class TorchFM(torch.nn.Module):
+-    def __init__(self, dim, k=16, seed=0):
++AUX_COLS = ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_hate', 'is_profile_enter']
++
++
++class MultiTaskFM(torch.nn.Module):
++    def __init__(self, dim, k=16, n_aux=7, seed=0):
+         super().__init__()
+         rng = np.random.default_rng(seed)
+         self.V = torch.nn.Parameter(torch.from_numpy(rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+-
+-    def forward(self, X):
++        self.W_aux = torch.nn.Parameter(torch.zeros(n_aux, dim, dtype=torch.float32))
++        self.b_aux = torch.nn.Parameter(torch.zeros(n_aux, dtype=torch.float32))
++
++    def shared_inter(self, X):
+         E = self.V[X]
+         S = E.sum(1)
+-        inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
+-        return self.b + self.W[X].sum(1) + inter
++        return 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
++
++    def forward(self, X):
++        return self.b + self.W[X].sum(1) + self.shared_inter(X)
++
++    def aux_logits(self, X):
++        inter = self.shared_inter(X).unsqueeze(1)
++        lin = self.W_aux[:, X].sum(2).transpose(0, 1)
++        return inter + lin + self.b_aux.unsqueeze(0)
+ 
+     @torch.no_grad()
+     def predict(self, X, bs=200000, device='cpu'):
+@@ -85,21 +94,8 @@
+     return os.path.join(data_dir, filename)
+ 
+ 
+-def _dur_bucket(ms):
+-    # fallback key if data.load stores a bucket rather than raw duration; keep coarse and deterministic
+-    x = _to_int(ms, 0)
+-    if x < 5000: return 0
+-    if x < 10000: return 1
+-    if x < 30000: return 2
+-    if x < 60000: return 3
+-    if x < 120000: return 4
+-    if x < 300000: return 5
+-    return 6
+-
+-
+-def read_raw_time_lookup(data_dir):
+-    look_exact = defaultdict(deque)
+-    look_nodur = defaultdict(deque)
++def read_raw_lookup(data_dir):
++    lookup = defaultdict(deque)
+     n = 0
+     headers = None
+     for fn in RAW_LOGS:
+@@ -114,40 +110,32 @@
+                 dur = _to_int(_pick(rec, ['duration_ms', 'video_duration_ms', 'duration', 'video_duration']))
+                 y = _to_int(_pick(rec, ['long_view', 'label'], 0))
+                 hourmin = _pick(rec, ['hourmin', 'hour_min', 'time', 'request_time'], 0)
+-                feats = _time_feats(date, hourmin, tab)
+-                look_exact[(date, user, video, tab, dur, y)].append(feats)
+-                look_nodur[(date, user, video, tab, y)].append(feats)
++                aux = tuple(float(_to_int(_pick(rec, [c], 0))) for c in AUX_COLS)
++                lookup[(date, user, video, tab, dur, y)].append((_time_feats(date, hourmin, tab), aux))
+                 n += 1
+-    return look_exact, look_nodur, n, headers
+-
+-
+-def aligned_time_features(data_dir, splits):
+-    look_exact, look_nodur, nraw, headers = read_raw_time_lookup(data_dir)
+-    metas = {}
+-    miss = exact = nodur = 0
+-    examples = []
++    return lookup, n, headers
++
++
++def aligned_raw_features(data_dir, splits):
++    lookup, nraw, headers = read_raw_lookup(data_dir)
++    time_meta, aux_meta = {}, {}
++    exact = miss = 0
+     for sp, rows in splits.items():
+-        arr = np.zeros((len(rows), 5), dtype=np.int64)
++        tarr = np.zeros((len(rows), 5), dtype=np.int64)
++        aarr = np.zeros((len(rows), len(AUX_COLS)), dtype=np.float32)
+         for i, row in enumerate(rows):
+             date, user, video, tab, dur, y = _to_int(row[0]), _to_int(row[1]), _to_int(row[2]), _to_int(row[4]), _to_int(row[5]), _to_int(row[6])
+-            q = look_exact.get((date, user, video, tab, dur, y))
++            q = lookup.get((date, user, video, tab, dur, y))
+             if q:
+-                arr[i] = q.popleft(); exact += 1
++                tf, aux = q.popleft(); exact += 1
++                tarr[i] = tf; aarr[i] = aux
+             else:
+-                q2 = look_nodur.get((date, user, video, tab, y))
+-                if q2:
+-                    arr[i] = q2.popleft(); nodur += 1
+-                else:
+-                    miss += 1
+-                    if len(examples) < 3:
+-                        examples.append((sp, tuple(row[:7])))
+-                    arr[i] = _time_feats(date, 0, tab)
+-        metas[sp] = arr
+-    if miss or nodur:
+-        print(f"raw hourmin alignment: exact={exact} nodur={nodur} missing={miss} raw={nraw} headers={headers} examples={examples}")
+-    else:
+-        print(f"raw hourmin alignment: exact={exact} missing=0 raw={nraw} headers={headers}")
+-    return metas
++                miss += 1
++                tarr[i] = _time_feats(date, 0, tab)
++        time_meta[sp] = tarr
++        aux_meta[sp] = aarr
++    print(f"raw alignment: exact={exact} missing={miss} raw={nraw} aux={AUX_COLS} headers={headers}")
++    return time_meta, aux_meta
+ 
+ 
+ def augment_encoded(enc, time_meta):
+@@ -158,8 +146,7 @@
+         vals = np.concatenate([time_meta[sp][:, j] for sp in ('train', 'valid', 'test')])
+         uniq = sorted(set(int(x) for x in vals))
+         mp = {v: offset + i for i, v in enumerate(uniq)}
+-        maps.append(mp)
+-        offset += len(uniq)
++        maps.append(mp); offset += len(uniq)
+     out = {}
+     for sp, (X, y, users) in enc.items():
+         extra = np.zeros((len(X), n_extra), dtype=np.int64)
+@@ -169,9 +156,11 @@
+     return out, offset
+ 
+ 
+-def encode_with_time(data_dir, splits):
++def encode_with_raw(data_dir, splits):
+     enc0, _ = encode(splits)
+-    return augment_encoded(enc0, aligned_time_features(data_dir, splits))
++    time_meta, aux_meta = aligned_raw_features(data_dir, splits)
++    enc, dim = augment_encoded(enc0, time_meta)
++    return enc, dim, aux_meta
+ 
+ 
+ def make_user_pairs(y, users):
+@@ -202,28 +191,40 @@
+     return pos_all[perm], neg_all[perm]
+ 
+ 
+-def train_one(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, seed=0, device='cpu', verbose=False, tag=''):
++def train_one(enc, dim, aux_train, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, seed=0, device='cpu', verbose=False, tag='', aux_weight=0.02):
+     Xtr, ytr, utr = enc['train']; Xva, yva, uva = enc['valid']
+-    model = TorchFM(dim, k=k, seed=seed).to(device)
+-    opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2}, {'params': [model.b], 'weight_decay': 0.0}], lr=lr, betas=(0.9, 0.999), eps=1e-8)
++    model = MultiTaskFM(dim, k=k, n_aux=aux_train.shape[1], seed=seed).to(device)
++    opt = torch.optim.Adam([{'params': [model.V, model.W, model.W_aux], 'weight_decay': l2}, {'params': [model.b, model.b_aux], 'weight_decay': 0.0}], lr=lr, betas=(0.9, 0.999), eps=1e-8)
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
++    aux_t = torch.from_numpy(aux_train.astype(np.float32))
++    # Balance rare auxiliary positives, but clip to keep this a gentle regularizer.
++    pos = aux_train.sum(axis=0)
++    neg = aux_train.shape[0] - pos
++    pw = np.clip(neg / np.maximum(pos, 1.0), 1.0, 20.0).astype(np.float32)
++    pos_weight = torch.from_numpy(pw).to(device)
+     pos_lists, neg_lists, n_pos = make_user_pairs(ytr, utr)
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+     if verbose:
+-        print(f"{tag} BPR users={len(pos_lists):,d} positives paired/epoch={n_pos:,d}")
++        print(f"{tag} BPR+aux users={len(pos_lists):,d} positives={n_pos:,d} pos_weight={pw}")
+     for ep in range(1, epochs + 1):
+         pos_idx, neg_idx = sample_epoch_pairs(pos_lists, neg_lists, n_pos, rng)
+         t0 = time.time(); model.train(); losses = []
+         for i in range(0, n_pos, bs):
+-            xp = Xtr_t[torch.from_numpy(pos_idx[i:i+bs])].to(device)
+-            xn = Xtr_t[torch.from_numpy(neg_idx[i:i+bs])].to(device)
++            pidx = pos_idx[i:i+bs]; nidx = neg_idx[i:i+bs]
++            xp = Xtr_t[torch.from_numpy(pidx)].to(device)
++            xn = Xtr_t[torch.from_numpy(nidx)].to(device)
++            both_idx = np.concatenate([pidx, nidx])
++            xb = Xtr_t[torch.from_numpy(both_idx)].to(device)
++            yaux = aux_t[torch.from_numpy(both_idx)].to(device)
+             opt.zero_grad(set_to_none=True)
+-            loss = torch.nn.functional.softplus(-(model(xp) - model(xn))).mean()
++            bpr = torch.nn.functional.softplus(-(model(xp) - model(xn))).mean()
++            aux_loss = torch.nn.functional.binary_cross_entropy_with_logits(model.aux_logits(xb), yaux, pos_weight=pos_weight)
++            loss = bpr + aux_weight * aux_loss
+             loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
++            print(f"  {tag} epoch {ep:2d} | loss {np.mean(losses):.4f} | valid GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -237,12 +238,12 @@
+ 
+ 
+ def train_ensemble(splits, data_dir, k=16, lr=0.001, epochs=40, seed=0, device='cpu', verbose=True):
+-    enc, dim = encode_with_time(data_dir, splits)
++    enc, dim, aux_meta = encode_with_raw(data_dir, splits)
+     seeds = [seed, seed+1009, seed+2027, seed+3037, seed+4051, seed+5059, seed+6073]
+     models = []
+     for j, s in enumerate(seeds):
+         torch.manual_seed(s)
+-        models.append(train_one(enc, dim, k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag=f"m{j+1}/7"))
++        models.append(train_one(enc, dim, aux_meta['train'], k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag=f"m{j+1}/7"))
+     return models, enc
+ 
+ 
+@@ -287,7 +288,7 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+['hour','hblock','weekday','tab_hour','tab_weekday']")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time aux={AUX_COLS}")
+     models, enc = train_ensemble(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[a.split]
+     scores = ensemble_predict(models, X, users, device=a.device)
+@@ -295,7 +296,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr7_time_context_keyfix (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr7_time_multitask_aux (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, ensemble_predict(models, Xs, us, device=a.device))

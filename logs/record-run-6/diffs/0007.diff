@@ -1,0 +1,178 @@
+# iteration 7  (parent: 6)
+# hypothesis: improve 6: aggregate user histories nudged nDCG, so add DIN-style recent target-aware sequence summaries from the user's last positive/impression events and let a small MLP learn nonlinear history effects.
+# result: GAUC 0.667564 | nDCG@5 0.535846 | primary 0.601705 | verdict noise
+
+--- logs/record-run-6/solutions/006_histfm.py
++++ logs/record-run-6/solutions/007_histfm_recent.py
+@@ -1,16 +1,15 @@
+-"""FM plus online user-history features.
+-
+-A lightweight DIN-inspired sequence draft: instead of representing a user only by
+-an id embedding, add target-aware summaries of the user's previous positive
+-behaviour for the current author/video/tab/duration bucket.  Training rows use
+-strictly previous rows; validation/test rows use histories accumulated from the
+-training split only.
++"""FM plus online user-history features, with recent positive sequence summaries.
++
++Refines 006: the aggregate history features helped nDCG a little, but DIN-style
++interest should be strongest for recent behaviour.  Add target-aware counts in a
++user's last positive impressions (author/video/tab/duration) while still using
++strictly previous training rows and training-only history for valid/test.
+ """
+ import argparse
+ import os
+ import sys
+ import time
+-from collections import defaultdict
++from collections import defaultdict, deque
+ 
+ import numpy as np
+ import torch
+@@ -37,13 +36,54 @@
+         self.ap = defaultdict(int)
+         self.vi = defaultdict(int)
+         self.vp = defaultdict(int)
++        self.ra = defaultdict(lambda: deque(maxlen=50))
++        self.rv = defaultdict(lambda: deque(maxlen=50))
++        self.rt = defaultdict(lambda: deque(maxlen=50))
++        self.rd = defaultdict(lambda: deque(maxlen=50))
++        self.ia = defaultdict(lambda: deque(maxlen=20))
++        self.iv = defaultdict(lambda: deque(maxlen=20))
+ 
+     def copy(self):
+         other = HistState()
+         for name in ('ui', 'up', 'uai', 'uap', 'uvi', 'uvp', 'uti', 'utp',
+                      'udi', 'udp', 'ai', 'ap', 'vi', 'vp'):
+             setattr(other, name, defaultdict(int, getattr(self, name).copy()))
++        for name in ('ra', 'rv', 'rt', 'rd'):
++            src = getattr(self, name)
++            dst = defaultdict(lambda: deque(maxlen=50))
++            for k, v in src.items():
++                dst[k] = deque(v, maxlen=50)
++            setattr(other, name, dst)
++        for name in ('ia', 'iv'):
++            src = getattr(self, name)
++            dst = defaultdict(lambda: deque(maxlen=20))
++            for k, v in src.items():
++                dst[k] = deque(v, maxlen=20)
++            setattr(other, name, dst)
+         return other
++
++    @staticmethod
++    def _cnt(seq, val, n):
++        if not seq:
++            return 0.0
++        c = 0
++        m = min(len(seq), n)
++        # right side is most recent
++        for x in list(seq)[-m:]:
++            if x == val:
++                c += 1
++        return float(c)
++
++    @staticmethod
++    def _recency(seq, val):
++        if not seq:
++            return 0.0
++        dist = 1
++        for x in reversed(seq):
++            if x == val:
++                return 1.0 / dist
++            dist += 1
++        return 0.0
+ 
+     def features_one(self, row):
+         u = row[1]
+@@ -65,6 +105,12 @@
+         ap = self.ap[a]
+         vi = self.vi[v]
+         vp = self.vp[v]
++        ra = self.ra[u]
++        rv = self.rv[u]
++        rt = self.rt[u]
++        rd = self.rd[u]
++        ia = self.ia[u]
++        iv = self.iv[u]
+         return [
+             np.log1p(ui), (up + 1.0) / (ui + 2.0),
+             np.log1p(uai), (uap + 0.5) / (uai + 2.0), uap / (up + 1.0),
+@@ -73,6 +119,15 @@
+             np.log1p(udi), (udp + 0.5) / (udi + 2.0),
+             np.log1p(ai), (ap + 1.0) / (ai + 2.0),
+             np.log1p(vi), (vp + 0.5) / (vi + 2.0),
++            # recent positive sequence, target-aware
++            self._cnt(ra, a, 5), self._cnt(ra, a, 20), self._recency(ra, a),
++            self._cnt(rv, v, 20), self._recency(rv, v),
++            self._cnt(rt, tab, 5), self._cnt(rt, tab, 20),
++            self._cnt(rd, dur, 5), self._cnt(rd, dur, 20),
++            np.log1p(len(ra)),
++            # recent impressions regardless of label; useful for repeated exposure fatigue/interest
++            self._cnt(ia, a, 5), self._cnt(ia, a, 20),
++            self._cnt(iv, v, 20), self._recency(iv, v),
+         ]
+ 
+     def update(self, row):
+@@ -96,12 +151,20 @@
+         self.ap[a] += y
+         self.vi[v] += 1
+         self.vp[v] += y
++        self.ia[u].append(a)
++        self.iv[u].append(v)
++        if y:
++            self.ra[u].append(a)
++            self.rv[u].append(v)
++            self.rt[u].append(tab)
++            self.rd[u].append(dur)
+ 
+ 
+ def make_history_features(splits):
+     state = HistState()
+     feats = {}
+-    tr = np.empty((len(splits['train']), 15), dtype=np.float32)
++    sample = state.features_one(splits['train'][0])
++    tr = np.empty((len(splits['train']), len(sample)), dtype=np.float32)
+     for i, row in enumerate(splits['train']):
+         tr[i] = state.features_one(row)
+         state.update(row)
+@@ -109,10 +172,10 @@
+     train_state = state.copy()
+     for sp in ('valid', 'test'):
+         st = train_state.copy()
+-        arr = np.empty((len(splits[sp]), 15), dtype=np.float32)
++        arr = np.empty((len(splits[sp]), tr.shape[1]), dtype=np.float32)
+         for i, row in enumerate(splits[sp]):
+             arr[i] = st.features_one(row)
+-            # Only training labels are part of the available behaviour history.
++            # Do not use validation/test labels as behaviour history.
+         feats[sp] = arr
+     mu = feats['train'].mean(axis=0)
+     sd = feats['train'].std(axis=0) + 1e-6
+@@ -129,9 +192,16 @@
+         self.V = torch.nn.Parameter(torch.from_numpy(V0))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+-        self.H = torch.nn.Linear(hist_dim, 1)
+-        torch.nn.init.zeros_(self.H.weight)
+-        torch.nn.init.zeros_(self.H.bias)
++        self.H = torch.nn.Sequential(
++            torch.nn.Linear(hist_dim, 16),
++            torch.nn.ReLU(),
++            torch.nn.Linear(16, 1),
++        )
++        # Start as the parent FM so early stopping sees only learned improvements.
++        torch.nn.init.normal_(self.H[0].weight, mean=0.0, std=0.01)
++        torch.nn.init.zeros_(self.H[0].bias)
++        torch.nn.init.zeros_(self.H[2].weight)
++        torch.nn.init.zeros_(self.H[2].bias)
+ 
+     def forward(self, X, H):
+         E = self.V[X]
+@@ -237,7 +307,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== histfm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== histfm_recent (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, hist[sp], device=a.device))

@@ -1,0 +1,200 @@
+# iteration 14  (parent: 10)
+# hypothesis: draft direction 6: add explicit temporal context to the best BPR ensemble by reading raw hourmin and appending hour/block/weekday interaction fields, following time-aware recommendation work such as https://dl.acm.org/doi/10.1145/1721654.1721677. This is the highest-upside unexplored direction now that ensemble size and lightweight history blends have flattened.
+# result: GAUC 0.671822 | nDCG@5 0.538043 | primary 0.604933 | verdict KEPT
+
+--- logs/record-run-3/solutions/010_bpr_7_rank_ensemble.py
++++ logs/record-run-3/solutions/014_bpr7_time_context.py
+@@ -1,14 +1,17 @@
+-"""Seven-member within-user rank ensemble of BPR FMs.
+-
+-Refines 009 by keeping exactly the same BPR training and within-user Borda/rank
+-combiner, but averaging seven independent members instead of five.  This tests
+-whether the node-8 -> node-9 gain was still mostly variance reduction from more
+-BPR rankers rather than a saturated ensemble.
++"""Seven-member same-user BPR FM ensemble with temporal context fields.
++
++Drafts direction 6 on top of the best BPR rank ensemble: read hourmin from the
++raw KuaiRand logs, align it back to data.load() rows, and append reusable time
++context fields (hour, 4-hour block, weekday, tab-hour, tab-weekday) to the FM.
++The training loss and within-user rank/Borda ensemble are unchanged from 010.
+ """
+ import argparse
++import csv
++import datetime as _dt
+ import os
+ import sys
+ import time
++from collections import defaultdict, deque
+ 
+ import numpy as np
+ import torch
+@@ -17,6 +20,12 @@
+                                 '..', 'kuairand-starter-kit'))
+ from data import load, encode, FIELDS          # noqa: E402
+ from evaluate import evaluate                  # noqa: E402
++
++
++RAW_LOGS = [
++    'log_standard_4_08_to_4_21_pure.csv',
++    'log_standard_4_22_to_5_08_pure.csv',
++]
+ 
+ 
+ class TorchFM(torch.nn.Module):
+@@ -42,6 +51,121 @@
+             xb = torch.from_numpy(X[i:i + bs].astype(np.int64)).to(device)
+             out.append(self(xb).cpu().numpy())
+         return np.concatenate(out)
++
++
++def _pick(rec, names, default=None):
++    for n in names:
++        if n in rec and rec[n] != '':
++            return rec[n]
++    return default
++
++
++def _to_int(x, default=0):
++    try:
++        return int(float(x))
++    except Exception:
++        return default
++
++
++def _weekday(date_int):
++    try:
++        s = str(int(date_int))
++        return _dt.date(int(s[:4]), int(s[4:6]), int(s[6:8])).weekday()
++    except Exception:
++        return 0
++
++
++def _time_feats(date_int, hourmin, tab):
++    hm = _to_int(hourmin, 0)
++    hour = max(0, min(23, hm // 100))
++    hblock = hour // 4
++    dow = _weekday(date_int)
++    tab = _to_int(tab, 0)
++    return (hour, hblock, dow, tab * 24 + hour, tab * 7 + dow)
++
++
++def _raw_log_path(data_dir, filename):
++    p = os.path.join(data_dir, filename)
++    if os.path.exists(p):
++        return p
++    # Be tolerant if the caller passes the dataset root instead of the data dir.
++    p2 = os.path.join(data_dir, 'data', filename)
++    if os.path.exists(p2):
++        return p2
++    return p
++
++
++def read_raw_time_lookup(data_dir):
++    """Return key -> queue of temporal features in original raw-log order."""
++    lookup = defaultdict(deque)
++    n = 0
++    for fn in RAW_LOGS:
++        path = _raw_log_path(data_dir, fn)
++        with open(path, 'r', encoding='utf-8', newline='') as f:
++            reader = csv.DictReader(f)
++            for rec in reader:
++                date = _to_int(_pick(rec, ['date']))
++                user = _to_int(_pick(rec, ['user_id', 'userid', 'user']))
++                video = _to_int(_pick(rec, ['video_id', 'videoid', 'item_id', 'itemid']))
++                author = _to_int(_pick(rec, ['author_id', 'authorid']))
++                tab = _to_int(_pick(rec, ['tab']))
++                dur = _to_int(_pick(rec, ['duration_ms', 'video_duration_ms',
++                                          'duration', 'video_duration']))
++                hourmin = _pick(rec, ['hourmin', 'hour_min', 'time_ms', 'time'], 0)
++                key = (date, user, video, author, tab, dur)
++                lookup[key].append(_time_feats(date, hourmin, tab))
++                n += 1
++    return lookup, n
++
++
++def aligned_time_features(data_dir, splits):
++    lookup, _nraw = read_raw_time_lookup(data_dir)
++    metas = {}
++    missing = 0
++    for sp, rows in splits.items():
++        arr = np.zeros((len(rows), 5), dtype=np.int64)
++        for i, row in enumerate(rows):
++            key = tuple(_to_int(row[j]) for j in range(6))
++            q = lookup.get(key)
++            if q:
++                arr[i] = q.popleft()
++            else:
++                # Fallback uses date/tab from the tuple and an unknown/zero hour.
++                missing += 1
++                date, tab = _to_int(row[0]), _to_int(row[4])
++                arr[i] = _time_feats(date, 0, tab)
++        metas[sp] = arr
++    if missing:
++        print(f"warning: {missing} rows could not be aligned to raw hourmin; used hour=0 fallback")
++    return metas
++
++
++def augment_encoded(enc, time_meta):
++    """Append categorical temporal fields to the starter-kit encoding."""
++    n_extra = next(iter(time_meta.values())).shape[1]
++    maps = []
++    offset = max(int(v[0].max()) for v in enc.values()) + 1
++    for j in range(n_extra):
++        vals = np.concatenate([time_meta[sp][:, j] for sp in ('train', 'valid', 'test')])
++        uniq = sorted(set(int(x) for x in vals))
++        mp = {v: offset + i for i, v in enumerate(uniq)}
++        maps.append(mp)
++        offset += len(uniq)
++
++    out = {}
++    for sp, (X, y, users) in enc.items():
++        extra = np.zeros((len(X), n_extra), dtype=np.int64)
++        for j, mp in enumerate(maps):
++            # Values are known because maps are built over all splits.
++            extra[:, j] = [mp[int(v)] for v in time_meta[sp][:, j]]
++        out[sp] = (np.concatenate([X.astype(np.int64), extra], axis=1), y, users)
++    return out, offset
++
++
++def encode_with_time(data_dir, splits):
++    enc0, _dim0 = encode(splits)
++    meta = aligned_time_features(data_dir, splits)
++    return augment_encoded(enc0, meta)
+ 
+ 
+ def make_user_pairs(y, users):
+@@ -134,9 +258,9 @@
+     return model
+ 
+ 
+-def train_ensemble(splits, k=16, lr=0.001, epochs=40, seed=0,
++def train_ensemble(splits, data_dir, k=16, lr=0.001, epochs=40, seed=0,
+                    device='cpu', verbose=True):
+-    enc, dim = encode(splits)
++    enc, dim = encode_with_time(data_dir, splits)
+     seeds = [seed, seed + 1009, seed + 2027, seed + 3037, seed + 4051,
+              seed + 5059, seed + 6073]
+     models = []
+@@ -196,9 +320,10 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+-
+-    models, enc = train_ensemble(splits, k=a.k, lr=a.lr,
++    print({k_: len(v) for k_, v in splits.items()},
++          f"fields={FIELDS}+['hour','hblock','weekday','tab_hour','tab_weekday']")
++
++    models, enc = train_ensemble(splits, a.data_dir, k=a.k, lr=a.lr,
+                                  epochs=a.epochs, seed=a.seed,
+                                  device=a.device, verbose=a.out is None)
+ 
+@@ -209,7 +334,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_7_rank_ensemble (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr7_time_context (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, ensemble_predict(models, Xs, us, device=a.device))

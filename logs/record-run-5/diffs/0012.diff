@@ -1,0 +1,166 @@
+# iteration 12  (parent: 11)
+# hypothesis: improve 11: weekday helped, so recover hourmin from the raw log CSVs and add hour-of-day as another reusable temporal embedding rather than raw date. This tests whether within-day exposure/preference drift adds signal on top of weekday.
+# result: GAUC None | nDCG@5 None | primary None | verdict failed
+
+--- logs/record-run-5/solutions/011_ensemble3_bpr_dow_fm.py
++++ logs/record-run-5/solutions/012_ensemble3_bpr_weekday_hour_fm.py
+@@ -1,15 +1,17 @@
+-"""3-model multi-negative BPR FM with a trainable day-of-week time feature.
+-
+-This drafts a small time-feature branch from the kept ensemble. Raw calendar date is
+-not useful as an embedding because valid/test dates are mostly unseen in train, so
+-we add weekday (shared across train/valid/test) to let the FM learn temporal
+-interactions without changing the ranking objective.
++"""3-model multi-negative BPR FM with weekday and hour-of-day features.
++
++Improves the kept weekday model by reading raw log_standard CSVs to recover
++hourmin. Weekday and hour are shared categories across the chronological split,
++so they avoid the non-generalising raw-date embedding problem while exposing
++within-day behaviour drift to the FM interactions.
+ """
+ import argparse
++import csv
++from collections import defaultdict, deque
++from datetime import datetime
+ import os
+ import sys
+ import time
+-from datetime import datetime
+ 
+ import numpy as np
+ import torch
+@@ -50,23 +52,78 @@
+     return datetime.strptime(str(int(d)), '%Y%m%d').weekday()  # Monday=0
+ 
+ 
+-def encode_with_weekday(splits):
++def parse_hour(hourmin):
++    hm = int(float(hourmin))
++    # KuaiRand hourmin is an HHMM integer (e.g. 930, 2137).
++    h = hm // 100
++    if h < 0:
++        h = 0
++    if h > 23:
++        h = h % 24
++    return h
++
++
++def _get(row, *names):
++    for n in names:
++        if n in row and row[n] != '':
++            return row[n]
++    raise KeyError('none of columns present: ' + ','.join(names))
++
++
++def build_raw_time_lookup(data_dir):
++    files = [
++        'log_standard_4_08_to_4_21_pure.csv',
++        'log_standard_4_22_to_5_08_pure.csv',
++    ]
++    lookup = defaultdict(deque)
++    for fn in files:
++        path = os.path.join(data_dir, fn)
++        with open(path, 'r', newline='', encoding='utf-8') as f:
++            reader = csv.DictReader(f)
++            for r in reader:
++                d = int(float(_get(r, 'date')))
++                key = (
++                    d,
++                    int(float(_get(r, 'user_id'))),
++                    int(float(_get(r, 'video_id'))),
++                    int(float(_get(r, 'author_id'))),
++                    int(float(_get(r, 'tab'))),
++                    int(float(_get(r, 'duration_ms'))),
++                )
++                hour = parse_hour(_get(r, 'hourmin'))
++                lookup[key].append((yyyymmdd_to_weekday(d), hour))
++    return lookup
++
++
++def encode_with_time(splits, data_dir):
+     enc, dim = encode(splits)
++    raw_time = build_raw_time_lookup(data_dir)
+     out = {}
+     for sp, rows in splits.items():
+         X, y, u = enc[sp]
+-        dow = np.asarray([yyyymmdd_to_weekday(r[0]) for r in rows], dtype=np.int64)
+-        X2 = np.concatenate([X.astype(np.int64), (dim + dow)[:, None]], axis=1)
++        feats = np.empty((len(rows), 2), dtype=np.int64)
++        for i, row in enumerate(rows):
++            key = (int(row[0]), int(row[1]), int(row[2]), int(row[3]),
++                   int(row[4]), int(row[5]))
++            if raw_time.get(key):
++                dow, hour = raw_time[key].popleft()
++            else:
++                # Fallback should almost never be used; it keeps the script robust
++                # to harmless CSV/loader representation differences.
++                dow, hour = yyyymmdd_to_weekday(row[0]), 0
++            feats[i, 0] = dim + dow
++            feats[i, 1] = dim + 7 + hour
++        X2 = np.concatenate([X.astype(np.int64), feats], axis=1)
+         out[sp] = (X2, y, u)
+-    return out, dim + 7
++    return out, dim + 7 + 24
+ 
+ 
+ def make_user_pair_pools(y, users):
+     by_user = {}
+-    for i, (u, yy) in enumerate(zip(users, y)):
+-        if u not in by_user:
+-            by_user[u] = [[], []]  # neg, pos
+-        by_user[u][1 if yy > 0.5 else 0].append(i)
++    for i, (uu, yy) in enumerate(zip(users, y)):
++        if uu not in by_user:
++            by_user[uu] = [[], []]  # neg, pos
++        by_user[uu][1 if yy > 0.5 else 0].append(i)
+ 
+     pos_rows = []
+     neg_pools = []
+@@ -122,7 +179,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | multineg_bpr_dow {np.mean(losses):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | multineg_bpr_time {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -140,9 +197,9 @@
+     return model
+ 
+ 
+-def run(splits, k=16, lr=0.001, epochs=40, neg_k=4, seed=0, device='cpu',
+-        verbose=True, n_models=3):
+-    enc, dim = encode_with_weekday(splits)
++def run(splits, data_dir, k=16, lr=0.001, epochs=40, neg_k=4, seed=0,
++        device='cpu', verbose=True, n_models=3):
++    enc, dim = encode_with_time(splits, data_dir)
+     models = []
+     seeds = [seed + 1009 * i for i in range(n_models)]
+     for i, s in enumerate(seeds):
+@@ -176,11 +233,11 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+['weekday']")
+-
+-    models, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, neg_k=a.neg_k,
+-                      seed=a.seed, device=a.device, verbose=a.out is None,
+-                      n_models=a.n_models)
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+['weekday','hour']")
++
++    models, enc = run(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs,
++                      neg_k=a.neg_k, seed=a.seed, device=a.device,
++                      verbose=a.out is None, n_models=a.n_models)
+ 
+     X, y, users = enc[a.split]
+     scores = predict_ensemble(models, X, device=a.device)
+@@ -189,7 +246,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== ensemble3_bpr_dow_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== ensemble3_bpr_weekday_hour_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, predict_ensemble(models, Xs, device=a.device))

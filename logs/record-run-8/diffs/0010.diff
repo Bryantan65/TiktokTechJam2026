@@ -1,0 +1,190 @@
+# iteration 10  (parent: 3)
+# hypothesis: draft user behaviour sequences: following DIN's attention-over-history idea (Deep Interest Network, arXiv:1706.06978), add causal candidate-specific user history bins for same author/video/tab/duration to the best BPR+BCE FM as a cheap readable sequence signal.
+# result: GAUC 0.668498 | nDCG@5 0.536094 | primary 0.602296 | verdict noise
+
+--- logs/record-run-8/solutions/003_bpr_bce_fm.py
++++ logs/record-run-8/solutions/010_history_features_bpr_bce_fm.py
+@@ -1,9 +1,9 @@
+-"""Factorization Machine trained with within-user BPR plus a small BCE term.
+-
+-Starts from 002_bpr_fm.py: same FM, same same-user positive/negative pair sampler.
+-The change is the loss: BPR remains primary, with a lightly weighted pointwise
+-BCE on the paired rows to preserve the useful calibration/static-feature signal
+-from the original baseline while still optimizing within-user ranking.
++"""BPR+BCE FM with causal user-history categorical features.
++
++A light-weight user behaviour sequence draft: instead of a full DIN network, append
++candidate-specific summaries of the user's prior interactions (same author/video,
++tab and duration-bin history).  Training features are causal within the train log;
++validation/test features use train history only, so target labels are not leaked.
+ """
+ import argparse
+ import os
+@@ -43,6 +43,121 @@
+             xb = torch.from_numpy(X[i:i + bs].astype(np.int64)).to(device)
+             out.append(self(xb).cpu().numpy())
+         return np.concatenate(out)
++
++
++def cnt_bin(c):
++    # 0, 1, 2, 3, 4-7, 8+
++    if c <= 0:
++        return 0
++    if c <= 3:
++        return int(c)
++    if c <= 7:
++        return 4
++    return 5
++
++
++def small_cnt_bin(c):
++    # 0, 1, 2, 3+
++    if c <= 0:
++        return 0
++    if c == 1:
++        return 1
++    if c == 2:
++        return 2
++    return 3
++
++
++def rate_bin(pos, neg):
++    n = pos + neg
++    if n <= 0:
++        return 0
++    r = pos / n
++    # 1..5 for quintiles, with no-history reserved as 0
++    return 1 + min(4, int(r * 5.0))
++
++
++def dur_bin_ms(ms):
++    # Coarse duration buckets from raw duration_ms, independent of data.encode's bucket map.
++    try:
++        x = int(ms)
++    except Exception:
++        x = 0
++    if x < 10_000:
++        return 0
++    if x < 30_000:
++        return 1
++    if x < 60_000:
++        return 2
++    if x < 120_000:
++        return 3
++    if x < 300_000:
++        return 4
++    return 5
++
++
++class HistState:
++    def __init__(self):
++        self.ap = defaultdict(int); self.an = defaultdict(int)
++        self.vp = defaultdict(int); self.vn = defaultdict(int)
++        self.tp = defaultdict(int); self.tn = defaultdict(int)
++        self.dp = defaultdict(int); self.dn = defaultdict(int)
++
++    def features(self, r):
++        u, v, a, tab = r[1], r[2], r[3], r[4]
++        db = dur_bin_ms(r[5])
++        ka = (u, a); kv = (u, v); kt = (u, tab); kd = (u, db)
++        ap, an = self.ap.get(ka, 0), self.an.get(ka, 0)
++        vp, vn = self.vp.get(kv, 0), self.vn.get(kv, 0)
++        tp, tn = self.tp.get(kt, 0), self.tn.get(kt, 0)
++        dp, dn = self.dp.get(kd, 0), self.dn.get(kd, 0)
++        return [
++            cnt_bin(ap), cnt_bin(an), rate_bin(ap, an), cnt_bin(ap + an),
++            small_cnt_bin(vp), small_cnt_bin(vn), cnt_bin(vp + vn),
++            rate_bin(tp, tn), cnt_bin(tp + tn), rate_bin(dp, dn)
++        ]
++
++    def update(self, r):
++        u, v, a, tab = r[1], r[2], r[3], r[4]
++        db = dur_bin_ms(r[5])
++        y = r[6]
++        if y > 0.5:
++            self.ap[(u, a)] += 1; self.vp[(u, v)] += 1
++            self.tp[(u, tab)] += 1; self.dp[(u, db)] += 1
++        else:
++            self.an[(u, a)] += 1; self.vn[(u, v)] += 1
++            self.tn[(u, tab)] += 1; self.dn[(u, db)] += 1
++
++
++def append_history_features(splits, enc, base_dim):
++    # Cardinalities for the 10 appended feature columns above.
++    cards = [6, 6, 6, 6, 4, 4, 6, 6, 6, 6]
++    offsets = np.asarray([base_dim + sum(cards[:i]) for i in range(len(cards))], dtype=np.int64)
++    dim = base_dim + sum(cards)
++
++    state = HistState()
++    hist_cols = {}
++
++    # Train is causal: feature first, then update with this row's label.
++    cols = np.empty((len(splits['train']), len(cards)), dtype=np.int64)
++    for i, r in enumerate(splits['train']):
++        cols[i] = np.asarray(state.features(r), dtype=np.int64) + offsets
++        state.update(r)
++    hist_cols['train'] = cols
++
++    # Evaluation rows use only completed train history; do not update with valid/test labels.
++    for sp, rows in splits.items():
++        if sp == 'train':
++            continue
++        cols = np.empty((len(rows), len(cards)), dtype=np.int64)
++        for i, r in enumerate(rows):
++            cols[i] = np.asarray(state.features(r), dtype=np.int64) + offsets
++        hist_cols[sp] = cols
++
++    out = {}
++    for sp in splits:
++        X, y, users = enc[sp]
++        out[sp] = (np.concatenate([X.astype(np.int64), hist_cols[sp]], axis=1), y, users)
++    return out, dim
+ 
+ 
+ def build_user_groups(y, users):
+@@ -75,14 +190,16 @@
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+         seed=0, device='cpu', verbose=True, bce_weight=0.15):
+-    enc, dim = encode(splits)
++    base_enc, base_dim = encode(splits)
++    enc, dim = append_history_features(splits, base_enc, base_dim)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+     groups = build_user_groups(ytr, utr)
+     if verbose:
+         n_pairs = sum(len(p) for p, _ in groups)
+-        print(f"BPR eligible users={len(groups):,d}, sampled pairs/epoch={n_pairs:,d}, bce_weight={bce_weight}")
++        print(f"BPR eligible users={len(groups):,d}, sampled pairs/epoch={n_pairs:,d}, "
++              f"base_dim={base_dim:,d}, hist_dim={dim:,d}, bce_weight={bce_weight}")
+ 
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+@@ -109,8 +226,6 @@
+             sp = model(xp)
+             sn = model(xn)
+             bpr = -torch.nn.functional.logsigmoid(sp - sn).mean()
+-            # Balanced pointwise term on the same paired rows; positives target 1,
+-            # sampled negatives target 0.  Using softplus avoids allocating labels.
+             bce = 0.5 * (torch.nn.functional.softplus(-sp).mean() +
+                          torch.nn.functional.softplus(sn).mean())
+             loss = bpr + bce_weight * bce
+@@ -162,7 +277,7 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS} + causal history bins")
+ 
+     model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+                      device=a.device, verbose=a.out is None,
+@@ -175,7 +290,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== history_features_bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

@@ -1,0 +1,92 @@
+# iteration 29  (parent: 27)
+# hypothesis: improve 27: node27 combines two LambdaMART residuals by z-scored margins; because nDCG@5 only needs top ordering and tree margins may be miscalibrated, add a 35% same-user rank-fusion component to the existing 60/40 node20/history blend.
+# result: GAUC 0.671055 | nDCG@5 0.537721 | primary 0.604388 | verdict KEPT
+
+--- logs/record-run-11/solutions/027_seed_ensemble_hist_blend.py
++++ logs/record-run-11/solutions/029_rank_fusion_hist_ensemble.py
+@@ -1,10 +1,10 @@
+-"""Three-seed ensemble blending node20 and history-aware residuals.
++"""Three-seed node20/history ensemble with top-rank fusion.
+ 
+-Node25 reduced variance by averaging three independent node20 rankers.  Node23's
+-history/target-encoding residual was slightly weaker standalone but uses different
+-collaborative-memory features, so here each neural seed trains both residuals on
+-the same frozen base model and blends their per-user standardized rankings at a
+-readable 40% history weight before averaging seeds.
++Node27 blended per-user z-scored residual scores.  Since the target includes
++nDCG@5 and residual score scales are not calibrated across the two LambdaMART
++models, this variant blends a mostly-score signal with a per-user rank-fusion
++signal so agreement near the top of a user's slate gets more weight while still
++retaining margins for GAUC.
+ """
+ import argparse
+ import importlib.util
+@@ -41,7 +41,29 @@
+     return out
+ 
+ 
+-def predict_one(splits, data_dir, target, seed, k, lr, epochs, device, hist_weight=0.40):
++def user_rank_score(scores, users):
++    """Return per-user rank scores: best item near +1, worst near -1."""
++    scores = np.asarray(scores, dtype=np.float32)
++    out = np.empty_like(scores, dtype=np.float32)
++    mp = defaultdict(list)
++    for i, u in enumerate(users):
++        mp[u].append(i)
++    for idxs in mp.values():
++        idx = np.asarray(idxs, dtype=np.int64)
++        s = scores[idx]
++        o = np.argsort(-s, kind='mergesort')
++        r = np.empty(len(idx), dtype=np.float32)
++        if len(idx) <= 1:
++            r[o] = 0.0
++        else:
++            # 1.0 for the top item, -1.0 for the bottom item.
++            r[o] = 1.0 - 2.0 * (np.arange(len(idx), dtype=np.float32) / float(len(idx) - 1))
++        out[idx] = r
++    return out
++
++
++def predict_one(splits, data_dir, target, seed, k, lr, epochs, device,
++                hist_weight=0.40, rank_mix=0.35):
+     torch.manual_seed(int(seed))
+     np.random.seed(int(seed) % (2**32 - 1))
+     model, resid20, enc, dlogs, calfeats = m20.run(
+@@ -56,7 +78,10 @@
+     base = model.predict(X, dlogs[target], device=device)
+     s20 = resid20.predict(base, u, X, calfeats[target]).astype(np.float32)
+     sh = resid_hist.predict(base, u, X, calfeats[target]).astype(np.float32)
+-    blended = (1.0 - hist_weight) * user_z(s20, u) + hist_weight * user_z(sh, u)
++
++    score_blend = (1.0 - hist_weight) * user_z(s20, u) + hist_weight * user_z(sh, u)
++    rank_blend = (1.0 - hist_weight) * user_rank_score(s20, u) + hist_weight * user_rank_score(sh, u)
++    blended = (1.0 - rank_mix) * user_z(score_blend, u) + rank_mix * user_z(rank_blend, u)
+     return user_z(blended, u), u
+ 
+ 
+@@ -71,6 +96,7 @@
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     ap.add_argument('--hist_weight', type=float, default=0.40)
++    ap.add_argument('--rank_mix', type=float, default=0.35)
+     a = ap.parse_args()
+ 
+     print(f"loading {a.data_dir} ...")
+@@ -81,13 +107,15 @@
+     else:
+         splits = m20.load(a.data_dir)
+         target = a.split
+-    print({k: len(v) for k, v in splits.items()}, f"node20 x3 + hist residual blend w={a.hist_weight}")
++    print({k: len(v) for k, v in splits.items()},
++          f"node20 x3 + hist residual score/rank fusion hist={a.hist_weight} rankmix={a.rank_mix}")
+ 
+     internal = [int(a.seed) * 100 + 11, int(a.seed) * 100 + 37, int(a.seed) * 100 + 73]
+     preds = []
+     for j, s in enumerate(internal, 1):
+         print(f"ensemble member {j}/3 seed={s}")
+-        p, _users = predict_one(splits, a.data_dir, target, s, a.k, a.lr, a.epochs, a.device, hist_weight=a.hist_weight)
++        p, _users = predict_one(splits, a.data_dir, target, s, a.k, a.lr, a.epochs, a.device,
++                                hist_weight=a.hist_weight, rank_mix=a.rank_mix)
+         preds.append(p)
+     scores = np.mean(np.stack(preds, axis=0), axis=0).astype(np.float64)
+ 

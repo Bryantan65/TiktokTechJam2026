@@ -1,0 +1,95 @@
+# iteration 31  (parent: 29)
+# hypothesis: improve 29: DeepFM is the best readable mechanism but is still trained pointwise; add a small same-user BPR term inside each minibatch so the saved checkpoints directly optimize within-user ordering without replacing the strong BCE+aux objective.
+# result: GAUC None | nDCG@5 None | primary None | verdict failed
+
+--- logs/record-run-6/solutions/029_blend_fm_deepfm.py
++++ logs/record-run-6/solutions/031_deepfm_bce_bpr_mix.py
+@@ -11,6 +11,8 @@
+ RANK_GAMMA = 2.0
+ MARGIN_WEIGHT = 0.30
+ DEEP_WEIGHT = 0.65
++BPR_WEIGHT = 0.03
++MAX_BPR_PAIRS = 4096
+ 
+ def to_int(x, default=0):
+     try: return int(float(x))
+@@ -135,23 +137,54 @@
+             out.append(self(xb, hb).cpu().numpy())
+         return np.concatenate(out)
+ 
++def make_bpr_pairs(users_b, y_b, rng, max_pairs=MAX_BPR_PAIRS):
++    users_b = np.asarray(users_b); y_b = np.asarray(y_b)
++    order = np.argsort(users_b, kind='mergesort'); su = users_b[order]
++    pos_all = []; neg_all = []; start = 0
++    while start < len(order):
++        end = start + 1
++        while end < len(order) and su[end] == su[start]: end += 1
++        idx = order[start:end]; yy = y_b[idx]
++        pos = idx[yy > 0.5]; neg = idx[yy <= 0.5]
++        if len(pos) and len(neg):
++            m = min(len(pos), len(neg), 4)
++            if len(pos) > m: pos = rng.choice(pos, size=m, replace=False)
++            if len(neg) > m: neg = rng.choice(neg, size=m, replace=False)
++            if len(pos) != len(neg):
++                mm = min(len(pos), len(neg)); pos = pos[:mm]; neg = neg[:mm]
++            pos_all.append(pos); neg_all.append(neg)
++            if sum(len(x) for x in pos_all) >= max_pairs: break
++        start = end
++    if not pos_all:
++        return None, None
++    p = np.concatenate(pos_all)[:max_pairs]; n = np.concatenate(neg_all)[:max_pairs]
++    return p.astype(np.int64), n.astype(np.int64)
++
+ def prepare(splits, data_dir):
+     enc0, _ = encode(splits); enc, dim = add_time_fields(enc0, splits, data_dir)
+     return enc, dim, make_history_features(splits), read_aux_targets(data_dir, splits)
+ 
+-def train_one(enc, dim, hist, aux_t, seed=0, k=16, lr=.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False, use_deep=True):
+-    torch.manual_seed(seed); Xtr,ytr,_ = enc['train']; Xva,yva,uva = enc['valid']; Htr,Hva = hist['train'],hist['valid']; Atr = aux_t['train']
++def train_one(enc, dim, hist, aux_t, seed=0, k=16, lr=.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=False, use_deep=True, bpr_weight=BPR_WEIGHT):
++    torch.manual_seed(seed); Xtr,ytr,utr = enc['train']; Xva,yva,uva = enc['valid']; Htr,Hva = hist['train'],hist['valid']; Atr = aux_t['train']
++    ytr_np = np.asarray(ytr, dtype=np.float32); utr_np = np.asarray(utr)
+     m = Model(dim, Xtr.shape[1], Htr.shape[1], Atr.shape[1], k, seed, use_deep=use_deep).to(device)
+     groups = [{'params':[m.V,m.W],'weight_decay':l2},{'params':[m.b],'weight_decay':0.0},{'params':m.H.parameters(),'weight_decay':1e-5},{'params':m.aux.parameters(),'weight_decay':1e-5}]
+     if use_deep: groups.append({'params':m.deep.parameters(),'weight_decay':1e-5})
+     opt = torch.optim.Adam(groups, lr=lr)
+-    bce = torch.nn.BCEWithLogitsLoss(); Xtr_t = torch.from_numpy(Xtr.astype(np.int64)); Htr_t = torch.from_numpy(Htr.astype(np.float32)); ytr_t = torch.from_numpy(np.asarray(ytr, dtype=np.float32)); Atr_t = torch.from_numpy(Atr.astype(np.float32))
++    bce = torch.nn.BCEWithLogitsLoss(); Xtr_t = torch.from_numpy(Xtr.astype(np.int64)); Htr_t = torch.from_numpy(Htr.astype(np.float32)); ytr_t = torch.from_numpy(ytr_np); Atr_t = torch.from_numpy(Atr.astype(np.float32))
+     rng = np.random.default_rng(seed); best = -1.; state = None; bad = 0
+     for ep in range(1, epochs+1):
+         idx = rng.permutation(len(ytr)); m.train(); losses = []; t0 = time.time()
+         for i in range(0, len(idx), bs):
+-            sel = torch.from_numpy(idx[i:i+bs]); xb = Xtr_t[sel].to(device); hb = Htr_t[sel].to(device); yb = ytr_t[sel].to(device); ab = Atr_t[sel].to(device)
+-            opt.zero_grad(set_to_none=True); main, aux = m(xb, hb, aux=True); loss = bce(main, yb) + .08 * bce(aux, ab); loss.backward(); opt.step(); losses.append(loss.item())
++            sel_np = idx[i:i+bs]; sel = torch.from_numpy(sel_np)
++            xb = Xtr_t[sel].to(device); hb = Htr_t[sel].to(device); yb = ytr_t[sel].to(device); ab = Atr_t[sel].to(device)
++            opt.zero_grad(set_to_none=True); main, aux = m(xb, hb, aux=True); loss = bce(main, yb) + .08 * bce(aux, ab)
++            if bpr_weight > 0:
++                pp, nn = make_bpr_pairs(utr_np[sel_np], ytr_np[sel_np], rng)
++                if pp is not None:
++                    pt = torch.from_numpy(pp).to(device); nt = torch.from_numpy(nn).to(device)
++                    loss = loss + bpr_weight * (-torch.nn.functional.logsigmoid(main[pt] - main[nt]).mean())
++            loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, m.predict(Xva, Hva, device=device))
+         if verbose: print(f'seed {seed} deep {use_deep} ep {ep} loss {np.mean(losses):.4f} valid {va["primary"]:.4f} {time.time()-t0:.1f}s')
+         if va['primary'] > best + 1e-5:
+@@ -185,15 +218,15 @@
+     return out
+ 
+ if __name__ == '__main__':
+-    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--rank_gamma', type=float, default=RANK_GAMMA); ap.add_argument('--margin_weight', type=float, default=MARGIN_WEIGHT); ap.add_argument('--deep_weight', type=float, default=DEEP_WEIGHT); a = ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'FM+DeepFM 8x/8x rank+margin blend dw={a.deep_weight}')
++    ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data'); ap.add_argument('--split', default='valid', choices=['train','valid','test']); ap.add_argument('--out', default=None); ap.add_argument('--k', type=int, default=16); ap.add_argument('--lr', type=float, default=.001); ap.add_argument('--epochs', type=int, default=40); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='cpu', choices=['cpu','cuda']); ap.add_argument('--rank_gamma', type=float, default=RANK_GAMMA); ap.add_argument('--margin_weight', type=float, default=MARGIN_WEIGHT); ap.add_argument('--deep_weight', type=float, default=DEEP_WEIGHT); ap.add_argument('--bpr_weight', type=float, default=BPR_WEIGHT); a = ap.parse_args()
++    print(f'loading {a.data_dir} ...'); splits = load(a.data_dir); print({k: len(v) for k, v in splits.items()}, f'FM+DeepFM 8x/8x BCE+BPR rank+margin blend dw={a.deep_weight} bw={a.bpr_weight}')
+     enc, dim, hist, aux_t = prepare(splits, a.data_dir); X, y, users = enc[a.split]
+     fm_preds = []; deep_preds = []
+     for s in range(8):
+-        m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None), use_deep=False)
++        m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None), use_deep=False, bpr_weight=a.bpr_weight)
+         fm_preds.append(m.predict(X, hist[a.split], device=a.device))
+     for s in range(8):
+-        m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None), use_deep=True)
++        m = train_one(enc, dim, hist, aux_t, seed=s, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=(a.out is None), use_deep=True, bpr_weight=a.bpr_weight)
+         deep_preds.append(m.predict(X, hist[a.split], device=a.device))
+     fm_score = per_user_rank_margin_blend(fm_preds, users, gamma=a.rank_gamma, margin_weight=a.margin_weight)
+     deep_score = per_user_rank_margin_blend(deep_preds, users, gamma=a.rank_gamma, margin_weight=a.margin_weight)

@@ -1,0 +1,146 @@
+# iteration 12  (parent: 3)
+# hypothesis: improve 3: average three independently seeded copies of the current best BPR+BCE FM logits so the successful pairwise mechanism gets lower sampling/initialization variance rather than adding an unreadable weak low-weight mechanism.
+# result: GAUC 0.670799 | nDCG@5 0.537692 | primary 0.604245 | verdict KEPT
+
+--- logs/record-run-8/solutions/003_bpr_bce_fm.py
++++ logs/record-run-8/solutions/012_ensemble_bpr_bce_fm.py
+@@ -1,9 +1,9 @@
+-"""Factorization Machine trained with within-user BPR plus a small BCE term.
+-
+-Starts from 002_bpr_fm.py: same FM, same same-user positive/negative pair sampler.
+-The change is the loss: BPR remains primary, with a lightly weighted pointwise
+-BCE on the paired rows to preserve the useful calibration/static-feature signal
+-from the original baseline while still optimizing within-user ranking.
++"""Small seed ensemble of the best BPR+BCE Factorization Machine.
++
++Copies 003_bpr_bce_fm.py and changes only the final predictor: train three
++independent BPR+BCE FM models and average their logits.  The single model is
++strong but has stochastic pair sampling; averaging should reduce sampling noise
++and may improve top-user rankings without introducing a new weak mechanism.
+ """
+ import argparse
+ import os
+@@ -73,17 +73,18 @@
+     return pi[order], ni[order]
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True, bce_weight=0.15):
+-    enc, dim = encode(splits)
++def train_one(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
++              patience=4, seed=0, device='cpu', verbose=True,
++              bce_weight=0.15, tag=''):
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+     groups = build_user_groups(ytr, utr)
+     if verbose:
+         n_pairs = sum(len(p) for p, _ in groups)
+-        print(f"BPR eligible users={len(groups):,d}, sampled pairs/epoch={n_pairs:,d}, bce_weight={bce_weight}")
+-
++        print(f"{tag} BPR eligible users={len(groups):,d}, sampled pairs/epoch={n_pairs:,d}, bce_weight={bce_weight}")
++
++    torch.manual_seed(seed)
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}],
+@@ -109,8 +110,6 @@
+             sp = model(xp)
+             sn = model(xn)
+             bpr = -torch.nn.functional.logsigmoid(sp - sn).mean()
+-            # Balanced pointwise term on the same paired rows; positives target 1,
+-            # sampled negatives target 0.  Using softplus avoids allocating labels.
+             bce = 0.5 * (torch.nn.functional.softplus(-sp).mean() +
+                          torch.nn.functional.softplus(sn).mean())
+             loss = bpr + bce_weight * bce
+@@ -122,7 +121,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | loss {np.mean(losses):.4f} bpr {np.mean(bprs):.4f} bce {np.mean(bces):.4f} | valid "
++            print(f"  {tag} epoch {ep:2d} | loss {np.mean(losses):.4f} bpr {np.mean(bprs):.4f} bce {np.mean(bces):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -133,11 +132,38 @@
+             bad += 1
+             if bad >= patience:
+                 if verbose:
+-                    print(f"  early stop at epoch {ep}")
++                    print(f"  {tag} early stop at epoch {ep}")
+                 break
+ 
+     model.load_state_dict(best_state)
+-    return model, enc
++    return model
++
++
++def run(splits, k=16, lr=0.001, epochs=40, seed=0, device='cpu',
++        verbose=True, bce_weight=0.15, n_models=3):
++    enc, dim = encode(splits)
++    models = []
++    # Large offsets keep the internal members distinct while preserving the
++    # harness seed as the ensemble's base seed.
++    for m in range(n_models):
++        s = int(seed + 997 * m)
++        models.append(train_one(enc, dim, k=k, lr=lr, epochs=epochs, seed=s,
++                                device=device, verbose=verbose,
++                                bce_weight=bce_weight, tag=f"m{m}/seed{s}"))
++    return models, enc
++
++
++@torch.no_grad()
++def predict_ensemble(models, X, device='cpu'):
++    pred = None
++    for model in models:
++        p = model.predict(X, device=device).astype(np.float64)
++        if pred is None:
++            pred = p
++        else:
++            pred += p
++    pred /= float(len(models))
++    return pred
+ 
+ 
+ if __name__ == '__main__':
+@@ -151,6 +177,7 @@
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     ap.add_argument('--bce_weight', type=float, default=0.15)
++    ap.add_argument('--n_models', type=int, default=3)
+     a = ap.parse_args()
+ 
+     torch.manual_seed(a.seed)
+@@ -162,24 +189,24 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+-
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None,
+-                     bce_weight=a.bce_weight)
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}, ensemble={a.n_models}")
++
++    models, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
++                      device=a.device, verbose=a.out is None,
++                      bce_weight=a.bce_weight, n_models=a.n_models)
+ 
+     X, y, users = enc[target]
+-    scores = model.predict(X, device=a.device)
++    scores = predict_ensemble(models, X, device=a.device)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== ensemble_bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]
+-                r = evaluate(us, ys, model.predict(Xs, device=a.device))
++                r = evaluate(us, ys, predict_ensemble(models, Xs, device=a.device))
+                 print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+                       f"| primary {r['primary']:.4f}")
+ 

@@ -1,0 +1,229 @@
+# iteration 4  (parent: 2)
+# hypothesis: improve 2: pure BPR helps but trains from random init on only mixed-label users; warm up the FM with pointwise BCE on all rows, then checkpoint only BPR fine-tuning so the ranking loss actually determines the submitted model.
+# result: GAUC 0.667105 | nDCG@5 0.53549 | primary 0.601297 | verdict noise
+
+--- logs/record-run-7/solutions/002_bpr_fm.py
++++ logs/record-run-9/solutions/004_bce_warm_bpr_fm.py
+@@ -1,9 +1,10 @@
+-"""Factorization Machine trained with a same-user BPR pairwise ranking loss.
++"""FM with pointwise BCE warmup followed by within-user BPR fine-tuning.
+ 
+-This keeps the baseline FM architecture and encoding, but replaces pointwise BCE
+-with BPR: for each positive impression, sample a negative impression from the
+-same user and maximise log sigmoid(score_pos - score_neg). The metric ranks
+-within user, so cross-user pairs are deliberately not used.
++The pure BPR model in node 2 improved GAUC but starts from random embeddings and
++sees only users with both positive and negative rows. This version first learns
++the stable pointwise FM representation from all training rows, then optimizes the
++same-user pairwise objective. Checkpoint selection is restricted to the BPR phase
++so the fine-tuning cannot be a no-op that just returns the warmup model.
+ """
+ import argparse
+ import os
+@@ -44,30 +45,33 @@
+         return np.concatenate(out)
+ 
+ 
+-def build_pair_pools(y, users):
+-    """Return positive indices whose user has negatives, and per-user negatives."""
+-    pos_by_u = {}
+-    neg_by_u = {}
+-    for i, (yy, uu) in enumerate(zip(y, users)):
+-        if yy > 0.5:
+-            pos_by_u.setdefault(uu, []).append(i)
+-        else:
+-            neg_by_u.setdefault(uu, []).append(i)
++def make_bpr_training_arrays(ytr, utr):
++    y = np.asarray(ytr)
++    u = np.asarray(utr)
++    order = np.argsort(u, kind='stable')
++    us = u[order]
++    split = np.flatnonzero(us[1:] != us[:-1]) + 1
++    chunks = np.split(order, split)
+ 
+-    pos_idx = []
+-    pos_user = []
+-    neg_by_u_arr = {}
+-    for uu, ps in pos_by_u.items():
+-        ns = neg_by_u.get(uu)
+-        if ns:
+-            pos_idx.extend(ps)
+-            pos_user.extend([uu] * len(ps))
+-            neg_by_u_arr[uu] = np.asarray(ns, dtype=np.int64)
+-    return np.asarray(pos_idx, dtype=np.int64), np.asarray(pos_user, dtype=object), neg_by_u_arr
++    neg_by_user = {}
++    eligible_pos = []
++    eligible_user = []
++    for rows in chunks:
++        yy = y[rows]
++        pos = rows[yy > 0.5]
++        neg = rows[yy <= 0.5]
++        if len(pos) and len(neg):
++            uid = int(u[rows[0]])
++            neg_by_user[uid] = neg.astype(np.int64)
++            eligible_pos.append(pos.astype(np.int64))
++            eligible_user.append(np.full(len(pos), uid, dtype=np.int64))
++    if not eligible_pos:
++        raise RuntimeError('no users with both positive and negative rows')
++    return np.concatenate(eligible_pos), np.concatenate(eligible_user), neg_by_user
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True):
++def run(splits, k=16, lr=0.001, l2=1e-6, warm_epochs=5, bpr_epochs=30,
++        bs=8192, patience=4, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -78,46 +82,61 @@
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
++    ytr_t = torch.from_numpy(ytr.astype(np.float32))
+     rng = np.random.default_rng(seed)
+-    pos_idx, pos_user, neg_by_user = build_pair_pools(ytr, utr)
+-    if len(pos_idx) == 0:
+-        raise RuntimeError('no same-user positive/negative pairs found')
+ 
+-    # Match the pointwise baseline's amount of data per epoch approximately.
+-    pairs_per_epoch = len(ytr)
+-    steps_per_epoch = int(np.ceil(pairs_per_epoch / bs))
+-
+-    best, best_state, bad = -1.0, None, 0
+-    for ep in range(1, epochs + 1):
++    # Pointwise warmup on all rows. Do not checkpoint this phase.
++    for ep in range(1, warm_epochs + 1):
++        perm = rng.permutation(len(Xtr))
+         t0 = time.time()
+         model.train()
+         losses = []
+-        for _ in range(steps_per_epoch):
+-            pick = rng.integers(0, len(pos_idx), size=bs)
+-            pidx_np = pos_idx[pick]
+-            # One sampled negative from the same user for each positive.
+-            nidx_np = np.empty(bs, dtype=np.int64)
+-            for j, uu in enumerate(pos_user[pick]):
+-                ns = neg_by_user[uu]
+-                nidx_np[j] = ns[rng.integers(0, len(ns))]
++        for st in range(0, len(perm), bs):
++            idx_np = perm[st:st + bs]
++            idx = torch.from_numpy(idx_np)
++            xb = Xtr_t[idx].to(device)
++            yb = ytr_t[idx].to(device)
++            opt.zero_grad(set_to_none=True)
++            loss = torch.nn.functional.binary_cross_entropy_with_logits(model(xb), yb)
++            loss.backward()
++            opt.step()
++            losses.append(loss.item())
++        if verbose:
++            va = evaluate(uva, yva, model.predict(Xva, device=device))
++            print(f"  warm {ep:2d} | bce {np.mean(losses):.4f} | valid "
++                  f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
++                  f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+-            pidx = torch.from_numpy(pidx_np)
+-            nidx = torch.from_numpy(nidx_np)
+-            xp = Xtr_t[pidx].to(device)
+-            xn = Xtr_t[nidx].to(device)
+-            x = torch.cat([xp, xn], dim=0)
++    pos_rows, pos_users, neg_by_user = make_bpr_training_arrays(ytr, utr)
++    best, best_state, bad = -1.0, None, 0
++
++    # Ranking fine-tune. Save only BPR-phase checkpoints to ensure this tests BPR.
++    for ep in range(1, bpr_epochs + 1):
++        perm = rng.permutation(len(pos_rows))
++        t0 = time.time()
++        model.train()
++        losses = []
++        for st in range(0, len(perm), bs):
++            psel = perm[st:st + bs]
++            pidx_np = pos_rows[psel]
++            users_np = pos_users[psel]
++            nidx_np = np.fromiter((neg_by_user[int(u)][rng.integers(len(neg_by_user[int(u)]))]
++                                   for u in users_np), dtype=np.int64,
++                                  count=len(users_np))
++
++            xp = Xtr_t[torch.from_numpy(pidx_np)].to(device)
++            xn = Xtr_t[torch.from_numpy(nidx_np)].to(device)
+ 
+             opt.zero_grad(set_to_none=True)
+-            s = model(x)
+-            sp, sn = s[:len(xp)], s[len(xp):]
+-            loss = torch.nn.functional.softplus(-(sp - sn)).mean()
++            diff = model(xp) - model(xn)
++            loss = torch.nn.functional.softplus(-diff).mean()
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  bpr  {ep:2d} | loss {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -128,7 +147,7 @@
+             bad += 1
+             if bad >= patience:
+                 if verbose:
+-                    print(f"  early stop at epoch {ep}")
++                    print(f"  early stop at BPR epoch {ep}")
+                 break
+ 
+     model.load_state_dict(best_state)
+@@ -138,41 +157,36 @@
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser()
+     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+-    ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test', 'dev'])
++    ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test'])
+     ap.add_argument('--out', default=None)
+     ap.add_argument('--k', type=int, default=16)
+     ap.add_argument('--lr', type=float, default=0.001)
+-    ap.add_argument('--epochs', type=int, default=40)
++    ap.add_argument('--epochs', type=int, default=30)
++    ap.add_argument('--warm_epochs', type=int, default=5)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+ 
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+-    if a.split == 'dev':
+-        from devdata import load as load_dev
+-        splits = load_dev(a.data_dir)
+-        target = 'valid'
+-    else:
+-        splits = load(a.data_dir)
+-        target = a.split
++    splits = load(a.data_dir)
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
++    model, enc = run(splits, k=a.k, lr=a.lr, warm_epochs=a.warm_epochs,
++                     bpr_epochs=a.epochs, seed=a.seed, device=a.device,
++                     verbose=a.out is None)
+ 
+-    X, y, users = enc[target]
++    X, y, users = enc[a.split]
+     scores = model.predict(X, device=a.device)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bce_warm_bpr_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+-            if sp in enc:
+-                Xs, ys, us = enc[sp]
+-                r = evaluate(us, ys, model.predict(Xs, device=a.device))
+-                print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+-                      f"| primary {r['primary']:.4f}")
++            Xs, ys, us = enc[sp]
++            r = evaluate(us, ys, model.predict(Xs, device=a.device))
++            print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
++                  f"| primary {r['primary']:.4f}")
+ 

@@ -1,0 +1,62 @@
+# iteration 6  (parent: 5)
+# hypothesis: improve 5: add a small BCE auxiliary term to the sampled-softmax candidate set, so the best listwise FM keeps absolute positive/negative calibration while still being dominated by within-user ranking loss.
+# result: GAUC 0.670148 | nDCG@5 0.536889 | primary 0.603518 | verdict KEPT
+
+--- logs/record-run-4/solutions/005_sampled_softmax_neg8_fm.py
++++ logs/record-run-4/solutions/006_softmax8_bce_aux_fm.py
+@@ -1,9 +1,9 @@
+-"""FM trained with a sampled within-user softmax ranking loss, using more negatives.
++"""FM trained with sampled within-user softmax plus a small BCE auxiliary loss.
+ 
+-Node 3 showed the sampled listwise objective can beat pointwise BCE but was noisy.
+-This variant keeps the same model/training loop and samples 8 same-user negatives
+-per positive instead of 4, giving the softmax a harder/more complete candidate
+-set for top-rank separation.
++This refines the best sampled-softmax FM (node 5).  The ranking loss optimizes
++within-user ordering, while a light pointwise BCE term on the same sampled
++positive/negative rows anchors absolute positive-vs-negative separation and may
++stabilize nDCG without overwhelming the ranking objective.
+ """
+ import argparse
+ import os
+@@ -71,7 +71,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=4096, patience=4,
+-        neg_k=8, seed=0, device='cpu', verbose=True):
++        neg_k=8, bce_weight=0.10, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -106,14 +106,20 @@
+             sn = model(xn_flat).view(bsz, neg_k)
+             logits = torch.cat([sp, sn], dim=1)
+             target = torch.zeros(bsz, dtype=torch.long, device=device)
+-            loss = torch.nn.functional.cross_entropy(logits, target)
++            rank_loss = torch.nn.functional.cross_entropy(logits, target)
++
++            # Auxiliary pointwise term on the sampled candidate set.  Normalize
++            # over candidates so bce_weight is stable when neg_k changes.
++            bce_targets = torch.cat([torch.ones_like(sp), torch.zeros_like(sn)], dim=1)
++            bce_loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, bce_targets)
++            loss = rank_loss + bce_weight * bce_loss
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | sampled_softmax_k8 {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | softmax8+bce {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -158,7 +164,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== sampled_softmax_neg8_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== softmax8_bce_aux_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

@@ -1,0 +1,143 @@
+# iteration 12  (parent: 10)
+# hypothesis: draft direction 2: add a train-only user behavior history signal by blending the best BPR ensemble with personalized user-feature affinity residuals, a lightweight DIN-style use of history before implementing full attention. Reference for behavior-sequence attention: https://arxiv.org/abs/1706.06978.
+# result: GAUC 0.671267 | nDCG@5 0.537487 | primary 0.604377 | verdict KEPT
+
+--- logs/record-run-3/solutions/010_bpr_7_rank_ensemble.py
++++ logs/record-run-3/solutions/012_bpr7_user_history_blend.py
+@@ -1,14 +1,15 @@
+-"""Seven-member within-user rank ensemble of BPR FMs.
+-
+-Refines 009 by keeping exactly the same BPR training and within-user Borda/rank
+-combiner, but averaging seven independent members instead of five.  This tests
+-whether the node-8 -> node-9 gain was still mostly variance reduction from more
+-BPR rankers rather than a saturated ensemble.
++"""Seven-member BPR FM rank ensemble blended with personalized user-history priors.
++
++Drafts a lightweight sequence/user-behaviour feature on top of the current best
++BPR ensemble.  The neural models are unchanged from 010; their within-user rank
++ensemble is blended with within-user ranks from train-only user history affinity
++(video/author/tab/duration smoothed user-feature label rates).
+ """
+ import argparse
+ import os
+ import sys
+ import time
++from collections import defaultdict
+ 
+ import numpy as np
+ import torch
+@@ -171,14 +172,79 @@
+     return out
+ 
+ 
++class UserHistoryPrior:
++    def __init__(self, enc):
++        Xtr, ytr, users = enc['train']
++        ytr = ytr.astype(np.float64)
++        self.global_rate = float(ytr.mean())
++        self.user_sum = defaultdict(float)
++        self.user_cnt = defaultdict(int)
++        self.tables = []
++
++        # Build smoothed per-user feature feedback tables from train only.  The
++        # encoded columns are [user, video, author, tab, dur_bucket].
++        specs = [
++            (1, 1.0, 1.35),   # repeated/previously seen video for this user
++            (2, 4.0, 0.85),   # author affinity
++            (3, 12.0, 0.45),  # tab preference
++            (4, 18.0, 0.20),  # duration preference
++        ]
++        sums = [defaultdict(float) for _ in specs]
++        cnts = [defaultdict(int) for _ in specs]
++        for row, yy, u in zip(Xtr, ytr, users):
++            u = int(u)
++            self.user_sum[u] += float(yy)
++            self.user_cnt[u] += 1
++            for j, (col, _smooth, _weight) in enumerate(specs):
++                key = (u, int(row[col]))
++                sums[j][key] += float(yy)
++                cnts[j][key] += 1
++        self.specs = specs
++        self.sums = sums
++        self.cnts = cnts
++
++    @staticmethod
++    def _logit(p):
++        p = min(max(float(p), 1e-5), 1.0 - 1e-5)
++        return np.log(p / (1.0 - p))
++
++    def score(self, X, users):
++        out = np.zeros(len(X), dtype=np.float64)
++        g = self.global_rate
++        for i, (row, u0) in enumerate(zip(X, users)):
++            u = int(u0)
++            # Center by the user's own train rate so heavy/light users do not
++            # get a constant offset; only feature-specific deviations rank rows.
++            uc = self.user_cnt.get(u, 0)
++            ur = (self.user_sum.get(u, 0.0) + 20.0 * g) / (uc + 20.0)
++            base = self._logit(ur)
++            s = 0.0
++            for j, (col, smooth, weight) in enumerate(self.specs):
++                key = (u, int(row[col]))
++                c = self.cnts[j].get(key, 0)
++                sm = self.sums[j].get(key, 0.0)
++                # Smooth to this user's baseline, not global, to make the prior
++                # a personalized history-affinity residual.
++                r = (sm + smooth * ur) / (c + smooth)
++                s += weight * (self._logit(r) - base)
++            out[i] = s
++        return out
++
++
+ @torch.no_grad()
+-def ensemble_predict(models, X, users, device='cpu'):
++def bpr_ensemble_rank(models, X, users, device='cpu'):
+     pred = np.zeros(len(X), dtype=np.float64)
+     for m in models:
+         raw = m.predict(X, device=device)
+         pred += within_user_rank_scores(raw, users)
+     pred /= len(models)
+     return pred
++
++
++def blended_predict(models, hist_prior, X, users, device='cpu', alpha=0.94):
++    bpr = bpr_ensemble_rank(models, X, users, device=device)
++    hp = within_user_rank_scores(hist_prior.score(X, users), users)
++    return alpha * bpr + (1.0 - alpha) * hp
+ 
+ 
+ if __name__ == '__main__':
+@@ -191,6 +257,7 @@
+     ap.add_argument('--epochs', type=int, default=40)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
++    ap.add_argument('--alpha', type=float, default=0.94)
+     a = ap.parse_args()
+ 
+     torch.manual_seed(a.seed)
+@@ -201,18 +268,22 @@
+     models, enc = train_ensemble(splits, k=a.k, lr=a.lr,
+                                  epochs=a.epochs, seed=a.seed,
+                                  device=a.device, verbose=a.out is None)
++    hist_prior = UserHistoryPrior(enc)
+ 
+     X, y, users = enc[a.split]
+-    scores = ensemble_predict(models, X, users, device=a.device)
++    scores = blended_predict(models, hist_prior, X, users, device=a.device,
++                             alpha=a.alpha)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_7_rank_ensemble (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr7_user_history_blend (seed={a.seed}, alpha={a.alpha}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+-            r = evaluate(us, ys, ensemble_predict(models, Xs, us, device=a.device))
++            r = evaluate(us, ys, blended_predict(models, hist_prior, Xs, us,
++                                                 device=a.device,
++                                                 alpha=a.alpha))
+             print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+                   f"| primary {r['primary']:.4f}")
+ 

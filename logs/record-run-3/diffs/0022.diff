@@ -1,0 +1,237 @@
+# iteration 22  (parent: 17)
+# hypothesis: draft direction 4: use CWM-style watch-time supervision as an additional ranking signal, motivated by censored watch-time recommendation/survival framing https://www.kdd.org/kdd2016/papers/files/adf0363-covingtonA.pdf. Replace one of the seven node-17 label-BPR members with a same-user play_time/duration pairwise member to add watch-ratio diversity without using play_time at inference.
+# result: GAUC 0.671622 | nDCG@5 0.53819 | primary 0.604906 | verdict KEPT
+
+--- logs/record-run-3/solutions/017_time_context_keyfix.py
++++ logs/record-run-3/solutions/022_time_watchpair_diversity.py
+@@ -1,9 +1,9 @@
+-"""Seven-member same-user BPR FM ensemble with correctly keyed temporal context.
+-
+-Debugs node 14: the raw interaction logs do not contain author_id, so the
+-(date,user,video,author,tab,duration) lookup missed almost every row and fell
+-back to hour=0.  This version aligns raw hourmin by fields actually present in
+-both sources: (date,user,video,tab,duration_ms,long_view), FIFO for duplicates.
++"""Six label-BPR time FM members plus one watch-ratio pairwise member.
++
++Draft direction 4: use raw play_time/duration as a train-only continuous
++preference signal.  The watch member learns same-user higher-watch-ratio over
++lower-watch-ratio pairs, then contributes only as a small source of rank-diverse
++ensemble signal; play_time is never used as an inference feature.
+ """
+ import argparse
+ import csv
+@@ -61,6 +61,13 @@
+         return default
+ 
+ 
++def _to_float(x, default=0.0):
++    try:
++        return float(x)
++    except Exception:
++        return default
++
++
+ def _weekday(date_int):
+     try:
+         s = str(int(date_int))
+@@ -85,21 +92,8 @@
+     return os.path.join(data_dir, filename)
+ 
+ 
+-def _dur_bucket(ms):
+-    # fallback key if data.load stores a bucket rather than raw duration; keep coarse and deterministic
+-    x = _to_int(ms, 0)
+-    if x < 5000: return 0
+-    if x < 10000: return 1
+-    if x < 30000: return 2
+-    if x < 60000: return 3
+-    if x < 120000: return 4
+-    if x < 300000: return 5
+-    return 6
+-
+-
+-def read_raw_time_lookup(data_dir):
+-    look_exact = defaultdict(deque)
+-    look_nodur = defaultdict(deque)
++def read_raw_lookup(data_dir):
++    lookup = defaultdict(deque)
+     n = 0
+     headers = None
+     for fn in RAW_LOGS:
+@@ -114,40 +108,33 @@
+                 dur = _to_int(_pick(rec, ['duration_ms', 'video_duration_ms', 'duration', 'video_duration']))
+                 y = _to_int(_pick(rec, ['long_view', 'label'], 0))
+                 hourmin = _pick(rec, ['hourmin', 'hour_min', 'time', 'request_time'], 0)
+-                feats = _time_feats(date, hourmin, tab)
+-                look_exact[(date, user, video, tab, dur, y)].append(feats)
+-                look_nodur[(date, user, video, tab, y)].append(feats)
++                play = _to_float(_pick(rec, ['play_time_ms'], 0.0), 0.0)
++                # clip at completion; this is a train target only, not an inference feature
++                play_ratio = min(max(play / max(float(dur), 1000.0), 0.0), 1.0)
++                lookup[(date, user, video, tab, dur, y)].append((_time_feats(date, hourmin, tab), play_ratio))
+                 n += 1
+-    return look_exact, look_nodur, n, headers
+-
+-
+-def aligned_time_features(data_dir, splits):
+-    look_exact, look_nodur, nraw, headers = read_raw_time_lookup(data_dir)
+-    metas = {}
+-    miss = exact = nodur = 0
+-    examples = []
++    return lookup, n, headers
++
++
++def aligned_raw_features(data_dir, splits):
++    lookup, nraw, headers = read_raw_lookup(data_dir)
++    time_meta, play_meta = {}, {}
++    exact = miss = 0
+     for sp, rows in splits.items():
+-        arr = np.zeros((len(rows), 5), dtype=np.int64)
++        tarr = np.zeros((len(rows), 5), dtype=np.int64)
++        parr = np.zeros((len(rows),), dtype=np.float32)
+         for i, row in enumerate(rows):
+             date, user, video, tab, dur, y = _to_int(row[0]), _to_int(row[1]), _to_int(row[2]), _to_int(row[4]), _to_int(row[5]), _to_int(row[6])
+-            q = look_exact.get((date, user, video, tab, dur, y))
++            q = lookup.get((date, user, video, tab, dur, y))
+             if q:
+-                arr[i] = q.popleft(); exact += 1
++                tf, pr = q.popleft(); exact += 1
++                tarr[i] = tf; parr[i] = pr
+             else:
+-                q2 = look_nodur.get((date, user, video, tab, y))
+-                if q2:
+-                    arr[i] = q2.popleft(); nodur += 1
+-                else:
+-                    miss += 1
+-                    if len(examples) < 3:
+-                        examples.append((sp, tuple(row[:7])))
+-                    arr[i] = _time_feats(date, 0, tab)
+-        metas[sp] = arr
+-    if miss or nodur:
+-        print(f"raw hourmin alignment: exact={exact} nodur={nodur} missing={miss} raw={nraw} headers={headers} examples={examples}")
+-    else:
+-        print(f"raw hourmin alignment: exact={exact} missing=0 raw={nraw} headers={headers}")
+-    return metas
++                miss += 1
++                tarr[i] = _time_feats(date, 0, tab)
++        time_meta[sp] = tarr; play_meta[sp] = parr
++    print(f"raw alignment: exact={exact} missing={miss} raw={nraw} +play_ratio headers={headers}")
++    return time_meta, play_meta
+ 
+ 
+ def augment_encoded(enc, time_meta):
+@@ -169,9 +156,11 @@
+     return out, offset
+ 
+ 
+-def encode_with_time(data_dir, splits):
++def encode_with_raw(data_dir, splits):
+     enc0, _ = encode(splits)
+-    return augment_encoded(enc0, aligned_time_features(data_dir, splits))
++    time_meta, play_meta = aligned_raw_features(data_dir, splits)
++    enc, dim = augment_encoded(enc0, time_meta)
++    return enc, dim, play_meta
+ 
+ 
+ def make_user_pairs(y, users):
+@@ -190,6 +179,30 @@
+     return pos_lists, neg_lists, n_pos
+ 
+ 
++def make_value_pairs(values, users):
++    values = np.asarray(values); users = np.asarray(users)
++    order = np.argsort(users, kind='mergesort')
++    su = users[order]
++    starts = np.r_[0, np.flatnonzero(su[1:] != su[:-1]) + 1]
++    ends = np.r_[starts[1:], len(order)]
++    hi_lists, lo_lists, n_hi = [], [], 0
++    for s, e in zip(starts, ends):
++        idx = order[s:e]
++        vals = values[idx]
++        if len(idx) < 2 or float(vals.max() - vals.min()) < 1e-6:
++            continue
++        med = np.median(vals)
++        hi = idx[vals > med]
++        lo = idx[vals <= med]
++        if len(hi) == 0 or len(lo) == 0:
++            # fall back to strict max-vs-rest for tiny/tied groups
++            hi = idx[vals == vals.max()]
++            lo = idx[vals < vals.max()]
++        if len(hi) and len(lo):
++            hi_lists.append(hi.astype(np.int64)); lo_lists.append(lo.astype(np.int64)); n_hi += len(hi)
++    return hi_lists, lo_lists, n_hi
++
++
+ def sample_epoch_pairs(pos_lists, neg_lists, n_pos, rng):
+     pos_all = np.empty(n_pos, dtype=np.int64); neg_all = np.empty(n_pos, dtype=np.int64)
+     off = 0
+@@ -202,16 +215,19 @@
+     return pos_all[perm], neg_all[perm]
+ 
+ 
+-def train_one(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, seed=0, device='cpu', verbose=False, tag=''):
++def train_pair_model(enc, dim, pair_source='label', play_train=None, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, seed=0, device='cpu', verbose=False, tag=''):
+     Xtr, ytr, utr = enc['train']; Xva, yva, uva = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2}, {'params': [model.b], 'weight_decay': 0.0}], lr=lr, betas=(0.9, 0.999), eps=1e-8)
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+-    pos_lists, neg_lists, n_pos = make_user_pairs(ytr, utr)
++    if pair_source == 'watch':
++        pos_lists, neg_lists, n_pos = make_value_pairs(play_train, utr)
++    else:
++        pos_lists, neg_lists, n_pos = make_user_pairs(ytr, utr)
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+     if verbose:
+-        print(f"{tag} BPR users={len(pos_lists):,d} positives paired/epoch={n_pos:,d}")
++        print(f"{tag} {pair_source} pairs users={len(pos_lists):,d} positives={n_pos:,d}")
+     for ep in range(1, epochs + 1):
+         pos_idx, neg_idx = sample_epoch_pairs(pos_lists, neg_lists, n_pos, rng)
+         t0 = time.time(); model.train(); losses = []
+@@ -223,7 +239,7 @@
+             loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {tag} epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
++            print(f"  {tag} epoch {ep:2d} | {pair_source} {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -237,12 +253,15 @@
+ 
+ 
+ def train_ensemble(splits, data_dir, k=16, lr=0.001, epochs=40, seed=0, device='cpu', verbose=True):
+-    enc, dim = encode_with_time(data_dir, splits)
+-    seeds = [seed, seed+1009, seed+2027, seed+3037, seed+4051, seed+5059, seed+6073]
++    enc, dim, play_meta = encode_with_raw(data_dir, splits)
++    label_seeds = [seed, seed+1009, seed+2027, seed+3037, seed+4051, seed+5059]
+     models = []
+-    for j, s in enumerate(seeds):
++    for j, s in enumerate(label_seeds):
+         torch.manual_seed(s)
+-        models.append(train_one(enc, dim, k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag=f"m{j+1}/7"))
++        models.append(train_pair_model(enc, dim, pair_source='label', k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag=f"label{j+1}/6"))
++    s = seed + 6073
++    torch.manual_seed(s)
++    models.append(train_pair_model(enc, dim, pair_source='watch', play_train=play_meta['train'], k=k, lr=lr, epochs=epochs, seed=s, device=device, verbose=verbose, tag="watch1/1"))
+     return models, enc
+ 
+ 
+@@ -287,7 +306,7 @@
+     torch.manual_seed(a.seed)
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+['hour','hblock','weekday','tab_hour','tab_weekday']")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+time; ensemble=6label+1watchpair")
+     models, enc = train_ensemble(splits, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     X, y, users = enc[a.split]
+     scores = ensemble_predict(models, X, users, device=a.device)
+@@ -295,7 +314,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr7_time_context_keyfix (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== time_watchpair_diversity (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, ensemble_predict(models, Xs, us, device=a.device))

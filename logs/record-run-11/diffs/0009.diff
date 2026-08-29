@@ -1,0 +1,137 @@
+# iteration 9  (parent: 8)
+# hypothesis: improve 8: semi-hard sampling mainly raises nDCG@5, so add a light LambdaRank-style weight proportional to approximate delta-nDCG@5 for each same-user pair to focus updates on top-5 ordering; reference: https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/MSR-TR-2010-82.pdf
+# result: GAUC 0.669837 | nDCG@5 0.536816 | primary 0.603326 | verdict noise
+
+--- logs/record-run-11/solutions/008_semihard_hybrid.py
++++ logs/record-run-11/solutions/009_lambda_semihard.py
+@@ -1,11 +1,10 @@
+-"""FM with BPR+BCE using tempered semi-hard same-user negatives.
+-
+-Debugs node 7.  The hard-negative draft picked mostly the current top-scoring
+-negative for every positive, which can repeatedly punish ambiguous/false
+-negatives and collapse the model.  This version keeps node 5's uniform BPR as
+-the base, but for a small fraction of pairs chooses a semi-hard negative: among
+-a few same-user candidates, use the highest scoring one that is still below the
+-positive score, otherwise fall back to a uniform negative.
++"""FM with semi-hard BPR+BCE and a light LambdaRank-style nDCG@5 weight.
++
++Improves node 8 by keeping its conservative semi-hard negative sampling, but
++weights each same-user pair by the approximate absolute change in nDCG@5 if the
++positive and negative swapped under the current model ranking.  The weight is
++normalised inside each batch so this should emphasise top-5 mistakes without
++changing the overall learning-rate scale too much.
+ """
+ import argparse
+ import os
+@@ -62,15 +61,18 @@
+     return groups
+ 
+ 
+-def make_pairs(groups, rng, train_scores=None, semi_k=4, semi_frac=0.25):
+-    """Sample same-user pairs with lightly tempered semi-hard negatives."""
+-    left, right = [], []
++def make_pairs(groups, rng, train_scores=None, semi_k=4, semi_frac=0.25,
++               lambda_alpha=2.5):
++    """Sample same-user pairs and return per-pair LambdaRank-style weights."""
++    left, right, wts = [], [], []
+     order_groups = np.arange(len(groups))
+     rng.shuffle(order_groups)
++    disc5 = np.asarray([1.0 / np.log2(i + 2.0) for i in range(5)], dtype=np.float32)
+     for gi in order_groups:
+         ps, ns = groups[gi]
+         m = len(ps)
+         chosen = rng.choice(ns, size=m, replace=True)
++
+         if train_scores is not None and semi_k > 1 and semi_frac > 0:
+             mask = rng.random(m) < semi_frac
+             hh = int(mask.sum())
+@@ -80,7 +82,6 @@
+                 cs = train_scores[cand]
+                 pscores = train_scores[psel]
+                 ok = cs < pscores[:, None]
+-                # Select the hardest candidate that is still below the positive.
+                 masked = np.where(ok, cs, -np.inf)
+                 any_ok = ok.any(axis=1)
+                 if any_ok.any():
+@@ -89,17 +90,37 @@
+                     tmp = chosen[mask]
+                     tmp[rows] = cand[rows, cols]
+                     chosen[mask] = tmp
++
++        weights = np.ones(m, dtype=np.float32)
++        if train_scores is not None and lambda_alpha > 0:
++            # Current within-user ranks over this user's training impressions.
++            all_idx = np.concatenate([ps, ns])
++            order = np.argsort(-train_scores[all_idx], kind='mergesort')
++            ranks = np.empty(len(all_idx), dtype=np.int32)
++            ranks[order] = np.arange(1, len(all_idx) + 1, dtype=np.int32)
++            local_rank = dict(zip(all_idx.tolist(), ranks.tolist()))
++            rp = np.fromiter((local_rank[int(x)] for x in ps), dtype=np.int32, count=m)
++            rn = np.fromiter((local_rank[int(x)] for x in chosen), dtype=np.int32, count=m)
++            dp = np.where(rp <= 5, 1.0 / np.log2(rp.astype(np.float32) + 1.0), 0.0)
++            dn = np.where(rn <= 5, 1.0 / np.log2(rn.astype(np.float32) + 1.0), 0.0)
++            idcg = float(disc5[:min(len(ps), 5)].sum())
++            if idcg > 0:
++                delta = np.abs(dp - dn) / idcg
++                weights = (1.0 + lambda_alpha * delta).astype(np.float32)
++
+         left.append(ps)
+         right.append(chosen.astype(np.int64, copy=False))
++        wts.append(weights)
+     p = np.concatenate(left)
+     n = np.concatenate(right)
++    w = np.concatenate(wts)
+     perm = rng.permutation(len(p))
+-    return p[perm], n[perm]
++    return p[perm], n[perm], w[perm]
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+         seed=0, device='cpu', verbose=True, bce_warmup=1, bce_weight=0.15,
+-        semi_k=4, semi_frac=0.25):
++        semi_k=4, semi_frac=0.25, lambda_alpha=2.5):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -133,17 +154,20 @@
+                 losses.append(loss.item())
+         else:
+             train_scores = model.predict(Xtr, device=device)
+-            pidx, nidx = make_pairs(groups, rng, train_scores=train_scores,
+-                                    semi_k=semi_k, semi_frac=semi_frac)
++            pidx, nidx, pair_w = make_pairs(groups, rng, train_scores=train_scores,
++                                            semi_k=semi_k, semi_frac=semi_frac,
++                                            lambda_alpha=lambda_alpha)
+             for i in range(0, len(pidx), bs):
+                 ps = torch.from_numpy(pidx[i:i + bs])
+                 ns = torch.from_numpy(nidx[i:i + bs])
++                wt = torch.from_numpy(pair_w[i:i + bs]).to(device)
+                 xp = Xtr_t[ps].to(device)
+                 xn = Xtr_t[ns].to(device)
+                 opt.zero_grad(set_to_none=True)
+                 sp = model(xp)
+                 sn = model(xn)
+-                bpr_loss = torch.nn.functional.softplus(-(sp - sn)).mean()
++                loss_vec = torch.nn.functional.softplus(-(sp - sn))
++                bpr_loss = (loss_vec * wt).sum() / (wt.sum() + 1e-8)
+                 point_scores = torch.cat([sp, sn])
+                 point_labels = torch.cat([torch.ones_like(sp), torch.zeros_like(sn)])
+                 loss = bpr_loss + bce_weight * bce(point_scores, point_labels)
+@@ -153,7 +177,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            phase = 'bce' if ep <= bce_warmup else 'semihard_hybrid'
++            phase = 'bce' if ep <= bce_warmup else 'lambda_semihard'
+             print(f"  epoch {ep:2d} {phase} | loss {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+@@ -203,7 +227,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== semihard_hybrid (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== lambda_semihard (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

@@ -1,0 +1,119 @@
+# iteration 6  (parent: 5)
+# hypothesis: debug 5: auxiliary alignment missed almost every row because it keyed on video-feature fields; align raw feedback by log fields (date,user_id,video_id,tab) with FIFO duplicate order so the multi-task signal actually reaches training.
+# result: GAUC 0.669243 | nDCG@5 0.53662 | primary 0.602931 | verdict noise
+
+--- logs/record-run-8/solutions/005_mtl_aux_bpr_fm.py
++++ logs/record-run-8/solutions/006_mtl_aux_keyfix.py
+@@ -1,10 +1,10 @@
+-"""Multi-task FM: primary within-user BPR+BCE plus auxiliary feedback heads.
+-
+-This drafts the multi-task direction from the current best BPR+BCE FM.  The
+-primary head is unchanged for prediction.  Additional heads share the FM
+-interaction embeddings and learn raw KuaiRand feedback labels (click/like/follow/
+-comment/forward) read from the original CSVs, acting as an auxiliary regularizer
+-for the shared representation.
++"""Multi-task FM with auxiliary feedback heads; debugged CSV alignment.
++
++This is a targeted debug of 005_mtl_aux_bpr_fm.py.  The earlier version keyed
++raw log rows by author_id and duration_ms, but those are video-feature fields and
++not reliably present in the log CSVs, causing almost all auxiliary rows to miss.
++Here auxiliary labels are aligned by the actual log identity/order key
++(date,user_id,video_id,tab), with FIFO queues preserving duplicate row order.
+ """
+ import argparse
+ import csv
+@@ -48,59 +48,61 @@
+ 
+ def row_key_from_tuple(r):
+     # data.load rows: (date, user_id, video_id, author_id, tab, duration_ms, label)
+-    return (_to_int(r[0]), str(r[1]), str(r[2]), str(r[3]), _to_int(r[4]), _to_int(r[5]))
++    # Match only fields that originate in the log files.  author_id/duration_ms
++    # are joined from video_features_basic_pure.csv and were the source of the
++    # miss storm in node 5.
++    return (_to_int(r[0]), str(r[1]), str(r[2]), _to_int(r[4]))
+ 
+ 
+ def row_key_from_csv(row):
+     date = _to_int(_first_key(row, ['date', 'request_date', 'day']))
+     user = str(_first_key(row, ['user_id', 'userId', 'user']) or '')
+     video = str(_first_key(row, ['video_id', 'photo_id', 'item_id', 'videoId']) or '')
+-    author = str(_first_key(row, ['author_id', 'author', 'authorId']) or '')
+     tab = _to_int(_first_key(row, ['tab', 'tab_id']))
+-    dur = _to_int(_first_key(row, ['duration_ms', 'video_duration', 'duration', 'play_duration_ms']))
+-    return (date, user, video, author, tab, dur)
++    return (date, user, video, tab)
+ 
+ 
+ def load_auxiliary(data_dir, splits):
+     """Return train auxiliary label matrix aligned to splits['train']."""
+     rows_by_key = defaultdict(deque)
+-    fields_found = None
++    aux_cols = None
++    total_csv = 0
+     for fn in LOG_FILES:
+         path = os.path.join(data_dir, fn)
+         if not os.path.exists(path):
+-            # Some harnesses pass the KuaiRand-Pure root rather than its data dir.
+             path = os.path.join(data_dir, 'data', fn)
+         with open(path, 'r', newline='', encoding='utf-8') as f:
+             reader = csv.DictReader(f)
+-            if fields_found is None:
+-                fields_found = [c for c in AUX_CANDIDATES if c in (reader.fieldnames or [])]
+-            aux_cols = [c for c in AUX_CANDIDATES if c in (reader.fieldnames or [])]
++            this_cols = [c for c in AUX_CANDIDATES if c in (reader.fieldnames or [])]
++            if aux_cols is None:
++                aux_cols = this_cols
+             for row in reader:
++                total_csv += 1
+                 key = row_key_from_csv(row)
+                 vals = [_to_int(row.get(c, 0)) for c in aux_cols]
+                 rows_by_key[key].append(vals)
+ 
+-    aux_cols = fields_found or []
++    aux_cols = aux_cols or []
+     if not aux_cols:
+         return np.zeros((len(splits['train']), 0), dtype=np.float32), []
+ 
+     aligned = {}
+     misses = 0
++    used = 0
+     for sp in [s for s in ('train', 'valid', 'test') if s in splits]:
+         arr = np.zeros((len(splits[sp]), len(aux_cols)), dtype=np.float32)
+         for i, r in enumerate(splits[sp]):
+             q = rows_by_key.get(row_key_from_tuple(r))
+             if q:
+-                vals = q.popleft()
+-                # If a later CSV had a different available-column list, keep the
+-                # common leading fields from AUX_CANDIDATES; in the KuaiRand files
+-                # the schemas are normally identical.
+-                arr[i, :min(len(vals), len(aux_cols))] = vals[:len(aux_cols)]
++                arr[i] = q.popleft()
++                used += 1
+             else:
+                 misses += 1
+         aligned[sp] = arr
+     if misses:
+-        print(f"auxiliary CSV alignment misses: {misses:,d}")
++        print(f"auxiliary CSV alignment misses: {misses:,d}; used={used:,d}; csv_rows={total_csv:,d}")
++    else:
++        print(f"auxiliary CSV alignment perfect; used={used:,d}; csv_rows={total_csv:,d}")
+     return aligned['train'], aux_cols
+ 
+ 
+@@ -125,7 +127,6 @@
+ 
+     def forward_all(self, X):
+         inter = self.interaction(X)
+-        # self.W[:, X] has shape (tasks, batch, fields).
+         lin = self.W[:, X].sum(2).transpose(0, 1)
+         return self.b.view(1, -1) + lin + inter.view(-1, 1) * self.alpha.view(1, -1)
+ 
+@@ -290,7 +291,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== mtl_aux_bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== mtl_aux_keyfix (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

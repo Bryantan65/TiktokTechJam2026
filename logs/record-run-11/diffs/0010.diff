@@ -1,0 +1,182 @@
+# iteration 10  (parent: 9)
+# hypothesis: draft 6: add contextual weekday/hour/daypart embeddings from the raw log hourmin column on top of the current best semi-hard ranker, because time-aware CF can capture context-dependent preferences; reference: https://dl.acm.org/doi/10.1145/1454008.1454048
+# result: GAUC 0.670476 | nDCG@5 0.537361 | primary 0.603918 | verdict KEPT
+
+--- logs/record-run-11/solutions/009_lambda_semihard.py
++++ logs/record-run-11/solutions/010_time_context.py
+@@ -1,16 +1,17 @@
+-"""FM with semi-hard BPR+BCE and a light LambdaRank-style nDCG@5 weight.
+-
+-Improves node 8 by keeping its conservative semi-hard negative sampling, but
+-weights each same-user pair by the approximate absolute change in nDCG@5 if the
+-positive and negative swapped under the current model ranking.  The weight is
+-normalised inside each batch so this should emphasise top-5 mistakes without
+-changing the overall learning-rate scale too much.
++"""FM with semi-hard BPR+BCE plus temporal context embeddings.
++
++Branches from node 9.  The ranking loss is unchanged except that the encoded
++feature matrix is augmented with weekday/hour/daypart categorical fields.  Hour
++comes from the raw log CSVs and is matched back to starter-kit tuples by
++(date,user_id,video_id,tab) in original order.
+ """
+ import argparse
++import csv
+ import os
+ import sys
+ import time
+-from collections import defaultdict
++from collections import defaultdict, deque
++from datetime import datetime
+ 
+ import numpy as np
+ import torch
+@@ -44,6 +45,84 @@
+             xb = torch.from_numpy(X[i:i + bs].astype(np.int64)).to(device)
+             out.append(self(xb).cpu().numpy())
+         return np.concatenate(out)
++
++
++def _weekday(yyyymmdd):
++    try:
++        return datetime.strptime(str(int(yyyymmdd)), '%Y%m%d').weekday()
++    except Exception:
++        return 7
++
++
++def _read_hour_queues(data_dir):
++    """Return key -> queue of hourmin values from raw logs."""
++    files = [
++        os.path.join(data_dir, 'log_standard_4_08_to_4_21_pure.csv'),
++        os.path.join(data_dir, 'log_standard_4_22_to_5_08_pure.csv'),
++    ]
++    q = defaultdict(deque)
++    n = 0
++    for path in files:
++        if not os.path.exists(path):
++            continue
++        with open(path, 'r', newline='', encoding='utf-8') as f:
++            rd = csv.DictReader(f)
++            cols = set(rd.fieldnames or [])
++            if not {'date', 'user_id', 'video_id', 'tab', 'hourmin'}.issubset(cols):
++                continue
++            for r in rd:
++                try:
++                    key = (int(r['date']), str(r['user_id']), str(r['video_id']), int(r['tab']))
++                    hm = int(float(r['hourmin']))
++                except Exception:
++                    continue
++                q[key].append(hm)
++                n += 1
++    print(f"raw hour rows loaded: {n:,d} keys={len(q):,d}")
++    return q
++
++
++def augment_time_features(splits, enc, dim, data_dir):
++    hour_q = _read_hour_queues(data_dir)
++    new_enc = {}
++    total = matched = 0
++    # offsets: weekday 0..7, hour 0..24, daypart 0..6 (last value = unknown)
++    off_week = dim
++    off_hour = off_week + 8
++    off_part = off_hour + 25
++    new_dim = off_part + 7
++
++    for sp, (X, y, users) in enc.items():
++        rows = splits[sp]
++        extra = np.empty((len(rows), 3), dtype=np.int64)
++        for i, row in enumerate(rows):
++            date, uid, vid, _aid, tab, _dur, _lab = row
++            wd = _weekday(date)
++            key = (int(date), str(uid), str(vid), int(tab))
++            hm = None
++            if key in hour_q and hour_q[key]:
++                hm = hour_q[key].popleft()
++                matched += 1
++            total += 1
++            if hm is None:
++                hour = 24
++                part = 6
++            else:
++                hour = int(hm) // 100
++                if hour < 0 or hour > 23:
++                    hour = 24
++                    part = 6
++                else:
++                    part = hour // 4
++            if wd < 0 or wd > 6:
++                wd = 7
++            extra[i, 0] = off_week + wd
++            extra[i, 1] = off_hour + hour
++            extra[i, 2] = off_part + part
++        X2 = np.concatenate([X.astype(np.int64), extra], axis=1)
++        new_enc[sp] = (X2, y, users)
++    print(f"hour matched {matched:,d}/{total:,d} ({matched / max(total,1):.3%}); dim {dim}->{new_dim}; fields={FIELDS}+weekday+hour+daypart")
++    return new_enc, new_dim
+ 
+ 
+ def build_user_groups(users, y):
+@@ -63,7 +142,6 @@
+ 
+ def make_pairs(groups, rng, train_scores=None, semi_k=4, semi_frac=0.25,
+                lambda_alpha=2.5):
+-    """Sample same-user pairs and return per-pair LambdaRank-style weights."""
+     left, right, wts = [], [], []
+     order_groups = np.arange(len(groups))
+     rng.shuffle(order_groups)
+@@ -93,7 +171,6 @@
+ 
+         weights = np.ones(m, dtype=np.float32)
+         if train_scores is not None and lambda_alpha > 0:
+-            # Current within-user ranks over this user's training impressions.
+             all_idx = np.concatenate([ps, ns])
+             order = np.argsort(-train_scores[all_idx], kind='mergesort')
+             ranks = np.empty(len(all_idx), dtype=np.int32)
+@@ -118,10 +195,11 @@
+     return p[perm], n[perm], w[perm]
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        seed=0, device='cpu', verbose=True, bce_warmup=1, bce_weight=0.15,
+-        semi_k=4, semi_frac=0.25, lambda_alpha=2.5):
+-    enc, dim = encode(splits)
++def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
++        patience=4, seed=0, device='cpu', verbose=True, bce_warmup=1,
++        bce_weight=0.15, semi_k=4, semi_frac=0.25, lambda_alpha=2.5):
++    enc0, dim0 = encode(splits)
++    enc, dim = augment_time_features(splits, enc0, dim0, data_dir)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+@@ -177,7 +255,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            phase = 'bce' if ep <= bce_warmup else 'lambda_semihard'
++            phase = 'bce' if ep <= bce_warmup else 'time_lambda_semihard'
+             print(f"  epoch {ep:2d} {phase} | loss {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+@@ -217,17 +295,18 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+-
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+weekday+hour+daypart")
++
++    model, enc = run(splits, data_dir=a.data_dir, k=a.k, lr=a.lr,
++                     epochs=a.epochs, seed=a.seed, device=a.device,
++                     verbose=a.out is None)
+     X, y, users = enc[target]
+     scores = model.predict(X, device=a.device)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== lambda_semihard (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== time_context_lambda_semihard (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

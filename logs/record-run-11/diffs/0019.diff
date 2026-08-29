@@ -1,0 +1,196 @@
+# iteration 19  (parent: 18)
+# hypothesis: improve 18: CWM only gave a small noisy gain; fit a frozen-score context calibrator on train labels to correct tab/hour/duration score-scale drift after the ranking model, which is a cheap post-hoc calibration pass likely to affect within-user mixed-context lists.
+# result: GAUC 0.671266 | nDCG@5 0.537533 | primary 0.604399 | verdict KEPT
+
+--- logs/record-run-11/solutions/018_cwm_watchtime.py
++++ logs/record-run-11/solutions/019_calibrated_cwm.py
+@@ -1,10 +1,10 @@
+-"""DeepFM + censored watch-time auxiliary/survival score.
+-
+-Extends node 17. The raw play_time_ms auxiliary MSE is replaced by a simple
+-censored log-normal watch-time model: if play reaches the video duration the
+-latent desired watch time is right-censored, otherwise the observed play time is
+-an uncensored sample. The predicted survival margin over duration is also added
+-as a small learned residual to the ranking logit.
++"""Node 18 plus a post-hoc context calibrator.
++
++Train the same DeepFM+CWM ranker as node 18, then freeze it and fit a tiny
++logistic calibration layer on the train rows using only the frozen score plus
++coarse context offsets (tab/hour/daypart/duration). These offsets can correct
++BPR score-scale drift between contexts while still changing rankings within a
++user when impressions span tabs or duration groups.
+ """
+ import argparse, csv, os, sys, time
+ from collections import defaultdict, deque
+@@ -30,8 +30,7 @@
+         self.cwm_scale = torch.nn.Parameter(torch.tensor(0.15, dtype=torch.float32))
+         self.n_aux = int(n_aux); self.use_cwm = bool(use_cwm)
+         self.deep = torch.nn.Sequential(torch.nn.Linear(n_fields * k, 64), torch.nn.ReLU(), torch.nn.Dropout(0.10),
+-                                        torch.nn.Linear(64, 32), torch.nn.ReLU(), torch.nn.Dropout(0.05),
+-                                        torch.nn.Linear(32, 1))
++                                        torch.nn.Linear(64, 32), torch.nn.ReLU(), torch.nn.Dropout(0.05), torch.nn.Linear(32, 1))
+         with torch.no_grad():
+             for m in self.deep:
+                 if isinstance(m, torch.nn.Linear):
+@@ -47,7 +46,7 @@
+         E = self.V[X]; return E, E.sum(1)
+ 
+     def cwm_mu(self, X):
+-        E, S = self.shared(X)
++        _E, S = self.shared(X)
+         return (S @ self.cwm_A + self.cwm_W[X].sum(1) + self.cwm_b).squeeze(1)
+ 
+     def forward(self, X, dlog=None):
+@@ -71,6 +70,27 @@
+             xb = torch.from_numpy(X[i:i+bs].astype(np.int64)).to(device)
+             db = torch.from_numpy(dlog[i:i+bs].astype(np.float32)).to(device)
+             out.append(self(xb, db).cpu().numpy())
++        return np.concatenate(out)
++
++
++class Calibrator(torch.nn.Module):
++    def __init__(self):
++        super().__init__()
++        self.scale_raw = torch.nn.Parameter(torch.zeros(()))
++        self.bias = torch.nn.Parameter(torch.zeros(()))
++        self.tab = torch.nn.Parameter(torch.zeros(8))
++        self.hour = torch.nn.Parameter(torch.zeros(25))
++        self.part = torch.nn.Parameter(torch.zeros(7))
++        self.dur = torch.nn.Parameter(torch.zeros(32))
++    def forward(self, base, cf):
++        scale = 1.0 + 0.25 * torch.tanh(self.scale_raw)
++        return scale * base + self.bias + self.tab[cf[:,0]] + self.hour[cf[:,1]] + self.part[cf[:,2]] + self.dur[cf[:,3]]
++    @torch.no_grad()
++    def predict_np(self, base, cf, bs=300000, device='cpu'):
++        self.eval(); out=[]
++        for i in range(0, len(base), bs):
++            b=torch.from_numpy(base[i:i+bs].astype(np.float32)).to(device); c=torch.from_numpy(cf[i:i+bs].astype(np.int64)).to(device)
++            out.append(self(b,c).cpu().numpy())
+         return np.concatenate(out)
+ 
+ 
+@@ -105,9 +125,9 @@
+ def augment(splits, enc, dim, data_dir):
+     raw_q, active, active_idx, has_play = _read_raw(data_dir)
+     off_w = dim; off_h = off_w + 8; off_p = off_h + 25; new_dim = off_p + 7
+-    new_enc = {}; aux = {}; cwm = {}; dlogs = {}; total = matched = 0
++    new_enc = {}; aux = {}; cwm = {}; dlogs = {}; cal = {}; total = matched = 0
+     for sp, (X, y, users) in enc.items():
+-        rows = splits[sp]; extra = np.empty((len(rows), 3), dtype=np.int64)
++        rows = splits[sp]; extra = np.empty((len(rows), 3), dtype=np.int64); cf = np.empty((len(rows), 4), dtype=np.int64)
+         aa = np.zeros((len(rows), len(active)), dtype=np.float32); mm = np.zeros_like(aa)
+         obs = np.zeros(len(rows), dtype=np.float32); cens = np.zeros(len(rows), dtype=np.float32); mask = np.zeros(len(rows), dtype=np.float32)
+         dlog = np.zeros(len(rows), dtype=np.float32)
+@@ -122,18 +142,21 @@
+                 if hour < 0 or hour > 23: hour, part = 24, 6
+                 else: part = hour // 4
+             extra[i] = (off_w + (wd if 0 <= wd <= 6 else 7), off_h + hour, off_p + part)
++            dur = max(float(dur_ms or 0.0), 1.0); dlog[i] = np.log1p(dur) / 10.0
++            tb = int(tab) if 0 <= int(tab) < 7 else 7
++            db = int(np.log1p(dur) / 0.35); db = max(0, min(31, db))
++            cf[i] = (tb, hour, part, db)
+             if avals is not None:
+                 for j, ai in enumerate(active_idx):
+                     v = avals[ai]
+                     if not np.isnan(v): aa[i, j] = v; mm[i, j] = 1.0
+-            dur = max(float(dur_ms or 0.0), 1.0); dlog[i] = np.log1p(dur) / 10.0
+             if not np.isnan(play_raw):
+                 obs[i] = np.log1p(max(play_raw, 0.0)) / 10.0; mask[i] = 1.0
+                 cens[i] = 1.0 if play_raw >= 0.95 * dur else 0.0
+         new_enc[sp] = (np.concatenate([X.astype(np.int64), extra], axis=1), y, users)
+-        aux[sp] = (aa, mm); cwm[sp] = (obs, cens, mask); dlogs[sp] = dlog
++        aux[sp] = (aa, mm); cwm[sp] = (obs, cens, mask); dlogs[sp] = dlog; cal[sp] = cf
+     print(f"raw matched {matched:,d}/{total:,d} ({matched/max(total,1):.3%}); dim {dim}->{new_dim}")
+-    return new_enc, new_dim, aux, cwm, dlogs, active, has_play
++    return new_enc, new_dim, aux, cwm, dlogs, cal, active, has_play
+ 
+ 
+ def groups(users, y):
+@@ -170,21 +193,39 @@
+     if model.use_cwm:
+         den=cmask.sum()
+         if den.item() > 0:
+-            mu=model.cwm_mu(xb); zobs=(obs-mu)/CWM_SIGMA; zdur=(obs.new_zeros(obs.shape)) # placeholder overwritten below outside? no duration not needed for uncens threshold only
+-            # censored records use threshold equal to observed duration proxy? obs is replaced by duration for censored below by caller not here
+-            log_pdf=0.5*zobs*zobs
+-            surv=torch.clamp(0.5*torch.special.erfc(zobs/np.sqrt(2.0)), min=1e-7)
+-            loss=torch.where(cens > 0.5, -torch.log(surv), log_pdf)
+-            losses.append((loss*cmask).sum()/den)
++            mu=model.cwm_mu(xb); z=(obs-mu)/CWM_SIGMA
++            log_pdf=0.5*z*z; surv=torch.clamp(0.5*torch.special.erfc(z/np.sqrt(2.0)), min=1e-7)
++            losses.append((torch.where(cens > 0.5, -torch.log(surv), log_pdf)*cmask).sum()/den)
+     return None if not losses else sum(losses)/len(losses)
+ 
+ 
++def fit_calibrator(base_tr, ytr, cf_tr, base_va, yva, uva, cf_va, seed=0, device='cpu', verbose=True):
++    cal = Calibrator().to(device)
++    params_decay = [cal.tab, cal.hour, cal.part, cal.dur]
++    opt = torch.optim.Adam([{'params': params_decay, 'weight_decay': 1e-3}, {'params': [cal.scale_raw, cal.bias], 'weight_decay': 0.0}], lr=0.05)
++    b_t=torch.from_numpy(base_tr.astype(np.float32)); y_t=torch.from_numpy(ytr.astype(np.float32)); cf_t=torch.from_numpy(cf_tr.astype(np.int64))
++    rng=np.random.default_rng(seed + 17); bs=65536
++    best = evaluate(uva, yva, base_va)['primary']; best_state = {k:v.detach().clone() for k,v in cal.state_dict().items()}; bad=0
++    if verbose: print(f"  calibrator epoch  0 | valid primary {best:.5f}")
++    for ep in range(1, 16):
++        idx=rng.permutation(len(ytr)); losses=[]; cal.train()
++        for i in range(0, len(idx), bs):
++            sel=torch.from_numpy(idx[i:i+bs]); xb=b_t[sel].to(device); yb=y_t[sel].to(device); cb=cf_t[sel].to(device)
++            opt.zero_grad(set_to_none=True); loss=torch.nn.functional.binary_cross_entropy_with_logits(cal(xb, cb), yb)
++            loss.backward(); opt.step(); losses.append(loss.item())
++        pred_va=cal.predict_np(base_va, cf_va, device=device); r=evaluate(uva, yva, pred_va)['primary']
++        if verbose: print(f"  calibrator epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {r:.5f}")
++        if r > best + 1e-5: best=r; best_state={k:v.detach().clone() for k,v in cal.state_dict().items()}; bad=0
++        else:
++            bad += 1
++            if bad >= 4: break
++    cal.load_state_dict(best_state); return cal
++
++
+ def run(splits, data_dir, seed=0, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu', verbose=True):
+-    enc0, dim0 = encode(splits); enc, dim, aux, cwm, dlogs, active, has_play = augment(splits, enc0, dim0, data_dir)
++    enc0, dim0 = encode(splits); enc, dim, aux, cwm, dlogs, calfeats, active, has_play = augment(splits, enc0, dim0, data_dir)
+     Xtr,ytr,utr=enc['train']; Xva,yva,uva=enc['valid']; dtr=dlogs['train']; dva=dlogs['valid']
+-    atr,mtr=aux['train']; obs,cens,cmask=cwm['train']
+-    # For censored samples, CWM likelihood is survival at duration, not at observed play.
+-    obs_thr = obs.copy(); obs_thr[cens > 0.5] = dtr[cens > 0.5]
++    atr,mtr=aux['train']; obs,cens,cmask=cwm['train']; obs_thr=obs.copy(); obs_thr[cens > 0.5] = dtr[cens > 0.5]
+     model=Model(dim, Xtr.shape[1], k=k, n_aux=len(active), use_cwm=has_play, seed=seed).to(device)
+     decay=[model.V, model.W] + list(model.deep.parameters()); nodecay=[model.b, model.deep_scale, model.cwm_scale]
+     if len(active)>0: decay += [model.aux_A, model.aux_W]; nodecay += [model.aux_b]
+@@ -215,14 +256,17 @@
+                 if ml is not None: loss = loss + 0.05*ml
+                 loss.backward(); opt.step(); losses.append(loss.item())
+         va=evaluate(uva,yva,model.predict(Xva,dva,device=device))
+-        if verbose: print(f"  epoch {ep:2d} cwm | scales d={float(model.deep_scale.detach().cpu()):+.3f} c={float(model.cwm_scale.detach().cpu()):+.3f} | loss {np.mean(losses):.4f} | valid GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
++        if verbose: print(f"  epoch {ep:2d} cwm | scales d={float(model.deep_scale.detach().cpu()):+.3f} c={float(model.cwm_scale.detach().cpu()):+.3f} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5: best=va['primary']; bad=0; best_state={k:v.detach().clone() for k,v in model.state_dict().items()}
+         else:
+             bad += 1
+             if bad >= patience:
+                 if verbose: print(f"  early stop at epoch {ep}")
+                 break
+-    model.load_state_dict(best_state); return model, enc, dlogs
++    model.load_state_dict(best_state)
++    base_tr=model.predict(Xtr,dtr,device=device); base_va=model.predict(Xva,dva,device=device)
++    calibrator=fit_calibrator(base_tr, ytr, calfeats['train'], base_va, yva, uva, calfeats['valid'], seed=seed, device=device, verbose=verbose)
++    return model, calibrator, enc, dlogs, calfeats
+ 
+ 
+ if __name__ == '__main__':
+@@ -233,12 +277,12 @@
+         splits=load_dev(a.data_dir); target='valid'
+     else:
+         splits=load(a.data_dir); target=a.split
+-    print({k:len(v) for k,v in splits.items()}, f"fields={FIELDS}+time aux+CWM")
+-    model, enc, dlogs = run(splits, a.data_dir, seed=a.seed, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=a.out is None)
+-    X,y,u=enc[target]; scores=model.predict(X, dlogs[target], device=a.device)
++    print({k:len(v) for k,v in splits.items()}, f"fields={FIELDS}+time aux+CWM+calibrator")
++    model, cal, enc, dlogs, calfeats = run(splits, a.data_dir, seed=a.seed, k=a.k, lr=a.lr, epochs=a.epochs, device=a.device, verbose=a.out is None)
++    X,y,u=enc[target]; base=model.predict(X, dlogs[target], device=a.device); scores=cal.predict_np(base, calfeats[target], device=a.device)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+         for sp in ('valid','test'):
+-            Xs,ys,us=enc[sp]; r=evaluate(us,ys,model.predict(Xs,dlogs[sp],device=a.device)); print(sp, r)
+-
++            Xs,ys,us=enc[sp]; b=model.predict(Xs,dlogs[sp],device=a.device); r=evaluate(us,ys,cal.predict_np(b, calfeats[sp],device=a.device)); print(sp, r)
++

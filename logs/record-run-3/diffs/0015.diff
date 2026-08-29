@@ -1,0 +1,96 @@
+# iteration 15  (parent: 14)
+# hypothesis: debug 14: the first time-context draft warned that almost every row missed raw alignment, likely because duration column names/semantics differ; match FIFO raw rows by (date,user,video,author,tab) instead so real hourmin reaches the model.
+# result: GAUC 0.671821 | nDCG@5 0.538043 | primary 0.604932 | verdict KEPT
+
+--- logs/record-run-3/solutions/014_bpr7_time_context.py
++++ logs/record-run-3/solutions/015_bpr7_time_context_fixalign.py
+@@ -1,9 +1,9 @@
+-"""Seven-member same-user BPR FM ensemble with temporal context fields.
+-
+-Drafts direction 6 on top of the best BPR rank ensemble: read hourmin from the
+-raw KuaiRand logs, align it back to data.load() rows, and append reusable time
+-context fields (hour, 4-hour block, weekday, tab-hour, tab-weekday) to the FM.
+-The training loss and within-user rank/Borda ensemble are unchanged from 010.
++"""Seven-member same-user BPR FM ensemble with correctly aligned temporal context.
++
++Debugs 014: raw hourmin alignment used duration in the matching key, but the
++starter tuple duration does not reliably equal a raw log duration column.  Align
++by the stable raw tuple prefix (date,user,video,author,tab) with FIFO queues in
++raw file order, then append hour/block/weekday/tab-time fields to the FM.
+ """
+ import argparse
+ import csv
+@@ -88,7 +88,6 @@
+     p = os.path.join(data_dir, filename)
+     if os.path.exists(p):
+         return p
+-    # Be tolerant if the caller passes the dataset root instead of the data dir.
+     p2 = os.path.join(data_dir, 'data', filename)
+     if os.path.exists(p2):
+         return p2
+@@ -96,7 +95,7 @@
+ 
+ 
+ def read_raw_time_lookup(data_dir):
+-    """Return key -> queue of temporal features in original raw-log order."""
++    """Return (date,user,video,author,tab) -> queue of time feats in raw order."""
+     lookup = defaultdict(deque)
+     n = 0
+     for fn in RAW_LOGS:
+@@ -109,10 +108,8 @@
+                 video = _to_int(_pick(rec, ['video_id', 'videoid', 'item_id', 'itemid']))
+                 author = _to_int(_pick(rec, ['author_id', 'authorid']))
+                 tab = _to_int(_pick(rec, ['tab']))
+-                dur = _to_int(_pick(rec, ['duration_ms', 'video_duration_ms',
+-                                          'duration', 'video_duration']))
+-                hourmin = _pick(rec, ['hourmin', 'hour_min', 'time_ms', 'time'], 0)
+-                key = (date, user, video, author, tab, dur)
++                hourmin = _pick(rec, ['hourmin', 'hour_min'], 0)
++                key = (date, user, video, author, tab)
+                 lookup[key].append(_time_feats(date, hourmin, tab))
+                 n += 1
+     return lookup, n
+@@ -125,23 +122,23 @@
+     for sp, rows in splits.items():
+         arr = np.zeros((len(rows), 5), dtype=np.int64)
+         for i, row in enumerate(rows):
+-            key = tuple(_to_int(row[j]) for j in range(6))
++            key = tuple(_to_int(row[j]) for j in (0, 1, 2, 3, 4))
+             q = lookup.get(key)
+             if q:
+                 arr[i] = q.popleft()
+             else:
+-                # Fallback uses date/tab from the tuple and an unknown/zero hour.
+                 missing += 1
+                 date, tab = _to_int(row[0]), _to_int(row[4])
+                 arr[i] = _time_feats(date, 0, tab)
+         metas[sp] = arr
+     if missing:
+         print(f"warning: {missing} rows could not be aligned to raw hourmin; used hour=0 fallback")
++    else:
++        print("raw hourmin alignment: all rows matched")
+     return metas
+ 
+ 
+ def augment_encoded(enc, time_meta):
+-    """Append categorical temporal fields to the starter-kit encoding."""
+     n_extra = next(iter(time_meta.values())).shape[1]
+     maps = []
+     offset = max(int(v[0].max()) for v in enc.values()) + 1
+@@ -156,7 +153,6 @@
+     for sp, (X, y, users) in enc.items():
+         extra = np.zeros((len(X), n_extra), dtype=np.int64)
+         for j, mp in enumerate(maps):
+-            # Values are known because maps are built over all splits.
+             extra[:, j] = [mp[int(v)] for v in time_meta[sp][:, j]]
+         out[sp] = (np.concatenate([X.astype(np.int64), extra], axis=1), y, users)
+     return out, offset
+@@ -334,7 +330,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr7_time_context (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr7_time_context_fixalign (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, ensemble_predict(models, Xs, us, device=a.device))

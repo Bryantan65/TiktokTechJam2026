@@ -1,0 +1,47 @@
+# iteration 13  (parent: 10)
+# hypothesis: improve 10: convergence is at risk, so make the highest-probability move: extend the only clearly working mechanism from seven to eleven independent same-user BPR rankers with the same Borda combiner. This tests whether ensemble variance reduction still has any headroom beyond node 10.
+# result: GAUC 0.671333 | nDCG@5 0.537668 | primary 0.6045 | verdict KEPT
+
+--- logs/record-run-3/solutions/010_bpr_7_rank_ensemble.py
++++ logs/record-run-3/solutions/013_bpr_11_rank_ensemble.py
+@@ -1,9 +1,9 @@
+-"""Seven-member within-user rank ensemble of BPR FMs.
+-
+-Refines 009 by keeping exactly the same BPR training and within-user Borda/rank
+-combiner, but averaging seven independent members instead of five.  This tests
+-whether the node-8 -> node-9 gain was still mostly variance reduction from more
+-BPR rankers rather than a saturated ensemble.
++"""Eleven-member within-user rank ensemble of BPR FMs.
++
++Refines 010 by keeping exactly the same BPR training and within-user Borda/rank
++combiner, but averaging eleven independent members instead of seven.  This is a
++last pass on the only mechanism that has produced clear, stable gains: variance
++reduction across independently initialized same-user BPR rankers.
+ """
+ import argparse
+ import os
+@@ -138,12 +138,13 @@
+                    device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     seeds = [seed, seed + 1009, seed + 2027, seed + 3037, seed + 4051,
+-             seed + 5059, seed + 6073]
++             seed + 5059, seed + 6073, seed + 7079, seed + 8089,
++             seed + 9103, seed + 10037]
+     models = []
+     for j, s in enumerate(seeds):
+         torch.manual_seed(s)
+         m = train_one(enc, dim, k=k, lr=lr, epochs=epochs, seed=s,
+-                      device=device, verbose=verbose, tag=f"m{j+1}/7")
++                      device=device, verbose=verbose, tag=f"m{j+1}/11")
+         models.append(m)
+     return models, enc
+ 
+@@ -209,7 +210,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_7_rank_ensemble (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_11_rank_ensemble (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, ensemble_predict(models, Xs, us, device=a.device))
