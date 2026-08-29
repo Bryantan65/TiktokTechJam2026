@@ -1593,6 +1593,79 @@ worked, and replication said otherwise. It is not misconduct, it is what
 single-seed reporting does, and it is the reason every claim in this file that
 matters is quoted with a seed count.
 
+### Deep user history does not make taste learnable, 2026-08-29
+
+The data-limited finding pointed at one escape: more history per user. The user
+side is the underdetermined half - video vectors get 190 observations each
+(1.44M rows / 7,551 videos), user vectors get 52 (1.44M / 27,285 users), which is
+~3 per embedding dimension.
+
+KuaiRand-1k has the SAME per-user depth as 27k (11,713 vs 11,812 interactions per
+user) for 963 of Pure's users, so the mechanism is testable without the 9.21GB
+27k download. We built per-user tag-affinity profiles from 1k's 04-08..04-21 file
+only, added them as a bucketed field crossed with each Pure video's tag, and
+split the valid score by whether the user had that deep history.
+
+```
+                   COVERED users GAUC        other users GAUC
+control            0.67223 +/- 0.00427       0.66952 +/- 0.00058
+tagtaste           0.67295 +/- 0.00163       0.66953 +/- 0.00085
+paired diff        +0.00073, t = 0.33        +0.00001
+```
+
+**11,700 interactions of history moves a user's GAUC by +0.0007, t = 0.33.**
+Scaled to 27k - every user covered - that is roughly +0.0004 on primary, half a
+seed-noise unit for 9.21GB and five hours. **27k is not worth downloading.**
+
+The detail that explains it: the deep-history users already scored *higher* than
+everyone else before the feature was added (0.67223 vs 0.66952). There was no
+deficit to fill. That is the third time this pattern has appeared - BPR-untrained
+users also scored above average.
+
+Caveat, stated because it bounds the claim: this is one feature design, and
+Pure's 7,583 videos span only 44 distinct tags, which is a coarse taste signal.
+Finer attributes (author, music, duration) were not tested. The claim is that the
+most natural attribute-taste design gives nothing at 27k depth, not that 27k is
+provably useless.
+
+### GroupCE: cross-user ranking loss actively hurts, 2026-08-29
+
+"Hierarchical Group-wise Ranking Framework for Recommendation Models"
+(arXiv 2506.12756, AdKDD'25) quantises users into a hierarchy of clusters and
+computes a listwise cross-entropy loss *within each cluster* rather than within
+each user, so a sparse user borrows ranking signal from similar users. Reported
+on KuaiRand: GAUC 0.6911 -> 0.6953 overall, and 0.6718 -> 0.6786 on cold-start
+users - which is exactly the population our whole ceiling is made of.
+
+Implemented as BPR plus a two-level group ListCE term (16 coarse clusters, 128
+after residual quantisation, k-means on the trained user embeddings):
+
+```
+control        0.603282 +/- 0.000435
+groupce l=0.3  0.597839 +/- 0.000310   -0.00544   t = -52.09 on 4 df
+groupce l=1.0  0.594972 +/- 0.000384   -0.00831   t = -41.45 on 4 df
+```
+
+Every seed, both weights, monotonic in the weight. **Statistically the cleanest
+result in this file, and clearly negative.**
+
+The mechanism is independent of the implementation. GAUC is computed per user and
+averaged; nDCG@5 is per user. Nothing in the metric rewards making one user's
+scores comparable to another's, so every gradient spent on cross-user ordering is
+spent against the objective. Their gain is measured against pointwise LogLoss,
+which has no within-user structure at all - we replaced that in run 1 with
+something tighter than what they add on top.
+
+One implementation caveat: the group term takes its own optimiser step per group
+batch rather than being summed into the BPR loss, so its effective weight exceeds
+the nominal lambda. That is not a faithful reproduction. It does not change the
+reading - an effect of -0.0054 is far too large to be an artifact of weighting,
+and the direction is monotonic.
+
+**This closes the last outstanding lead.** Four separate published methods have
+now been ruled out by the same argument: they fix something our setup does not
+have wrong.
+
 ### Two structural facts worth keeping
 
 ```
