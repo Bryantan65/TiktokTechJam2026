@@ -111,6 +111,33 @@ from direction 1's listwise softmax.
 impressions already selected by a policy. The training data is missing \
 items the user never saw. Counterfactual methods correct for this selection \
 bias in the ranking objective itself.
+12. **Differentiable GAUC loss** — GAUC is literally half the primary metric. \
+Instead of optimising a proxy (BPR, BCE) and hoping GAUC follows, directly \
+optimise per-user AUC as a differentiable pairwise loss grouped by user. \
+Search for recent papers on differentiable AUC optimisation.
+13. **Curriculum negative sampling** — BPR with uniform random negatives is \
+noisy. Sampling negatives that are close to the decision boundary (hard \
+negatives) or using a curriculum (easy first, hard later) focuses learning \
+on the exact ranking boundaries where nDCG@5 is decided. Also try \
+popularity-biased sampling — sample negatives proportional to item \
+popularity to reduce exposure bias.
+14. **Stacking ensemble** — every ensemble so far uses fixed weights. Train \
+a lightweight meta-learner (logistic regression, small GBDT) on held-out \
+predictions from the base models. This learns which model to trust for \
+which users, instead of trusting all equally.
+
+## Lessons from prior runs — do not repeat these mistakes
+- **Listwise softmax fails on this data.** 7 implementations across 6 runs \
+all scored -0.002 to -0.005. The dataset is 33% positive, so softmax's \
+one-relevant-item assumption is wrong. Do NOT try listwise softmax again.
+- **Watch-time as a prediction TARGET is catastrophic** (-0.0375). But \
+watch-time as a training WEIGHT works (+0.0006). The difference matters.
+- **DIN/sequence attention adds nothing measurable** on this data — users \
+have too few repeat interactions (median 29 unique videos).
+- **Hard negatives need a curriculum.** Jumping straight to hard negatives \
+destabilises training (-0.0034, -0.0164). Start easy, transition to hard.
+- **Standalone LambdaRank/LightGBM loses** (-0.0032). Only useful as an \
+ensemble member, not a replacement for FM.
 
 ## The run ends if you stop making progress — read this
 The run stops automatically when the best valid primary has not improved by
@@ -197,8 +224,6 @@ So:
   predictions can extract value that equal-weight misses.
 
 ## Search strategy — spend your budget wisely
-- Try your most ambitious direction EARLY, while convergence headroom is large,
-  not after the cheap gains are exhausted.
 - The metric is nDCG@5 + GAUC. A method that directly optimises a ranking metric
   may have an advantage over one that optimises a proxy like logloss or BPR;
   judge it on the combined primary, not one component alone.
@@ -208,6 +233,12 @@ So:
 - Equal-weight ensembles plateau quickly. If you have multiple strong models,
   learned weights (e.g. stacking on held-out predictions) can extract value
   that equal-weight averaging cannot.
+- For ensemble fusion, try per-user z-score normalisation before averaging — \
+  it aligns score scales across members. Reciprocal rank fusion (RRF) is \
+  another option: rank each member's predictions per user, then fuse ranks.
+- Watch-time (play_time_ms) is useful as a TRAINING WEIGHT on BPR pairs, \
+  not as a prediction target. Weighting pairs by how long the user watched \
+  tells the model which positives are most informative.
 
 ## What is installed
 Your solutions are standalone scripts, so anything importable is available:
@@ -344,6 +375,15 @@ def _ledger_table() -> str:
         'apart** - treating that gap as a result is reading noise. To beat a',
         'number you must beat it by more than the +/-, not by any amount.',
         '',
+        '`+/-` can also read:',
+        '  `1seed` - scored on one seed because it landed well below the best,',
+        '            so the remaining seeds were not spent. The number is real',
+        '            but noisy. Re-testing the idea properly is up to you.',
+        '  `det`   - every seed produced byte-identical predictions, so your',
+        '            solution ignored `--seed`. Three runs measured one thing',
+        '            three times and the spread is UNKNOWN, not zero. If you',
+        '            want a spread, let the harness seed control the run.',
+        '',
         '`secs` is what the experiment cost to run, and it is a budget you are',
         'spending. An experiment is killed at 900s, so anything near that fails',
         'and teaches you nothing. Cost is mostly set by how many models you',
@@ -369,7 +409,9 @@ def _ledger_table() -> str:
             fmt(r.get('GAUC')),
             fmt(r.get('nDCG@5')),
             fmt(p),
-            ('%.6f' % sd) if sd is not None else '--',
+            ('%.6f' % sd) if sd is not None
+            else 'det' if r.get('deterministic')
+            else '1seed' if r.get('seed_mode') == 'screened' else '--',
             ('%d' % round(secs)) if isinstance(secs, (int, float)) else '--',
             ('%+.4f' % (p - ledger.BASELINE_VALID)) if p is not None else '--',
             r.get('verdict', '?'),
