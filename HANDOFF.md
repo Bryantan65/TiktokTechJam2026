@@ -1266,6 +1266,124 @@ reasoning:
 
 ---
 
+## The task is data-limited, not method-limited
+
+The most useful measurement of the project, and it explains every other result
+in this file. Run on `record-run-3`'s winner, predicting the real `valid`, with
+every arm fitting on a slice of `train` only - no validation row is used for
+training anywhere in this experiment, and `test` is never loaded.
+
+```
+A    6 days, OLD     fit 04-09..04-14, stop 04-15..04-21    0.589287
+C    6 days, RECENT  fit 04-15..04-20, stop 04-21           0.591171
+B   12 days, RECENT  fit 04-09..04-20, stop 04-21           0.604831
+
+recency   C - A = +0.00188    same volume, six days newer      2.4 sigma
+volume    B - C = +0.01366    same end date, twice the data   17 sigma
+```
+
+**Doubling the training data is worth +0.0137. The agent's entire modelling
+gain across eleven runs is +0.0040.** Recency matters too but seven times less,
+which also means the 8-day gap between the end of `train` and the start of
+`test` is not what is holding the score down.
+
+### Why this explains everything else
+
+Three independent measurements now say the same thing from different angles:
+
+```
+median user has 31 training rows, k=16       1.9 observations per parameter
+changing k (8/16/24/32)                      spread inside seed noise
+weight decay 1e-6 -> 1e-3                    monotonically WORSE, -0.0038 at 1e-3
+```
+
+The `l2` result is the sharp one. If those thinly-estimated user vectors were
+memorising noise, shrinking them would help. Shrinking them hurts, monotonically.
+So **the model is under-fit, not over-fit** - what it has learned from two
+observations per dimension is real signal, thinly measured. It is starved, not
+confused.
+
+That is why seven independent searches across four mechanism families all landed
+within 0.0009 of each other, and why six hyperparameter configurations moved the
+score less than the random seed does. They were all competing over the last
+thousandth of a signal whose first fifteen thousandths are set by how much data
+the split provides.
+
+### The corollary we deliberately did not take
+
+Adding `valid` to training is +11% rows. The marginal value of data has
+collapsed by then - 6->12 days is worth +0.0023/day, 12->13 days is worth
++0.0005/day - so extrapolating gives perhaps +0.001 to +0.002 on test. Real,
+and roughly a third of the agent's total gain.
+
+**We did not do it.** A TikTok ML engineer said in the official Q&A: *"try not
+to touch validation until it's time to test."* That is explicit guidance from
+the organisers and it settles the question on its own. Two further reasons make
+it the right call anyway: once `valid` is in training the only instrument left
+is `test`, so choosing "refit or not" would mean selecting on the split we are
+judged by; and the credibility of our result rests on no agent having trained on
+a validation row in eleven runs, which is exactly why +0.0040 on valid became
++0.0039 on test.
+
+Worth stating plainly in the write-up: we measured what the discipline cost and
+paid it deliberately, rather than not noticing it was available.
+
+## What was tested and found empty, 2026-08-29
+
+Each of these was a plausible idea with a mechanism behind it. All were measured
+rather than argued about, and all came back inside seed noise or worse.
+
+| tried | result |
+| --- | --- |
+| embedding dimension k = 8 / 16 / 24 / 32 | spread 0.00105, scattered; less than one seed sigma |
+| learning rate 0.0005 / 0.001 / 0.002 | both changes slightly worse |
+| weight decay 1e-5 / 1e-4 / 1e-3 | monotonically worse; -0.0038 at 1e-3 |
+| `video_features_statistic_pure.csv` (52 cols) | best column scores 0.5804 against item popularity's 0.5807 - identical |
+| `is_rand` exposure debiasing | 0 of 1,141,112 training rows have it set |
+| user-tag taste history | 78% coverage, GAUC 0.5216 - a coin flip within users |
+| transductive features from the impression list | eval-window exposure 0.4973, position 0.4833; blending them in hurts monotonically |
+| the 18-second label threshold | subsumed - 99.99% of valid videos appear in train, so `video_id` already encodes every static property |
+| seed rank-averaging on the winner | +0.00001. The earlier +0.0005 was measured on record-run-2's single BPR model; run 3's winner is already a 10-member ensemble and has done that variance reduction |
+| ApproxNDCG / NeuralNDCG | published as on-par with LambdaRank, which we measured at -0.0032. Three untried methods ruled out by one measurement we already had |
+| cold-start literature | addresses unseen ITEMS; ours are 99.99% seen. Wrong problem shape |
+
+### Two structural facts worth keeping
+
+```
+valid impressions whose video appears in train    99.99%
+valid impressions whose (user, video) pair does    1.62%
+same (user, video) seen twice in valid - labels agree   94.7%
+```
+
+The label is highly predictable from who-and-what. The problem is that you
+almost never get to observe that pair before being asked about it. Content
+features are redundant because the item is always known; personalisation is
+unlearnable because the pairing almost never is.
+
+### The ceiling, honestly estimated
+
+Earlier versions of this file quoted a "perfect video knowledge" ceiling of
+0.6197 on valid. That number was memorisation: it fit each video's rate on the
+same rows it scored, roughly 21 per video. Cross-validated properly - fit on
+train plus 90% of valid, score the held-out 10% - it collapses:
+
+```
+                        self-fitted   cross-validated
+video rate                0.6146          0.5834
+(video, tab) rate         0.6351          0.5919
+(user, video) rate        0.8477          0.4988
+```
+
+The `(user, video)` collapse from 0.85 to 0.50 is the proof - that number was
+the label leaking through one-row cells.
+
+**Our submission beats perfect knowledge of any single feature by +0.014.** The
+realistic ceiling is ~0.607 on valid, ~0.600 on test: seven runs span
+0.6046-0.6055 with sd 0.00034, and blending six of them - the highest anything
+reached - gives 0.6063.
+
+---
+
 ## Organiser Q&A, 2026-08-28 — what it settles
 
 A live Q&A session with the organisers. Four points bear on decisions we had
