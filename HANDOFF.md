@@ -1467,6 +1467,66 @@ runs really are decorrelated (r = 0.89-0.96 across runs against 0.98-0.99 within
 one) - but it consumes N times the compute budget, and whether it counts as one
 submission is exactly the open question in `docs/email-multirun-question.md`.
 
+### The tab decomposition, and same-tab negative sampling, 2026-08-29
+
+`long_view` rates run 4.2% on tab 0 to 48.9% on tab 4, and the organisers flagged
+conditioning on `tab` as an open and reasonable modelling decision. Splitting the
+winner's own valid predictions by whether a scored pair crosses a tab boundary:
+
+```
+                    share of scored pairs    model AUC
+same-tab  pairs           73.4%               0.6198
+cross-tab pairs           26.6%               0.8256
+
+51.3% of discriminative valid users span more than one tab
+```
+
+**The model is already near-solved on cross-tab ordering.** A single tab bias term
+wins those pairs, because the base rates are so far apart. The overall GAUC of
+0.672 is a blend of easy cross-tab pairs and the same-tab pairs it is much worse
+at - and same-tab is three quarters of everything the metric scores. This is the
+most useful structural fact we have about where the remaining error lives.
+
+That looked like shortcut learning: uniform within-user negative sampling hands
+the model ~27% easy pairs, so it can lower BPR loss through the tab bias without
+learning within-surface affinity. The fix would be to draw negatives from the
+same tab at rate p, making the tab term worthless.
+
+```
+p_same   primary              same-tab AUC   cross-tab AUC
+0.00     0.602635             0.6150         0.8245
+0.50     0.602517  -0.00012   0.6155         0.8251
+0.75     0.603214  +0.00058   0.6159         0.8227
+1.00     0.592396  -0.01024   0.6136         0.7699
+```
+
+`p=1.00` confirms the mechanism exists in the other direction: with no pair ever
+distinguishing tabs the bias goes untrained and cross-tab AUC collapses.
+
+But the shortcut theory is wrong. Same-tab AUC barely moves (0.6150 -> 0.6159)
+even when the model is forced onto those pairs, so same-tab discrimination is
+data-limited, not shortcut-limited - the same conclusion everything else reaches.
+
+#### The +0.00058 was one lucky seed
+
+Worth recording in full, because a single seed said the idea worked:
+
+```
+seed 0      p=0.00 0.602635   p=0.75 0.603217   diff +0.00058
+seed 1009   p=0.00 0.603244   p=0.75 0.602253   diff -0.00099
+seed 2027   p=0.00 0.603746   p=0.75 0.603187   diff -0.00056
+seed 3037   p=0.00 0.602873   p=0.75 0.601186   diff -0.00169
+seed 4051   p=0.00 0.603050   p=0.75 0.603042   diff -0.00001
+
+paired diff  mean -0.00053   sd 0.00087   t = -1.36 on 4 df
+```
+
+Seed 0 was the only positive of five. Reporting the first result would have
+published a gain that does not exist. Every number in this file that is quoted
+as an improvement should be read against this: single-seed differences below
+about 0.0008 are indistinguishable from nothing, and the only defence is
+replication.
+
 ### Two structural facts worth keeping
 
 ```
