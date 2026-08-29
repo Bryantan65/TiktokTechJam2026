@@ -1,0 +1,64 @@
+{
+  "iteration": 34,
+  "solution": "logs/record-run-12/solutions/035_candidate_set_prior.py",
+  "hypothesis": "draft transductive candidate-set prior from 26: use only the unlabeled target candidate list to rank repeated videos/authors/tags/music within each user, testing whether the logging policy's candidate composition contains implicit preference signal (transductive LTR/candidate-set context; web search summary on transductive learning in ranking).",
+  "parent": "26",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T15:17:17+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.600027,
+  "GAUC": 0.665517,
+  "nDCG@5": 0.534538,
+  "source_hash": "4b37de37bc4f",
+  "stdout_tail": "loading cached pred_cache\\018_content_bpr_anchor_v1_seed2_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed2_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed0_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed1_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed2_n124909.npy\nbehavior map uv keys 1092750\nbehavior map ua keys 1070326\nbehavior map utag keys 355242\nbehavior map umusic keys 1064176\nbehavior map utab keys 63579\nbehavior map udur keys 423756\nbehavior prior mean/std/coverage/strength 0.3453534805774771 0.0986902147715316 0.9710669367299394 0.4949977740409931\ncandidate prior users 18460 rows 124909 mean/std/nonzero 1.6944897702277872 1.1815921394985378 0.9683529609555757\nnode24 deep weight mean/min/max 0.20855755602542014 0.2001371365880417 0.45 behavior 0.12 candidate-set blend 0.25\nwrote 124,909 predictions",
+  "predictions_hash": "1fe8d2926e87",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.665517,
+      "nDCG@5": 0.534538,
+      "primary": 0.600027
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.665517,
+      "nDCG@5": 0.534538,
+      "primary": 0.600027
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.665517,
+      "nDCG@5": 0.534538,
+      "primary": 0.600027
+    }
+  ],
+  "seconds": 44.2,
+  "verdict": "noise",
+  "delta": -0.001473,
+  "tokens_in": 150542,
+  "tokens_out": 8411,
+  "tokens_cached": 117888,
+  "cost_usd": 0.224689,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 128.7,
+  "recovery_events": []
+}

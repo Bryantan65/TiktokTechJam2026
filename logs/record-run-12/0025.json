@@ -1,0 +1,64 @@
+{
+  "iteration": 25,
+  "solution": "logs/record-run-12/solutions/026_lgbm_rank_ensemble.py",
+  "hypothesis": "draft 14: add a learned LambdaRank tabular ranker at a readable 25% blend as a stacking-style diverse member, following the standard stacked/LTR ensemble idea (https://en.wikipedia.org/wiki/Ensemble_learning#Stacking).",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:46:42+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.600269,
+  "GAUC": 0.665251,
+  "nDCG@5": 0.535287,
+  "source_hash": "26db7372e64c",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['music_id', 'tag', 'video_type', 'upload_type', 'server_width', 'server_height', 'music_type']\nloaded video content rows 7583\ncontent cardinalities {'music_id': 7173, 'tag': 111, 'video_type': 4, 'upload_type': 15, 'server_width': 155, 'server_height': 121, 'music_type': 6} new_dim 47845\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed0_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed0_n124909.npy\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed1_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed1_n124909.npy\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed2_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed2_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed0_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed1_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed2_n124909.npy\ntraining LGBMRanker rows (1141112, 27) groups 26210 features 27\nnode24 deep weight mean/min/max 0.20855755602542014 0.2001371365880417 0.45 lgbm blend 0.25\nwrote 124,909 predictions",
+  "predictions_hash": "5936da0c8b8b",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 5.9e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.665244,
+      "nDCG@5": 0.535196,
+      "primary": 0.60022
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.665331,
+      "nDCG@5": 0.535336,
+      "primary": 0.600334
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.665179,
+      "nDCG@5": 0.535329,
+      "primary": 0.600254
+    }
+  ],
+  "seconds": 109.8,
+  "verdict": "noise",
+  "delta": -0.001231,
+  "tokens_in": 74788,
+  "tokens_out": 9116,
+  "tokens_cached": 57856,
+  "cost_usd": 0.162418,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 202.2,
+  "recovery_events": []
+}

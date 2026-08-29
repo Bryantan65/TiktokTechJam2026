@@ -1,0 +1,64 @@
+{
+  "iteration": 21,
+  "solution": "logs/record-run-12/solutions/022_debug_time_seq.py",
+  "hypothesis": "debug 20: node 20 missed every raw hourmin row because tuple-key matching used incompatible id/duration formatting; use the documented preserved raw log order to attach hourmin sequentially, keeping the same 20% time-prior blend with node-17 content ranks. If the prior still hurts after a non-missing join, time-prior fusion is likely exhausted.",
+  "parent": "20",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:32:17+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603917,
+  "GAUC": 0.67063,
+  "nDCG@5": 0.537204,
+  "source_hash": "5db8e6b0b015",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['music_id', 'tag', 'video_type', 'upload_type', 'server_width', 'server_height', 'music_type']+seq_time_prior\nloaded video content rows 7583\ncontent cardinalities {'music_id': 7173, 'tag': 111, 'video_type': 4, 'upload_type': 15, 'server_width': 155, 'server_height': 121, 'music_type': 6} new_dim 47845\nloading cached content_bpr_anchor_v1 seed 0 predictions pred_cache\\018_content_bpr_anchor_v1_seed0_n124909.npy\nloading cached content_bce_v1 seed 0 predictions pred_cache\\018_content_bce_v1_seed0_n124909.npy\nloading cached content_bpr_anchor_v1 seed 1 predictions pred_cache\\018_content_bpr_anchor_v1_seed1_n124909.npy\nloading cached content_bce_v1 seed 1 predictions pred_cache\\018_content_bce_v1_seed1_n124909.npy\nloading cached content_bpr_anchor_v1 seed 2 predictions pred_cache\\018_content_bpr_anchor_v1_seed2_n124909.npy\nloading cached content_bce_v1 seed 2 predictions pred_cache\\018_content_bce_v1_seed2_n124909.npy\nloaded raw hour sequence rows 1436609\ntime sequential missing/out-of-range 0 of 1436609 raw_short 0\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "bfcc2d95d0f9",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67063,
+      "nDCG@5": 0.537204,
+      "primary": 0.603917
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67063,
+      "nDCG@5": 0.537204,
+      "primary": 0.603917
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67063,
+      "nDCG@5": 0.537204,
+      "primary": 0.603917
+    }
+  ],
+  "seconds": 58.8,
+  "verdict": "KEPT",
+  "delta": 0.002417,
+  "tokens_in": 123494,
+  "tokens_out": 6177,
+  "tokens_cached": 85888,
+  "cost_usd": 0.198729,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 113.6,
+  "recovery_events": []
+}

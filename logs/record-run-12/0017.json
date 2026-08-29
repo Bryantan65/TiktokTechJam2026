@@ -1,0 +1,64 @@
+{
+  "iteration": 17,
+  "solution": "logs/record-run-12/solutions/018_content_features_rank.py",
+  "hypothesis": "draft 9: append categorical video side information (music/tag/type/upload/size/music_type) to the FM fields and train the same BPR/BCE rank-fusion ensemble; FMs are designed to exploit sparse side information for recommendation/cold-start style generalisation (https://www.csie.ntu.edu.tw/~b97053/paper/Rendle2010FM.pdf). This is a new mechanism, not another node-11 blend tweak.",
+  "parent": "11",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:11:10+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604866,
+  "GAUC": 0.67186,
+  "nDCG@5": 0.537872,
+  "source_hash": "73d033fa5c2f",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+['music_id', 'tag', 'video_type', 'upload_type', 'server_width', 'server_height', 'music_type']\nloaded video content rows 7583\ncontent cardinalities {'music_id': 7173, 'tag': 111, 'video_type': 4, 'upload_type': 15, 'server_width': 155, 'server_height': 121, 'music_type': 6} new_dim 47845\ntraining content_bpr_anchor_v1 seed 0 member\ntraining content_bce_v1 seed 0 member\ntraining content_bpr_anchor_v1 seed 1 member\ntraining content_bce_v1 seed 1 member\ntraining content_bpr_anchor_v1 seed 2 member\ntraining content_bce_v1 seed 2 member\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8f76a6f01500",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67186,
+      "nDCG@5": 0.537872,
+      "primary": 0.604866
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67186,
+      "nDCG@5": 0.537872,
+      "primary": 0.604866
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67186,
+      "nDCG@5": 0.537872,
+      "primary": 0.604866
+    }
+  ],
+  "seconds": 862.3,
+  "verdict": "KEPT",
+  "delta": 0.003366,
+  "tokens_in": 99804,
+  "tokens_out": 5605,
+  "tokens_cached": 75264,
+  "cost_usd": 0.155032,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 920.5,
+  "recovery_events": []
+}

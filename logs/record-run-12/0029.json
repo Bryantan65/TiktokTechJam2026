@@ -1,0 +1,64 @@
+{
+  "iteration": 29,
+  "solution": "logs/record-run-12/solutions/030_global_quality_prior.py",
+  "hypothesis": "improve 26: node 26's personalized prior helps, so add a small 4% global item-quality prior (video/author/tag/music/tab/duration target rates) to catch generally good videos that user-sparse histories miss while keeping the 12% behavior signal intact.",
+  "parent": "26",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:54:15+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605056,
+  "GAUC": 0.672271,
+  "nDCG@5": 0.537841,
+  "source_hash": "dca627191d80",
+  "stdout_tail": "behavior map ua keys 1070326\nbehavior map utag keys 355242\nbehavior map umusic keys 1064176\nbehavior map utab keys 63579\nbehavior map udur keys 423756\nbehavior prior mean/std/coverage/strength 0.3453534805774771 0.0986902147715316 0.9710669367299394 0.4949977740409931\nquality map video keys 7538\nquality map author keys 6482\nquality map tag keys 111\nquality map music keys 7160\nquality map tab keys 15\nquality map dur keys 82\nquality prior mean/std/coverage/strength 0.3325582181159238 0.10541297651098964 1.0 3.994899525116395\nnode24 deep weight mean/min/max 0.20855755602542014 0.2001371365880417 0.45 blend base=0.84 behavior=0.12 quality=0.04\nwrote 124,909 predictions",
+  "predictions_hash": "b543bac174e4",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672271,
+      "nDCG@5": 0.537841,
+      "primary": 0.605056
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672271,
+      "nDCG@5": 0.537841,
+      "primary": 0.605056
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672271,
+      "nDCG@5": 0.537841,
+      "primary": 0.605056
+    }
+  ],
+  "seconds": 46.0,
+  "verdict": "KEPT",
+  "delta": 0.003556,
+  "tokens_in": 94938,
+  "tokens_out": 6274,
+  "tokens_cached": 72192,
+  "cost_usd": 0.155701,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 92.1,
+  "recovery_events": []
+}

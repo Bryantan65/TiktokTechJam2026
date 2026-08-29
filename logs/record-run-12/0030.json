@@ -1,0 +1,64 @@
+{
+  "iteration": 30,
+  "solution": "logs/record-run-12/solutions/031_rrf_top_fusion.py",
+  "hypothesis": "improve 26: node 26 is a rank-average ensemble; test a readable 30% top-heavy reciprocal-rank fusion (RRF, related to curriculum/hard top ranking ideas; https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) so models that strongly agree on top-5 get amplified for nDCG without changing cached members.",
+  "parent": "26",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:56:14+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604467,
+  "GAUC": 0.671083,
+  "nDCG@5": 0.537851,
+  "source_hash": "cac05c11300d",
+  "stdout_tail": "loading cached pred_cache\\018_content_bce_v1_seed1_n124909.npy\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed2_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed2_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed0_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed1_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed2_n124909.npy\nbehavior map uv keys 1092750\nbehavior map ua keys 1070326\nbehavior map utag keys 355242\nbehavior map umusic keys 1064176\nbehavior map utab keys 63579\nbehavior map udur keys 423756\nbehavior prior mean/std/coverage/strength 0.3453534805774771 0.0986902147715316 0.9710669367299394 0.4949977740409931\nnode24 deep weight mean/min/max 0.20855755602542014 0.2001371365880417 0.45 behavior blend 0.12 plus 30% RRF(c=10)\nwrote 124,909 predictions",
+  "predictions_hash": "292e08a975e2",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671083,
+      "nDCG@5": 0.537851,
+      "primary": 0.604467
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671083,
+      "nDCG@5": 0.537851,
+      "primary": 0.604467
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671083,
+      "nDCG@5": 0.537851,
+      "primary": 0.604467
+    }
+  ],
+  "seconds": 42.4,
+  "verdict": "KEPT",
+  "delta": 0.002967,
+  "tokens_in": 157456,
+  "tokens_out": 7364,
+  "tokens_cached": 128768,
+  "cost_usd": 0.209744,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 115.4,
+  "recovery_events": []
+}

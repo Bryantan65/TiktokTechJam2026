@@ -1,0 +1,64 @@
+{
+  "iteration": 6,
+  "solution": "logs/record-run-12/solutions/006_watch_weight_valid.py",
+  "hypothesis": "debug 4: the dev screen proved non-unit watch-time weights reach training; run the row-order/date-aligned anchored weighted BPR on official valid, using raw play_time_ms only as pair weights. This tests whether the watch-time weighting signal survives outside the dev holdout.",
+  "parent": "4",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T13:34:40+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.600748,
+  "GAUC": 0.666436,
+  "nDCG@5": 0.535061,
+  "source_hash": "8727935eeca2",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwatch-time row-order alignment length OK: 1,141,112\nwatch weights mean=0.9487 std=0.2905 min=0.625 max=1.691\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "071d8e288a2c",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000655,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.666972,
+      "nDCG@5": 0.535434,
+      "primary": 0.601203
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.666821,
+      "nDCG@5": 0.535267,
+      "primary": 0.601044
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.665514,
+      "nDCG@5": 0.534482,
+      "primary": 0.599998
+    }
+  ],
+  "seconds": 242.4,
+  "verdict": "noise",
+  "delta": -0.000752,
+  "tokens_in": 75652,
+  "tokens_out": 3967,
+  "tokens_cached": 69233,
+  "cost_usd": 0.090338,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 1001.0,
+  "recovery_events": []
+}

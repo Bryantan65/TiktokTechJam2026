@@ -1,0 +1,64 @@
+{
+  "iteration": 12,
+  "solution": "logs/record-run-12/solutions/012_bpr_bce_seedbag_rank75.py",
+  "hypothesis": "improve 11: with rank fusion outperforming z-score fusion, change only the rank blend weight to 75/25 BPR/BCE, reusing unchanged cached members. This probes whether the best rank-fusion weight is slightly more BPR-heavy than 70/30.",
+  "parent": "11",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T13:48:22+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603979,
+  "GAUC": 0.670777,
+  "nDCG@5": 0.53718,
+  "source_hash": "c5a22c9c5368",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloading cached bpr_anchor_v1 seed 0 predictions pred_cache\\007_bpr_anchor_v1_seed0_n124909.npy\nloading cached bce_v1 seed 0 predictions pred_cache\\007_bce_v1_seed0_n124909.npy\nloading cached bpr_anchor_v1 seed 1 predictions pred_cache\\007_bpr_anchor_v1_seed1_n124909.npy\nloading cached bce_v1 seed 1 predictions pred_cache\\007_bce_v1_seed1_n124909.npy\nloading cached bpr_anchor_v1 seed 2 predictions pred_cache\\007_bpr_anchor_v1_seed2_n124909.npy\nloading cached bce_v1 seed 2 predictions pred_cache\\007_bce_v1_seed2_n124909.npy\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "4ec846c7940b",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670777,
+      "nDCG@5": 0.53718,
+      "primary": 0.603979
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670777,
+      "nDCG@5": 0.53718,
+      "primary": 0.603979
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670777,
+      "nDCG@5": 0.53718,
+      "primary": 0.603979
+    }
+  ],
+  "seconds": 26.7,
+  "verdict": "KEPT",
+  "delta": 0.002479,
+  "tokens_in": 75652,
+  "tokens_out": 3967,
+  "tokens_cached": 69233,
+  "cost_usd": 0.090338,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 1001.0,
+  "recovery_events": []
+}

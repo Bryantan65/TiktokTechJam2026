@@ -1,0 +1,64 @@
+{
+  "iteration": 27,
+  "solution": "logs/record-run-12/solutions/028_behavior_prior_gated.py",
+  "hypothesis": "improve 26: the history prior helped, but flat 12% may over-trust sparse matches; gate the blend from 4% to 20% by smoothed evidence strength so cold rows stay near node24 and repeated user-content rows get more personalization.",
+  "parent": "26",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:50:43+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605007,
+  "GAUC": 0.672285,
+  "nDCG@5": 0.537729,
+  "source_hash": "cfb9e4e7dfdd",
+  "stdout_tail": "loading cached pred_cache\\018_content_bce_v1_seed1_n124909.npy\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed2_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed2_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed0_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed1_n124909.npy\nloading cached pred_cache\\024_deepfm_content_bpr_v1_seed2_n124909.npy\nbehavior map uv keys 1092750\nbehavior map ua keys 1070326\nbehavior map utag keys 355242\nbehavior map umusic keys 1064176\nbehavior map utab keys 63579\nbehavior map udur keys 423756\nbehavior prior mean/std/coverage/strength 0.3453534805774771 0.0986902147715316 0.9710669367299394 0.4949977740409931\nnode24 deep weight mean/min/max 0.20855755602542014 0.2001371365880417 0.45 behavior gated alpha mean/min/max 0.1056337949573842 0.04 0.2\nwrote 124,909 predictions",
+  "predictions_hash": "cfcdd717fa90",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672285,
+      "nDCG@5": 0.537729,
+      "primary": 0.605007
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672285,
+      "nDCG@5": 0.537729,
+      "primary": 0.605007
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672285,
+      "nDCG@5": 0.537729,
+      "primary": 0.605007
+    }
+  ],
+  "seconds": 45.1,
+  "verdict": "KEPT",
+  "delta": 0.003507,
+  "tokens_in": 58856,
+  "tokens_out": 5322,
+  "tokens_cached": 42880,
+  "cost_usd": 0.1146,
+  "model": "gpt-5.5",
+  "agent_iteration": 16,
+  "wall_seconds": 81.9,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 31,
+  "solution": "logs/record-run-12/solutions/032_ips_bpr_blend.py",
+  "hypothesis": "draft 8: train a readable 30% IPS-weighted BPR content-FM member using random-log vs standard-log video exposure ratios to counter exposure bias (inverse propensity scoring for unbiased LTR; https://www.cs.cornell.edu/people/tj/publications/joachims_etal_17a.pdf), then blend with node 26.",
+  "parent": "26",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:58:49+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604976,
+  "GAUC": 0.672317,
+  "nDCG@5": 0.537636,
+  "source_hash": "9b2922125e24",
+  "stdout_tail": "ips-bpr seed 1 epoch 5 loss 0.5653 primary 0.60170\nips-bpr seed 1 epoch 6 loss 0.5505 primary 0.60006\nips-bpr seed 1 epoch 7 loss 0.5361 primary 0.59891\nips-bpr seed 1 epoch 8 loss 0.5196 primary 0.59543\nips-bpr seed 1 epoch 9 loss 0.5042 primary 0.59387\ntraining ips_video_bpr_v1 seed 2\nips-bpr seed 2 epoch 1 loss 0.6742 primary 0.59909\nips-bpr seed 2 epoch 2 loss 0.6061 primary 0.60287\nips-bpr seed 2 epoch 3 loss 0.5905 primary 0.60218\nips-bpr seed 2 epoch 4 loss 0.5794 primary 0.60271\nips-bpr seed 2 epoch 5 loss 0.5686 primary 0.60215\nips-bpr seed 2 epoch 6 loss 0.5534 primary 0.60017\nips-bpr seed 2 epoch 7 loss 0.5371 primary 0.59954\nnode24 deep weight mean/min/max 0.20855755602542014 0.2001371365880417 0.45 behavior 0.12 ips-bpr blend 0.30\nwrote 124,909 predictions",
+  "predictions_hash": "db51333586e4",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672317,
+      "nDCG@5": 0.537636,
+      "primary": 0.604976
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672317,
+      "nDCG@5": 0.537636,
+      "primary": 0.604976
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672317,
+      "nDCG@5": 0.537636,
+      "primary": 0.604976
+    }
+  ],
+  "seconds": 699.2,
+  "verdict": "KEPT",
+  "delta": 0.003476,
+  "tokens_in": 198279,
+  "tokens_out": 10695,
+  "tokens_cached": 162560,
+  "cost_usd": 0.277527,
+  "model": "gpt-5.5",
+  "agent_iteration": 20,
+  "wall_seconds": 811.8,
+  "recovery_events": []
+}

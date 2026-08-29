@@ -1,0 +1,64 @@
+{
+  "iteration": 23,
+  "solution": "logs/record-run-12/solutions/024_deepfm_content.py",
+  "hypothesis": "draft 5: test a new mechanism rather than another content-FM variant: DeepFM high-order interactions on the content fields, following Guo et al. KDD 2017 https://www.ijcai.org/proceedings/2017/0239.pdf, blended at a readable 30% with the cached node-17 ensemble.",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:41:37+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60493,
+  "GAUC": 0.67213,
+  "nDCG@5": 0.53773,
+  "source_hash": "540ffa2085eb",
+  "stdout_tail": "loaded video content rows 7583\ncontent cardinalities {'music_id': 7173, 'tag': 111, 'video_type': 4, 'upload_type': 15, 'server_width': 155, 'server_height': 121, 'music_type': 6} new_dim 47845\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed0_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed0_n124909.npy\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed1_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed1_n124909.npy\nloading cached pred_cache\\018_content_bpr_anchor_v1_seed2_n124909.npy\nloading cached pred_cache\\018_content_bce_v1_seed2_n124909.npy\ntraining deepfm_content_bpr_v1 seed 2\ndeep seed 2 epoch 1 loss 0.6818 primary 0.59589 14.0s\ndeep seed 2 epoch 2 loss 0.6017 primary 0.60239 15.0s\ndeep seed 2 epoch 3 loss 0.5848 primary 0.60207 14.6s\ndeep seed 2 epoch 4 loss 0.5742 primary 0.60186 14.9s\ndeep seed 2 epoch 5 loss 0.5654 primary 0.59962 15.3s\nwrote 124,909 predictions",
+  "predictions_hash": "a00db9ea2a0f",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000128,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671994,
+      "nDCG@5": 0.537683,
+      "primary": 0.604839
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672,
+      "nDCG@5": 0.537752,
+      "primary": 0.604876
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672395,
+      "nDCG@5": 0.537756,
+      "primary": 0.605076
+    }
+  ],
+  "seconds": 121.5,
+  "verdict": "KEPT",
+  "delta": 0.00343,
+  "tokens_in": 87263,
+  "tokens_out": 6671,
+  "tokens_cached": 58496,
+  "cost_usd": 0.167876,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 190.3,
+  "recovery_events": []
+}

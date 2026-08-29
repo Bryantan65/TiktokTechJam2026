@@ -1,0 +1,64 @@
+{
+  "iteration": 22,
+  "solution": "logs/record-run-12/solutions/023_content_time_fields.py",
+  "hypothesis": "improve 17: node 21 fixed hourmin alignment but showed a hand-smoothed prior is the wrong use of time; train a content+hour/quarter/dow BPR FM member so time interacts with user/item/content embeddings, then blend it at 30% with the cached node-17 ensemble. This gives direction 6 one refined test after the debug.",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T14:33:54+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604845,
+  "GAUC": 0.671789,
+  "nDCG@5": 0.537902,
+  "source_hash": "3da145a2a5aa",
+  "stdout_tail": "loaded video content rows 7583\ncontent cardinalities {'music_id': 7173, 'tag': 111, 'video_type': 4, 'upload_type': 15, 'server_width': 155, 'server_height': 121, 'music_type': 6} new_dim 47845\nloading cached content_bpr_anchor_v1 seed 0 predictions pred_cache\\018_content_bpr_anchor_v1_seed0_n124909.npy\nloading cached content_bce_v1 seed 0 predictions pred_cache\\018_content_bce_v1_seed0_n124909.npy\nloading cached content_bpr_anchor_v1 seed 1 predictions pred_cache\\018_content_bpr_anchor_v1_seed1_n124909.npy\nloading cached content_bce_v1 seed 1 predictions pred_cache\\018_content_bce_v1_seed1_n124909.npy\nloading cached content_bpr_anchor_v1 seed 2 predictions pred_cache\\018_content_bpr_anchor_v1_seed2_n124909.npy\nloading cached content_bce_v1 seed 2 predictions pred_cache\\018_content_bce_v1_seed2_n124909.npy\nloaded raw hour sequence rows 1436609\ntime sequential missing/out-of-range 0 of 1436609\ntime fields added ['hour', 'quarter', 'dow'] new_dim 47975\ntraining content_time_bpr_fast_v1 seed 0 member\ntraining content_time_bpr_fast_v1 seed 1 member\ntraining content_time_bpr_fast_v1 seed 2 member\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "657007b7361e",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671789,
+      "nDCG@5": 0.537902,
+      "primary": 0.604845
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671789,
+      "nDCG@5": 0.537902,
+      "primary": 0.604845
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671789,
+      "nDCG@5": 0.537902,
+      "primary": 0.604845
+    }
+  ],
+  "seconds": 394.7,
+  "verdict": "KEPT",
+  "delta": 0.003345,
+  "tokens_in": 83127,
+  "tokens_out": 4820,
+  "tokens_cached": 59264,
+  "cost_usd": 0.137489,
+  "model": "gpt-5.5",
+  "agent_iteration": 11,
+  "wall_seconds": 432.6,
+  "recovery_events": []
+}
