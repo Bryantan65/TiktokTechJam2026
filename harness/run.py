@@ -75,6 +75,39 @@ N_SEEDS = int(os.environ.get('HARNESS_SEEDS', 3))
 # below the incumbent cannot become best on a re-measurement: seed spread on
 # this data is ~0.0008, so 0.002 is about 2.5 sigma.
 ADAPTIVE_SEEDS = os.environ.get('HARNESS_ADAPTIVE_SEEDS', '0') != '0'
+
+# Which device solutions are told to use. Solutions take --device and default to
+# cpu, and the harness never passed the flag, so every run so far was CPU-only
+# by omission rather than by choice.
+#
+# Worth fixing because agent wall-clock is a scored criterion and GPU-hours
+# explicitly are not: the rules replace GPU-hours with wall-clock precisely so
+# that using a GPU is not penalised. Measured on record-run-3's winner, one seed,
+# 10-member ensemble: 251 s CPU vs 164 s GPU, primary 0.605339 vs 0.605323 - a
+# difference of 0.000016 against a 0.0008 noise floor, so the answer is the same.
+#
+# 'auto' uses CUDA when torch reports it; set HARNESS_DEVICE=cpu to force it off.
+DEVICE = os.environ.get('HARNESS_DEVICE', 'auto')
+
+
+def _resolve_device():
+    if DEVICE != 'auto':
+        return DEVICE
+    try:
+        import torch
+        return 'cuda' if torch.cuda.is_available() else 'cpu'
+    except Exception:
+        return 'cpu'
+
+
+def _accepts_device(solution):
+    """Does this solution take --device? One archived solution does not, and
+    passing an unknown flag to argparse exits 2 before any training starts."""
+    try:
+        with open(solution, encoding='utf-8') as fh:
+            return '--device' in fh.read()
+    except OSError:
+        return False
 SCREEN_MARGIN = float(os.environ.get('HARNESS_SCREEN_MARGIN', 0.002))
 
 
@@ -167,13 +200,15 @@ def _run_seeds(solution, split, data_dir, seeds, timeout, n_rows):
     env = _seed_env(len(seeds))
     procs, paths = [], []
     try:
+        dev = _resolve_device()
+        device_args = ['--device', dev] if _accepts_device(solution) else []
         for s in seeds:
             fd, path = tempfile.mkstemp(suffix='.npy')
             os.close(fd)
             paths.append(path)
             procs.append(subprocess.Popen(
                 [sys.executable, solution, '--data_dir', data_dir,
-                 '--split', split, '--out', path, '--seed', str(s)],
+                 '--split', split, '--out', path, '--seed', str(s)] + device_args,
                 cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, env=env))
 
