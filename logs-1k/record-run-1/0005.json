@@ -1,0 +1,30 @@
+{
+  "iteration": 5,
+  "solution": "logs-1k/record-run-1/solutions/005_bpr_history_fm.py",
+  "hypothesis": "improve 4: the dev screen for causal same-author/video history buckets was healthy and improved top-k signal, so promote the same implementation unchanged to public valid. This tests whether the DIN-inspired history signal transfers beyond the train-only holdout.",
+  "parent": "4",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T05:02:45+08:00",
+  "status": "duplicate",
+  "error": "identical source already run at iteration 4 (valid_primary 0.634254)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "12c52e841930",
+  "verdict": "duplicate",
+  "tokens_in": 38508,
+  "tokens_out": 1562,
+  "tokens_cached": 29440,
+  "cost_usd": 0.05301,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 540.0,
+  "recovery_events": []
+}

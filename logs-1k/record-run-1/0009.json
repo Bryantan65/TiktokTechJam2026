@@ -1,0 +1,30 @@
+{
+  "iteration": 9,
+  "solution": "logs-1k/record-run-1/solutions/008_bpr_watch_weight.py",
+  "hypothesis": "improve 8: the watch-time weighted BPR passed the dev disaster screen, so run the same implementation on public valid to test whether longer-view positives improve the causal-history BPR model. This is a direct promotion of node 8, not a new variant.",
+  "parent": "8",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T05:27:54+08:00",
+  "status": "duplicate",
+  "error": "identical source already run at iteration 8 (valid_primary 0.634047)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "956359c8165c",
+  "verdict": "duplicate",
+  "tokens_in": 36362,
+  "tokens_out": 502,
+  "tokens_cached": 21760,
+  "cost_usd": 0.052405,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 8.1,
+  "recovery_events": []
+}

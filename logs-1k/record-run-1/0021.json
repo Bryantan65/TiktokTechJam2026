@@ -1,0 +1,64 @@
+{
+  "iteration": 21,
+  "solution": "logs-1k/record-run-1/solutions/021_lgbm_binary_debug_dev.py",
+  "hypothesis": "debug 20: the LambdaRank version was far below random, so isolate whether the bug is query construction by training the same aggregate/tree feature set with ordinary binary logloss and no groups.",
+  "parent": "20",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T07:10:30+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.330845,
+  "GAUC": 0.484679,
+  "nDCG@5": 0.177012,
+  "source_hash": "ac7d673281f5",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+agg_lgb_binary\napply_codes: 9085/1753633 unknown values mapped to 971\napply_codes: 1269007/1753633 unknown values mapped to 1456475\napply_codes: 348780/1753633 unknown values mapped to 612891\nbuilt LightGBM binary features: 27 columns from ['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']; prior=0.2628\ntraining binary LightGBM rows=3302351 cols=27\nbest_iteration=1\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "b6efddbb24d6",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.063245,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.475717,
+      "nDCG@5": 0.258103,
+      "primary": 0.36691
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.41834,
+      "nDCG@5": 0.097297,
+      "primary": 0.257818
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.559981,
+      "nDCG@5": 0.175635,
+      "primary": 0.367808
+    }
+  ],
+  "seconds": 276.2,
+  "verdict": "screen",
+  "delta": -0.314255,
+  "tokens_in": 58148,
+  "tokens_out": 2980,
+  "tokens_cached": 49024,
+  "cost_usd": 0.077123,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 459.1,
+  "recovery_events": []
+}

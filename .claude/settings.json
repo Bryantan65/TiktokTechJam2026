@@ -1,7 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(../../../.venv/Scripts/python.exe -c ' *)"
+      "Bash(../../../.venv/Scripts/python.exe -c ' *)",
+      "Bash(ls:*)",
+      "Bash(python -c:*)",
+      "Bash(python -m pip:*)",
+      "Bash(pip show:*)",
+      "Bash(conda env list:*)",
+      "Read(//c/Users/kaiba/AppData/Local/Programs/Python/**)",
+      "Bash(\"C:/Users/kaiba/AppData/Local/Programs/Python/Python311/python.exe\" -m pip list)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026"
     ]
   }
 }

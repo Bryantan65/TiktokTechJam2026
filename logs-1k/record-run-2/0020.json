@@ -1,0 +1,64 @@
+{
+  "iteration": 20,
+  "solution": "logs-1k/record-run-2/solutions/020_bpr_userctx_statblend.py",
+  "hypothesis": "improve 19: add a cheap smoothed item/author/time statistical ranker as a 25% per-user z-score blend with the high-nDCG user-context FM; screen on dev because this post-hoc component could simply duplicate or overfit item popularity.",
+  "parent": "19",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T16:52:23+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.641683,
+  "GAUC": 0.672275,
+  "nDCG@5": 0.611091,
+  "source_hash": "902dc1efb49e",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\naligned hourmin for train: 3,302,351/3,302,351 rows after scanning 5,054,786 raw rows in 20.6s\naligned hourmin for valid: 1,753,633/1,753,633 rows after scanning 5,055,984 raw rows in 17.9s\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "75cb1b48661f",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.000552,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672053,
+      "nDCG@5": 0.61007,
+      "primary": 0.641062
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672588,
+      "nDCG@5": 0.611644,
+      "primary": 0.642116
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672184,
+      "nDCG@5": 0.611558,
+      "primary": 0.641871
+    }
+  ],
+  "seconds": 332.3,
+  "verdict": "screen",
+  "delta": -0.003417,
+  "tokens_in": 63420,
+  "tokens_out": 6450,
+  "tokens_cached": 46976,
+  "cost_usd": 0.129098,
+  "model": "gpt-5.5",
+  "agent_iteration": 9,
+  "wall_seconds": 390.9,
+  "recovery_events": []
+}

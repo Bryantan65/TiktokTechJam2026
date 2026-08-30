@@ -1,0 +1,30 @@
+{
+  "iteration": 18,
+  "solution": "logs-1k/record-run-2/solutions/018_bpr_time_userctx.py",
+  "hypothesis": "improve 17: the cheap user-context crosses screened above node 16 on dev without timing out, so run the same model on valid to test whether its nDCG lift transfers.",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T16:39:45+08:00",
+  "status": "duplicate",
+  "error": "identical source already run at iteration 17 (valid_primary 0.649539)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "3ee460c5ed1c",
+  "verdict": "duplicate",
+  "tokens_in": 46086,
+  "tokens_out": 1908,
+  "tokens_cached": 36928,
+  "cost_usd": 0.060444,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 710.5,
+  "recovery_events": []
+}

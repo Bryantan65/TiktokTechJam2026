@@ -1,0 +1,65 @@
+{
+  "iteration": 15,
+  "solution": "logs-1k/record-run-1/solutions/015_mtl_aux100_debug.py",
+  "hypothesis": "debug 14: the aux_weight=0.05 change no-oped, so make the auxiliary term unmistakably active with aux_weight=1.0 and print join/aux-loss diagnostics to verify the raw tasks affect the checkpointed model.",
+  "parent": "14",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T06:24:42+08:00",
+  "status": "no-op",
+  "error": "no-op: identical predictions as iteration 12 (012_multitask_fm_valid.py). Different code, same model - nothing was actually tested. Common cause: the new method ran but a \"keep the best checkpoint\" rule discarded its result, so the final model is the parent. Check that your change reaches the model that gets saved. This is NOT evidence about the technique.",
+  "valid_primary": 0.643428,
+  "GAUC": 0.674529,
+  "nDCG@5": 0.612328,
+  "source_hash": "d5a1712bfc15",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+raw_aux_mtl_aux100\nraw auxiliary csv files not found; MTL auxiliaries disabled\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "6a54e6476e6f",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.000581,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.674733,
+      "nDCG@5": 0.613464,
+      "primary": 0.644099
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.674013,
+      "nDCG@5": 0.61216,
+      "primary": 0.643086
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67484,
+      "nDCG@5": 0.611361,
+      "primary": 0.6431
+    }
+  ],
+  "no_op_twin": 12,
+  "seconds": 768.8,
+  "verdict": "no-op",
+  "delta": -0.001672,
+  "tokens_in": 60547,
+  "tokens_out": 6394,
+  "tokens_cached": 49536,
+  "cost_usd": 0.116237,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 1285.7,
+  "recovery_events": []
+}

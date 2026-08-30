@@ -1,0 +1,64 @@
+{
+  "iteration": 38,
+  "solution": "logs-1k/record-run-1/solutions/038_target_count_bucket_fm.py",
+  "hypothesis": "draft 6: add leakage-safe smoothed target/count encoding buckets for video/author interactions as categorical FM fields, following CTR feature-engineering practice with target and count encodings (Kaggle Avazu: https://www.kaggle.com/competitions/avazu-ctr-prediction/data). Screen first because encodings can overfit badly even with leave-one-out.",
+  "parent": "12",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T09:30:48+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.635047,
+  "GAUC": 0.672454,
+  "nDCG@5": 0.59764,
+  "source_hash": "21f002abd8cb",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+TE_count_buckets+raw_aux_mtl\nadded 10 target/count bucket fields; global rate=0.2628; dim 2070366->2070535\nraw auxiliaries unavailable; running as single-task plus TE buckets\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "fcde45b00917",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.005752,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672016,
+      "nDCG@5": 0.591402,
+      "primary": 0.631709
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.673392,
+      "nDCG@5": 0.590095,
+      "primary": 0.631744
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671955,
+      "nDCG@5": 0.611423,
+      "primary": 0.641689
+    }
+  ],
+  "seconds": 717.7,
+  "verdict": "screen",
+  "delta": -0.010053,
+  "tokens_in": 101191,
+  "tokens_out": 5902,
+  "tokens_cached": 82048,
+  "cost_usd": 0.147901,
+  "model": "gpt-5.5",
+  "agent_iteration": 34,
+  "wall_seconds": 781.2,
+  "recovery_events": []
+}

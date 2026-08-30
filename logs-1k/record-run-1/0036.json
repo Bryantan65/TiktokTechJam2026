@@ -1,0 +1,65 @@
+{
+  "iteration": 36,
+  "solution": "logs-1k/record-run-1/solutions/036_mtl_find_raw_aux.py",
+  "hypothesis": "debug 35: node 35 no-oped because raw feedback logs were not under --data_dir; search likely sibling/ancestor KuaiRand-Pure data directories and print hit/finite counts to verify the auxiliary loss is actually active before spending valid.",
+  "parent": "35",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T09:18:08+08:00",
+  "status": "no-op",
+  "error": "no-op: identical predictions as iteration 11 (011_multitask_fm.py). Different code, same model - nothing was actually tested. Common cause: the new method ran but a \"keep the best checkpoint\" rule discarded its result, so the final model is the parent. Check that your change reaches the model that gets saved. This is NOT evidence about the technique.",
+  "valid_primary": 0.638064,
+  "GAUC": 0.667736,
+  "nDCG@5": 0.608393,
+  "source_hash": "646c2fbc7255",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+raw_aux_mtl_find\nraw feedback logs not found; tried 88 candidate directories\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "b8696f72942f",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.001116,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669535,
+      "nDCG@5": 0.604194,
+      "primary": 0.636865
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.6689,
+      "nDCG@5": 0.609245,
+      "primary": 0.639072
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.664772,
+      "nDCG@5": 0.611739,
+      "primary": 0.638255
+    }
+  ],
+  "no_op_twin": 11,
+  "seconds": 377.9,
+  "verdict": "no-op",
+  "delta": -0.007036,
+  "tokens_in": 111864,
+  "tokens_out": 5105,
+  "tokens_cached": 91264,
+  "cost_usd": 0.148182,
+  "model": "gpt-5.5",
+  "agent_iteration": 32,
+  "wall_seconds": 428.5,
+  "recovery_events": []
+}

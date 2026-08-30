@@ -1,0 +1,30 @@
+{
+  "iteration": 22,
+  "solution": "logs-1k/record-run-2/solutions/021_bpr_time_userctx_hourneg.py",
+  "hypothesis": "improve 21: the same-hour hard negative variant screened slightly above node 17/19-style dev behavior while keeping high nDCG, so run it on the real valid split to see whether the sampler change is a real gain rather than dev noise.",
+  "parent": "21",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T17:04:19+08:00",
+  "status": "duplicate",
+  "error": "identical source already run at iteration 21 (valid_primary 0.64987)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "7cd9c4b2ae0b",
+  "verdict": "duplicate",
+  "tokens_in": 38838,
+  "tokens_out": 1936,
+  "tokens_cached": 30464,
+  "cost_usd": 0.055533,
+  "model": "gpt-5.5",
+  "agent_iteration": 11,
+  "wall_seconds": 822.8,
+  "recovery_events": []
+}

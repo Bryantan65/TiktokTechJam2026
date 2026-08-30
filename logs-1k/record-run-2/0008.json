@@ -1,0 +1,32 @@
+{
+  "iteration": 8,
+  "solution": "logs-1k/record-run-2/solutions/009_bpr_watchtime_weight.py",
+  "hypothesis": "improve 2: use heterogeneous implicit feedback as BPR confidence weighting (BPR paper: https://arxiv.org/abs/1205.2618), giving positives with larger play_time_ms slightly higher pair weight; screen on dev because raw CSV alignment can silently fail.",
+  "parent": "2",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T15:17:23+08:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "179ba78759ac",
+  "seeds_completed": 0,
+  "seconds": 904.2,
+  "verdict": "failed",
+  "tokens_in": 72114,
+  "tokens_out": 4261,
+  "tokens_cached": 65728,
+  "cost_usd": 0.091442,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 3375.1,
+  "recovery_events": []
+}

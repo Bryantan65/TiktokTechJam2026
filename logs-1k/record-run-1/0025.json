@@ -1,0 +1,64 @@
+{
+  "iteration": 25,
+  "solution": "logs-1k/record-run-1/solutions/025_mtl_agg_zblend_dev.py",
+  "hypothesis": "improve 12: node 22's aggregate-rate heuristic is weaker but mechanistically different, so blend it at a readable 30% with node-12 MTL using per-user z-score normalization rather than burying it at low weight.",
+  "parent": "12",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T07:30:18+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.638724,
+  "GAUC": 0.669891,
+  "nDCG@5": 0.607555,
+  "source_hash": "da01c8aa3c64",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+raw_aux_mtl+agg_zblend\n  epoch  1 | loss 0.5262 | valid primary 0.6383 | 47.7s\n  epoch  2 | loss 0.4351 | valid primary 0.6365 | 47.7s\n  epoch  3 | loss 0.4069 | valid primary 0.6223 | 47.5s\n  epoch  4 | loss 0.3806 | valid primary 0.6157 | 47.9s\n  epoch  5 | loss 0.3557 | valid primary 0.6078 | 47.6s\n  early stop at epoch 5\nsaved cached MTL predictions: pred_cache\\node12_mtl_dev_seed2.npy\nprior=0.26282; built 9 aggregate tables\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "586f48f12f1c",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.00194,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670744,
+      "nDCG@5": 0.604689,
+      "primary": 0.637717
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670234,
+      "nDCG@5": 0.604753,
+      "primary": 0.637494
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668696,
+      "nDCG@5": 0.613224,
+      "primary": 0.64096
+    }
+  ],
+  "seconds": 439.4,
+  "verdict": "screen",
+  "delta": -0.006376,
+  "tokens_in": 154322,
+  "tokens_out": 6633,
+  "tokens_cached": 130432,
+  "cost_usd": 0.191271,
+  "model": "gpt-5.5",
+  "agent_iteration": 21,
+  "wall_seconds": 499.8,
+  "recovery_events": []
+}

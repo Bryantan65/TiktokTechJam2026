@@ -1,0 +1,64 @@
+{
+  "iteration": 31,
+  "solution": "logs-1k/record-run-1/solutions/031_deepfm_mtl.py",
+  "hypothesis": "draft 5: DeepFM explicitly combines FM low-order terms with a DNN for high-order CTR interactions (https://arxiv.org/abs/1703.04247); branch from node 12 and screen a small shared DeepFM tower with the same MTL regularizer.",
+  "parent": "12",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T08:23:02+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.640168,
+  "GAUC": 0.669135,
+  "nDCG@5": 0.6112,
+  "source_hash": "d9c91e063d20",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+raw_aux_deepfm_mtl\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "fb40ac82dd76",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.003381,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668755,
+      "nDCG@5": 0.606314,
+      "primary": 0.637535
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669429,
+      "nDCG@5": 0.618533,
+      "primary": 0.643981
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.66922,
+      "nDCG@5": 0.608753,
+      "primary": 0.638987
+    }
+  ],
+  "seconds": 301.0,
+  "verdict": "screen",
+  "delta": -0.004932,
+  "tokens_in": 85996,
+  "tokens_out": 5726,
+  "tokens_cached": 67072,
+  "cost_usd": 0.138106,
+  "model": "gpt-5.5",
+  "agent_iteration": 27,
+  "wall_seconds": 359.2,
+  "recovery_events": []
+}

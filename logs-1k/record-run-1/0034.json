@@ -1,0 +1,64 @@
+{
+  "iteration": 34,
+  "solution": "logs-1k/record-run-1/solutions/034_mtl_snapshot_ensemble.py",
+  "hypothesis": "debug 33: the full three-member MTL ensemble timed out, so average the top checkpoints from a single node-12 training run to test ensembling at roughly one-model cost.",
+  "parent": "33",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T08:50:43+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.642198,
+  "GAUC": 0.674874,
+  "nDCG@5": 0.609522,
+  "source_hash": "643556b7b84c",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+raw_aux_mtl_snapshot\nsaved cached snapshot predictions pred_cache\\034_mtl_snapshot_KuaiRand-1K_data_valid_valid_n2524980_seed2_k16_lr0.001_ep40_top3.npy; averaged 3 checkpoints\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "985f1ff96433",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.000203,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.674924,
+      "nDCG@5": 0.609067,
+      "primary": 0.641995
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.674494,
+      "nDCG@5": 0.609901,
+      "primary": 0.642198
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.675203,
+      "nDCG@5": 0.609598,
+      "primary": 0.6424
+    }
+  ],
+  "seconds": 784.3,
+  "verdict": "worse",
+  "delta": -0.002902,
+  "tokens_in": 80262,
+  "tokens_out": 4555,
+  "tokens_cached": 62976,
+  "cost_usd": 0.120253,
+  "model": "gpt-5.5",
+  "agent_iteration": 30,
+  "wall_seconds": 825.5,
+  "recovery_events": []
+}

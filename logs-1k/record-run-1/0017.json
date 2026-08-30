@@ -1,0 +1,64 @@
+{
+  "iteration": 17,
+  "solution": "logs-1k/record-run-1/solutions/017_time_dense_fm_dev.py",
+  "hypothesis": "draft 6: Kaggle CTR practice commonly adds date/hour cyclic and drift features (e.g. Kaggle discussions hub https://www.kaggle.com/discuss); since raw hourmin is unavailable, screen tuple-derived date/day-of-week and tab-time trend dense terms before a valid run.",
+  "parent": "12",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T06:45:41+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.637344,
+  "GAUC": 0.66622,
+  "nDCG@5": 0.608468,
+  "source_hash": "5c914ef61230",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+dense_time\ndense time train mean/std before standardize: [ 0.4935221   0.34320155 -0.1971019  -0.10792881  0.36153063  0.103678\n  0.3198341   0.01845238  0.00174353] [0.325785   0.3426528  0.6965736  0.6775796  0.48042893 0.2520385\n 0.3511381  0.11335812 0.03526023]\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "bbf3a6f94206",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.00083,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668456,
+      "nDCG@5": 0.604351,
+      "primary": 0.636404
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668097,
+      "nDCG@5": 0.607858,
+      "primary": 0.637977
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.662107,
+      "nDCG@5": 0.613194,
+      "primary": 0.63765
+    }
+  ],
+  "seconds": 353.4,
+  "verdict": "screen",
+  "delta": -0.007756,
+  "tokens_in": 85696,
+  "tokens_out": 3690,
+  "tokens_cached": 65024,
+  "cost_usd": 0.121092,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 389.1,
+  "recovery_events": []
+}

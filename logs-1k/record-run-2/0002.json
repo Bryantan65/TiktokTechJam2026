@@ -1,0 +1,64 @@
+{
+  "iteration": 2,
+  "solution": "logs-1k/record-run-2/solutions/003_bpr_fm_two_neg.py",
+  "hypothesis": "improve 1: one-negative BPR helped, so sample two independent same-user negatives per positive to expose more counterexamples per epoch while keeping the objective unchanged. This tests whether the first draft was under-sampling negatives, especially for nDCG@5.",
+  "parent": "1",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T14:40:29+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.625043,
+  "GAUC": 0.667041,
+  "nDCG@5": 0.583045,
+  "source_hash": "9e92e0bf5fce",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "f333d17681a8",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.002407,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667631,
+      "nDCG@5": 0.587976,
+      "primary": 0.627803
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668041,
+      "nDCG@5": 0.578716,
+      "primary": 0.623378
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.665452,
+      "nDCG@5": 0.582444,
+      "primary": 0.623948
+    }
+  ],
+  "seconds": 361.3,
+  "verdict": "worse",
+  "delta": -0.020057,
+  "tokens_in": 38727,
+  "tokens_out": 2769,
+  "tokens_cached": 33664,
+  "cost_usd": 0.05718,
+  "model": "gpt-5.5",
+  "agent_iteration": 2,
+  "wall_seconds": 388.0,
+  "recovery_events": []
+}

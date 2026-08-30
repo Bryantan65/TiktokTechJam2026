@@ -1,0 +1,32 @@
+{
+  "iteration": 40,
+  "solution": "logs-1k/record-run-1/solutions/040_mtl_cross_fm.py",
+  "hypothesis": "draft 5: add explicit crossed categorical tokens to the best MTL FM so linear terms can memorize user-tab/user-author offsets; leakage-safe target/count encoding is a common CTR trick (https://www.kaggle.com/code/raddar/target-encoding-with-kfold-leakage-safe), but here crosses avoid label leakage and test whether higher-order memorization helps.",
+  "parent": "12",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T09:57:03+08:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "fbdb5cb361b8",
+  "seeds_completed": 0,
+  "seconds": 910.0,
+  "verdict": "failed",
+  "tokens_in": 107980,
+  "tokens_out": 4710,
+  "tokens_cached": 88192,
+  "cost_usd": 0.140666,
+  "model": "gpt-5.5",
+  "agent_iteration": 36,
+  "wall_seconds": 964.3,
+  "recovery_events": []
+}

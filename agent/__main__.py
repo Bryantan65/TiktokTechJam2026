@@ -17,9 +17,13 @@ def main():
     ap.add_argument('--run-id', default=None,
                     help='Exact run folder name, skipping auto-numbering. '
                          'e.g. --run-id record-run-5')
+    ap.add_argument('--dataset', choices=['pure', '1k', '27k'], default='pure',
+                    help='KuaiRand variant to use. pure -> logs/, '
+                         '1k -> logs-1k/, 27k -> logs-27k/ (default: pure)')
     args = ap.parse_args()
     run_loop(supervised=args.supervised, max_iter=args.max_iter,
-             run_name=args.run_name, run_id=args.run_id)
+             run_name=args.run_name, run_id=args.run_id,
+             dataset=args.dataset)
 
 
 if __name__ == '__main__':

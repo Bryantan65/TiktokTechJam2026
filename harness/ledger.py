@@ -53,15 +53,18 @@ def init_run_dir(run_dir: str):
     os.makedirs(run_dir, exist_ok=True)
 
 
-def next_run_dir(prefix: str = 'run') -> str:
-    """Find the next available logs/<prefix>-N/ folder.
+def next_run_dir(prefix: str = 'run', logs_root: str = None) -> str:
+    """Find the next available <logs_root>/<prefix>-N/ folder.
 
     Scans existing folders matching the prefix to find the highest number,
     then returns the path for N+1. Handles both zero-padded (shakedown-01)
     and non-padded (record-run-1) numbering from Bryan's naming style.
+
+    `logs_root` defaults to <ROOT>/logs (the pure-dataset folder). Pass the
+    dataset-specific root (e.g. <ROOT>/logs-1k) for other variants.
     """
     import re as _re
-    logs_dir = os.path.join(ROOT, 'logs')
+    logs_dir = logs_root if logs_root is not None else os.path.join(ROOT, 'logs')
     os.makedirs(logs_dir, exist_ok=True)
     pattern = _re.compile(r'^' + _re.escape(prefix) + r'-0*(\d+)$')
     highest = 0
