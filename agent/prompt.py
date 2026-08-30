@@ -7,13 +7,37 @@ sys.path.insert(0, os.path.join(ROOT, 'harness'))
 import ledger  # noqa: E402
 import search  # noqa: E402
 
+_DATASET_CONFIG = {
+    'pure': {
+        'name':     'KuaiRand-Pure',
+        'baseline': 0.6015,
+        'target':   0.6035,
+        'suffix':   'pure',
+        'data_rel': 'rec_datasets/KuaiRand-Pure/data',
+    },
+    '1k': {
+        'name':     'KuaiRand-1K',
+        'baseline': 0.6451,
+        'target':   0.6471,
+        'suffix':   '1k',
+        'data_rel': 'rec_datasets/KuaiRand-1K/data',
+    },
+    '27k': {
+        'name':     'KuaiRand-27K',
+        'baseline': 0.6451,   # placeholder — adjust when measured
+        'target':   0.6471,
+        'suffix':   '27k',
+        'data_rel': 'rec_datasets/KuaiRand-27K/data',
+    },
+}
+
 SYSTEM_PROMPT = """\
 You are an ML experiment agent. Your goal: beat the FM baseline on \
-within-user video ranking for the KuaiRand-Pure dataset.
+within-user video ranking for the {ds_name} dataset.
 
 ## Target
-Valid primary (mean of GAUC and nDCG@5) >= 0.6035.
-Baseline: 0.6015. Epsilon: 0.002.
+Valid primary (mean of GAUC and nDCG@5) >= {target}.
+Baseline: {baseline}. Epsilon: 0.002.
 Every score you see is a mean over 3 random seeds, reported with its spread.
 
 ## Metrics
@@ -35,7 +59,7 @@ Ensemble solutions retrain every member from scratch every time, even when the o
 
 Use `pred_cache/` to save and load per-member predictions:
 - Create it if needed: `os.makedirs('pred_cache', exist_ok=True)`
-- After training a member model, save its predictions: `np.save('pred_cache/NNN_member_seed{seed}.npy', preds)`
+- After training a member model, save its predictions: `np.save('pred_cache/NNN_member_seed{{seed}}.npy', preds)`
 - Before training, check if the cache exists: `if os.path.isfile(cache_path): preds = np.load(cache_path)`
 - If the cache is missing (fresh machine, first run), train from scratch. **Every solution must still work standalone without any cached files.**
 - Only cache predictions for members whose code has NOT changed. If you modify a member's training (loss, features, hyperparams), delete or ignore its cache and retrain.
@@ -49,7 +73,7 @@ Fields: [user_id, video_id, author_id, tab, dur_bucket], k=16, lr=0.001, \
 batch=8192, patience=4.
 
 ## The data contract — check this before writing a loader
-`data.load(data_dir)` returns `{'train': [...], 'valid': [...], 'test': [...]}`
+`data.load(data_dir)` returns `{{'train': [...], 'valid': [...], 'test': [...]}}`
 where each row is a plain **tuple, not a DataFrame**:
 
     (date, user_id, video_id, author_id, tab, duration_ms, label)
@@ -60,9 +84,15 @@ these tuples. Anything else — `hourmin`, `play_time_ms`, `is_click`, `is_like`
 and the rest of the 12 feedback signals — is only in the raw CSVs, which you
 must read yourself with `csv.DictReader`:
 
-    rec_datasets/KuaiRand-Pure/data/log_standard_4_08_to_4_21_pure.csv
-    rec_datasets/KuaiRand-Pure/data/log_standard_4_22_to_5_08_pure.csv
-    rec_datasets/KuaiRand-Pure/data/video_features_basic_pure.csv
+    {data_rel}/log_standard_4_08_to_4_21_{suffix}.csv
+    {data_rel}/log_standard_4_22_to_5_08_{suffix}.csv
+    {data_rel}/video_features_basic_{suffix}.csv
+
+**IMPORTANT: the CSV filenames end in `_{suffix}`, not `_pure`. If you are
+running on a non-Pure variant, using `_pure.csv` will silently fail to find the
+files and your auxiliary features will be all NaN. Always use `_{suffix}` in
+filenames. To find the correct suffix at runtime, look at the actual files in
+`--data_dir` (they all share the same suffix).**
 
 Row order matters: the two log files are read in the order above and original
 file order is preserved, which is what `row_id` and your output array index
@@ -84,6 +114,19 @@ play_time_ms as auxiliary tasks.
 capacity is not the bottleneck.
 6. **Time features** — hourmin, date, train-vs-test drift.
 7. **Unbiased validation** — log_random as extra validation (never train on it).
+
+These are starting points, not a ceiling. Think from first principles:
+- If the label has a known generating rule, model that rule, not just the 0/1.
+- If subgroups have very different label rates, per-group models beat one global model.
+- When the metric averages two objectives that fight each other, optimise each \
+separately and fuse.
+- Per-user score normalisation after prediction is free and helps ranking metrics.
+- Historical user/item statistics from training data are powerful cross features.
+- Not all positives are equal — weight pairs by signal strength, mine hard negatives.
+- Read every column in the raw CSVs; the tuple loader strips most of them, \
+and any correlated signal is a useful auxiliary training objective.
+- Ensemble diversity comes from different mechanisms, not different hyperparameters.
+
 ## The run ends if you stop making progress — read this
 The run stops automatically when the best valid primary has not improved by
 more than 0.002 across the last 3 scored experiments. That is the organisers'
@@ -235,7 +278,7 @@ window by date - earlier days to fit on, the last few to score on - so it never
 touches valid or test:
 
     from devdata import load as load_dev     # instead of `from data import load`
-    splits = load_dev(a.data_dir)            # {'train': ..., 'valid': ...}
+    splits = load_dev(a.data_dir)            # {{'train': ..., 'valid': ...}}
 
 Handle it in your solution's main block, exactly as `001_torch_fm.py` does:
 
@@ -289,7 +332,7 @@ within-user ranking.
 - long_view rate varies by tab: 4.1% (tab 0) to 48.3% (tab 4).
 - tab 1 is 73.7% of rows at 37.9% positive rate.
 - A correct run takes ~2 minutes (3 seeds x ~40 s). Iterations are cheap.
-- log_random_4_22_to_5_08_pure.csv must NOT be trained on.
+- log_random_4_22_to_5_08_{suffix}.csv must NOT be trained on.
 for debiasing the training loss (direction 8).
 
 ## Workflow
@@ -388,8 +431,15 @@ for a bugfix or parameter tweak.
 """
 
 
-def system_prompt() -> str:
-    return SYSTEM_PROMPT
+def system_prompt(dataset: str = 'pure') -> str:
+    cfg = _DATASET_CONFIG.get(dataset, _DATASET_CONFIG['pure'])
+    return SYSTEM_PROMPT.format(
+        ds_name=cfg['name'],
+        baseline=cfg['baseline'],
+        target=cfg['target'],
+        suffix=cfg['suffix'],
+        data_rel=cfg['data_rel'],
+    )
 
 
 def _ledger_table() -> str:

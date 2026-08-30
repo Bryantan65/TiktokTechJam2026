@@ -99,6 +99,19 @@ MAX_COST_USD = float(os.environ.get('AGENT_MAX_COST_USD', 0))
 # 40-experiment run at least one will happen. Previously only rate limits were
 # retried and everything else abandoned the iteration.
 MAX_API_RETRIES = int(os.environ.get('AGENT_MAX_API_RETRIES', 5))
+
+# Per-dataset log roots and data directories. pure uses the original 'logs/'
+# so existing runs are undisturbed. 1k and 27k get their own sibling folders.
+_DATASET_LOGS = {
+    'pure': os.path.join(ROOT, 'logs'),
+    '1k':   os.path.join(ROOT, 'logs-1k'),
+    '27k':  os.path.join(ROOT, 'logs-27k'),
+}
+_DATASET_DATA_DIRS = {
+    'pure': os.path.join(ROOT, 'rec_datasets', 'KuaiRand-Pure', 'data'),
+    '1k':   os.path.join(ROOT, 'rec_datasets', 'KuaiRand-1K', 'data'),
+    '27k':  os.path.join(ROOT, 'rec_datasets', 'KuaiRand-27K', 'data'),
+}
 _RETRYABLE = ('rate_limit', '429', '500', '502', '503', '504',
               'timeout', 'timed out', 'connection', 'overloaded',
               'internal server error', 'bad gateway', 'service unavailable',
@@ -398,30 +411,40 @@ def _summarize_args(name: str, args: dict) -> str:
     return ''
 
 
-def _setup_run_dir(run_name: str, run_id: str = None) -> str:
+def _setup_run_dir(run_name: str, run_id: str = None,
+                   dataset: str = 'pure') -> str:
     """Create a new per-run folder and redirect all output paths to it."""
     from agent.tools import init_solutions_dir
+    logs_root = _DATASET_LOGS.get(dataset, os.path.join(ROOT, 'logs'))
     if run_id:
-        run_dir = os.path.join(ROOT, 'logs', run_id)
+        run_dir = os.path.join(logs_root, run_id)
     else:
-        run_dir = ledger.next_run_dir(run_name)
+        run_dir = ledger.next_run_dir(run_name, logs_root=logs_root)
     ledger.init_run_dir(run_dir)
-    ledger.setup_control_row(run_dir)
+    # Control row (iteration 1 = FM baseline) only exists for pure; skip it
+    # for other variants so the ledger starts fresh against their own baseline.
+    if dataset == 'pure':
+        ledger.setup_control_row(run_dir)
     sol_dir = os.path.join(run_dir, 'solutions')
     init_solutions_dir(sol_dir)
     return run_dir
 
 
 def run_loop(supervised: bool = False, max_iter: int = 100,
-             run_name: str = 'run', run_id: str = None) -> None:
-    run_dir = _setup_run_dir(run_name, run_id)
+             run_name: str = 'run', run_id: str = None,
+             dataset: str = 'pure') -> None:
+    ledger.use_dataset(dataset)
+    from agent.tools import init_data_dir
+    init_data_dir(_DATASET_DATA_DIRS[dataset])
+    run_dir = _setup_run_dir(run_name, run_id, dataset=dataset)
     print(f'=== Run folder: {os.path.relpath(run_dir, ROOT)}/ ===')
+    print(f'=== Dataset: {dataset} (baseline {ledger.BASELINE_VALID}) ===')
 
     # .env is loaded at import, above. base_url is None for OpenAI itself.
     client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
     tokens = TokenTracker()
 
-    messages = [{'role': 'system', 'content': system_prompt()}]
+    messages = [{'role': 'system', 'content': system_prompt(dataset)}]
     iteration = 0
     iter_events: list[dict] = []
 

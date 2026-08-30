@@ -1,0 +1,64 @@
+{
+  "iteration": 26,
+  "solution": "logs-1k/record-run-2/solutions/026_bpr_seedens_rrfblend.py",
+  "hypothesis": "improve 25: keep the cached node-25 members unchanged and test a readable fusion change, blending 30% reciprocal-rank scores with 70% per-user z-score averages to emphasize top-5 ordering without retraining members.",
+  "parent": "25",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T17:38:17+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.655967,
+  "GAUC": 0.674282,
+  "nDCG@5": 0.637653,
+  "source_hash": "bb31b0a9de8b",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "d50349e844f6",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.001168,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.674272,
+      "nDCG@5": 0.638658,
+      "primary": 0.656465
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.674398,
+      "nDCG@5": 0.639209,
+      "primary": 0.656803
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.674176,
+      "nDCG@5": 0.635091,
+      "primary": 0.654633
+    }
+  ],
+  "seconds": 78.3,
+  "verdict": "KEPT",
+  "delta": 0.010867,
+  "tokens_in": 54603,
+  "tokens_out": 5323,
+  "tokens_cached": 40832,
+  "cost_usd": 0.108074,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 122.2,
+  "recovery_events": []
+}

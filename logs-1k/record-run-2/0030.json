@@ -1,0 +1,32 @@
+{
+  "iteration": 30,
+  "solution": "logs-1k/record-run-2/solutions/030_bpr4_userauthor_blend.py",
+  "hypothesis": "improve 28: node 14's full cross set timed out, but user-author affinity is the most direct missing preference signal; train one BPR member with only an added (user,author) field and blend it at 30% with the cached four-member z-score ensemble.",
+  "parent": "28",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:17:29+08:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "708635e8a999",
+  "seeds_completed": 0,
+  "seconds": 903.2,
+  "verdict": "failed",
+  "tokens_in": 85011,
+  "tokens_out": 7161,
+  "tokens_cached": 61312,
+  "cost_usd": 0.161514,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 973.7,
+  "recovery_events": []
+}

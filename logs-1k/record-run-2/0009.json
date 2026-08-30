@@ -1,0 +1,64 @@
+{
+  "iteration": 9,
+  "solution": "logs-1k/record-run-2/solutions/010_bpr_watchtime_fastalign.py",
+  "hypothesis": "debug 8: the watch-time weighting idea timed out during raw CSV alignment, so stream-align train rows in loader order instead of materialising duplicate-key deques; this tests whether the auxiliary play_time_ms signal is usable at all.",
+  "parent": "8",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T15:33:08+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.627164,
+  "GAUC": 0.663614,
+  "nDCG@5": 0.590713,
+  "source_hash": "8a0b2d8a3228",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\naligned play_time_ms for 0/3,302,351 train rows in 42.1s\npositive pair weight: mean=1.000 max=1.000\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "9c79de76d96e",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.000528,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.663302,
+      "nDCG@5": 0.590413,
+      "primary": 0.626858
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.663865,
+      "nDCG@5": 0.591682,
+      "primary": 0.627773
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.663675,
+      "nDCG@5": 0.590045,
+      "primary": 0.62686
+    }
+  ],
+  "seconds": 260.1,
+  "verdict": "screen",
+  "delta": -0.017936,
+  "tokens_in": 72114,
+  "tokens_out": 4261,
+  "tokens_cached": 65728,
+  "cost_usd": 0.091442,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 3375.1,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 6,
+  "solution": "logs-1k/record-run-1/solutions/006_bpr_history_valid.py",
+  "hypothesis": "improve 4: the dev screen for causal same-author/video history buckets was healthy and improved top-k signal, so promote the same implementation to public valid. This tests whether the DIN-inspired history signal transfers beyond the train-only holdout.",
+  "parent": "4",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T05:03:03+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.627,
+  "GAUC": 0.666383,
+  "nDCG@5": 0.587618,
+  "source_hash": "37029faa7f74",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history_counts\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "3464986f1431",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.002921,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.665973,
+      "nDCG@5": 0.588021,
+      "primary": 0.626997
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667124,
+      "nDCG@5": 0.592722,
+      "primary": 0.629923
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.666051,
+      "nDCG@5": 0.582111,
+      "primary": 0.624081
+    }
+  ],
+  "seconds": 515.8,
+  "verdict": "worse",
+  "delta": -0.0181,
+  "tokens_in": 38508,
+  "tokens_out": 1562,
+  "tokens_cached": 29440,
+  "cost_usd": 0.05301,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 540.0,
+  "recovery_events": []
+}

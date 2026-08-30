@@ -1,0 +1,32 @@
+{
+  "iteration": 14,
+  "solution": "logs-1k/record-run-2/solutions/015_bpr_time_crosses.py",
+  "hypothesis": "improve 13: temporal context helped, so add explicit sparse affinity crosses (user-author, user-hour, user-tab-hour, author/video-tab) to let first-order terms memorise contextual preferences instead of relying only on FM interactions.",
+  "parent": "13",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T16:03:48+08:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "742e7c1ffae2",
+  "seeds_completed": 0,
+  "seconds": 909.9,
+  "verdict": "failed",
+  "tokens_in": 120809,
+  "tokens_out": 5192,
+  "tokens_cached": 106560,
+  "cost_usd": 0.140823,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 2245.2,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 12,
+  "solution": "logs-1k/record-run-2/solutions/013_bpr_time_features.py",
+  "hypothesis": "draft direction 6: add raw-log temporal context (hourmin buckets and tab-hour crosses) to the two-negative BPR FM; DIEN motivates temporal user-interest context (https://huggingface.co/papers/1809.03672), and dev screens the raw CSV alignment before a valid run.",
+  "parent": "2",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T15:48:18+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.647964,
+  "GAUC": 0.67162,
+  "nDCG@5": 0.624308,
+  "source_hash": "cf948232d0b5",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\naligned hourmin for train: 3,302,351/3,302,351 rows after scanning 5,054,786 raw rows in 21.9s\naligned hourmin for valid: 1,753,633/1,753,633 rows after scanning 5,055,984 raw rows in 18.5s\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "6ea267513a4f",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.003305,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671615,
+      "nDCG@5": 0.628561,
+      "primary": 0.650088
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671773,
+      "nDCG@5": 0.627522,
+      "primary": 0.649648
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671472,
+      "nDCG@5": 0.616841,
+      "primary": 0.644157
+    }
+  ],
+  "seconds": 296.5,
+  "verdict": "screen",
+  "delta": 0.002864,
+  "tokens_in": 120809,
+  "tokens_out": 5192,
+  "tokens_cached": 106560,
+  "cost_usd": 0.140823,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 2245.2,
+  "recovery_events": []
+}

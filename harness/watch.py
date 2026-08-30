@@ -21,31 +21,44 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POLL = 15
 
+_LOGS_ROOT = {
+    'pure': os.path.join(ROOT, 'logs'),
+    '1k':   os.path.join(ROOT, 'logs-1k'),
+    '27k':  os.path.join(ROOT, 'logs-27k'),
+}
+_BASELINES = {'pure': 0.6015, '1k': 0.6451, '27k': None}
 
-def newest_run_dir():
-    """The most recently modified logs/<name>-N/ folder, else logs/iterations/.
+
+def newest_run_dir(logs_root):
+    """The most recently modified <logs_root>/<name>-N/ folder, else <logs_root>/iterations/.
 
     Runs write into their own folder now (ledger.init_run_dir), so a fixed path
     would watch the wrong place. Picking by mtime rather than by highest number
     means this follows whichever run is actually live, including a re-run of an
     earlier name.
     """
-    logs = os.path.join(ROOT, 'logs')
     cands = []
-    for name in os.listdir(logs):
-        d = os.path.join(logs, name)
-        if os.path.isdir(d) and re.match(r'^[a-z-]+-\d+$', name):
-            cands.append((os.path.getmtime(d), d))
+    if os.path.isdir(logs_root):
+        for name in os.listdir(logs_root):
+            d = os.path.join(logs_root, name)
+            if os.path.isdir(d) and re.match(r'^[a-z-]+-\d+$', name):
+                cands.append((os.path.getmtime(d), d))
     if not cands:
-        return os.path.join(logs, 'iterations')
+        return os.path.join(logs_root, 'iterations')
     return max(cands)[1]
 
 
 ap = argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--run-dir', default=None,
                 help='folder to watch (default: the most recently active run)')
+ap.add_argument('--dataset', choices=['pure', '1k', '27k'], default='pure',
+                help='KuaiRand variant — determines which logs folder to scan '
+                     '(pure -> logs/, 1k -> logs-1k/, 27k -> logs-27k/). '
+                     'Ignored when --run-dir is given.')
 _args = ap.parse_args()
-LOG_DIR = _args.run_dir or newest_run_dir()
+_logs_root = _LOGS_ROOT[_args.dataset]
+LOG_DIR = _args.run_dir or newest_run_dir(_logs_root)
+BASELINE = _BASELINES[_args.dataset]
 EVENTS = os.path.join(LOG_DIR, 'events.jsonl')
 if not os.path.isfile(EVENTS):          # pre-run-folder layout
     alt = os.path.join(ROOT, 'logs', 'events.jsonl')
@@ -78,7 +91,7 @@ def describe(r):
         return '#%-3d %-34s %-9s %s' % (
             n, sol, status.upper(), (r.get('error') or '')[:100])
     p, sd = r.get('valid_primary'), r.get('primary_std')
-    delta = p - 0.6015
+    delta = p - BASELINE if BASELINE is not None else float('nan')
     # A delta smaller than the spread has not been measured, so say so here
     # rather than leaving a tidy-looking number to be misread later.
     readable = '' if sd is None else ('' if abs(delta) > sd else '  [< spread]')

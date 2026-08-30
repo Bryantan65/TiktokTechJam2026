@@ -13,6 +13,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE_SOLUTIONS_DIR = os.path.join(ROOT, 'solutions')
 SOLUTIONS_DIR = BASE_SOLUTIONS_DIR
+DATA_DIR = os.path.join(ROOT, 'rec_datasets', 'KuaiRand-Pure', 'data')
 
 sys.path.insert(0, os.path.join(ROOT, 'harness'))
 import ledger  # noqa: E402
@@ -27,6 +28,15 @@ def init_solutions_dir(run_solutions_dir: str):
     global SOLUTIONS_DIR
     SOLUTIONS_DIR = run_solutions_dir
     os.makedirs(SOLUTIONS_DIR, exist_ok=True)
+
+
+def init_data_dir(data_dir: str):
+    """Point experiments at a different dataset directory.
+
+    Called once at agent startup when --dataset is not 'pure'.
+    """
+    global DATA_DIR
+    DATA_DIR = data_dir
 
 
 def read_ledger() -> str:
@@ -99,7 +109,7 @@ def run_experiment(solution: str, hypothesis: str = '',
     from run import run_experiment as _run  # noqa: E402
     full = os.path.join(SOLUTIONS_DIR, solution)
     result = _run(full, hypothesis=hypothesis, parent=parent, by='agent',
-                  split=split)
+                  split=split, data_dir=DATA_DIR)
     return json.dumps(result, indent=2)
 
 

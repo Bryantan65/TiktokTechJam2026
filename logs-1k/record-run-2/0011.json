@@ -1,0 +1,64 @@
+{
+  "iteration": 11,
+  "solution": "logs-1k/record-run-2/solutions/012_bpr_watchtime_key4.py",
+  "hypothesis": "debug 9: raw logs lack author_id and duration_ms, so align by available ordered keys (date,user_id,video_id,tab) and verify whether nonzero play_time_ms is actually present before judging watch-time weighting.",
+  "parent": "9",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T15:42:59+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.62492,
+  "GAUC": 0.662936,
+  "nDCG@5": 0.586905,
+  "source_hash": "9c9dbe307a1f",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nraw columns from log_standard_4_08_to_4_21_1k.csv: ['user_id', 'video_id', 'date', 'hourmin', 'time_ms', 'is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_hate', 'long_view', 'play_time_ms', 'duration_ms', 'profile_stay_time', 'comment_stay_time', 'is_profile_enter', 'is_rand', 'tab']\nfirst train key=('20220409', '0', '4354972', '0') first raw key=('20220409', '0', '4354972', '0')\naligned play_time_ms for 3,302,351/3,302,351 train rows; positive play values 2,629,496; scanned 5,054,786 rows in 20.5s\npositive pair weight: mean=1.472 max=1.577\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "eb80acf56860",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.000512,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.662568,
+      "nDCG@5": 0.586102,
+      "primary": 0.624335
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.663342,
+      "nDCG@5": 0.586946,
+      "primary": 0.625144
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.662898,
+      "nDCG@5": 0.587667,
+      "primary": 0.625282
+    }
+  ],
+  "seconds": 236.9,
+  "verdict": "screen",
+  "delta": -0.02018,
+  "tokens_in": 72114,
+  "tokens_out": 4261,
+  "tokens_cached": 65728,
+  "cost_usd": 0.091442,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 3375.1,
+  "recovery_events": []
+}

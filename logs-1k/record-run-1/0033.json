@@ -1,0 +1,32 @@
+{
+  "iteration": 33,
+  "solution": "logs-1k/record-run-1/solutions/033_mtl_seed_ensemble.py",
+  "hypothesis": "improve 12: node 12 is the strongest standalone model but has seed noise, so average three full-strength independently seeded MTL-FM members rather than adding weak low-weight mechanisms.",
+  "parent": "12",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T08:34:55+08:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "15bf6cd5abcb",
+  "seeds_completed": 0,
+  "seconds": 903.9,
+  "verdict": "failed",
+  "tokens_in": 63746,
+  "tokens_out": 3945,
+  "tokens_cached": 46976,
+  "cost_usd": 0.104863,
+  "model": "gpt-5.5",
+  "agent_iteration": 29,
+  "wall_seconds": 939.4,
+  "recovery_events": []
+}

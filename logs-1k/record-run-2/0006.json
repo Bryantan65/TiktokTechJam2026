@@ -1,0 +1,64 @@
+{
+  "iteration": 6,
+  "solution": "logs-1k/record-run-2/solutions/007_lgbm_binary_stats_debug.py",
+  "hypothesis": "debug 5: the sampled LambdaRank result was near-random, so keep the same feature construction but switch to binary LightGBM to isolate whether the bug is in features/plumbing or in LambdaRank grouping/objective.",
+  "parent": "5",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T15:06:41+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.523073,
+  "GAUC": 0.589127,
+  "nDCG@5": 0.457018,
+  "source_hash": "e68df5afad22",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "c67d5cc0dc29",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.018081,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.600456,
+      "nDCG@5": 0.474916,
+      "primary": 0.537686
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.599151,
+      "nDCG@5": 0.458209,
+      "primary": 0.52868
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.567774,
+      "nDCG@5": 0.437929,
+      "primary": 0.502852
+    }
+  ],
+  "seconds": 163.5,
+  "verdict": "screen",
+  "delta": -0.122027,
+  "tokens_in": 72114,
+  "tokens_out": 4261,
+  "tokens_cached": 65728,
+  "cost_usd": 0.091442,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 3375.1,
+  "recovery_events": []
+}

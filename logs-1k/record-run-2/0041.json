@@ -1,0 +1,64 @@
+{
+  "iteration": 41,
+  "solution": "logs-1k/record-run-2/solutions/041_allseed_member_fusion.py",
+  "hypothesis": "improve 39: node 25/28 members were already trained for all harness seeds; fuse all available unchanged BPR member caches (up to 12) before the node-39 top-2 stat correction to reduce nDCG seed wobble without changing the mechanism.",
+  "parent": "39",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T19:01:48+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.661668,
+  "GAUC": 0.681242,
+  "nDCG@5": 0.642094,
+  "source_hash": "db53001d46ab",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nusing 12 cached/trained BPR members for fusion\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "5cb385643418",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.681242,
+      "nDCG@5": 0.642094,
+      "primary": 0.661668
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.681242,
+      "nDCG@5": 0.642094,
+      "primary": 0.661668
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.681242,
+      "nDCG@5": 0.642094,
+      "primary": 0.661668
+    }
+  ],
+  "seconds": 76.3,
+  "verdict": "KEPT",
+  "delta": 0.016568,
+  "tokens_in": 93317,
+  "tokens_out": 7037,
+  "tokens_cached": 71168,
+  "cost_usd": 0.161327,
+  "model": "gpt-5.5",
+  "agent_iteration": 29,
+  "wall_seconds": 143.9,
+  "recovery_events": []
+}
