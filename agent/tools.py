@@ -107,7 +107,15 @@ def run_experiment(solution: str, hypothesis: str = '',
                            'error': "split must be 'valid' or 'dev', got %r" % split})
     sys.path.insert(0, os.path.join(ROOT, 'harness'))
     from run import run_experiment as _run  # noqa: E402
-    full = os.path.join(SOLUTIONS_DIR, solution)
+    # Resolve the same way read_solution does: run folder first, then the root
+    # solutions/. Without the fallback the agent can READ 001_torch_fm.py but
+    # not RUN it, because the starter lives in root while SOLUTIONS_DIR points
+    # at the run folder. That asymmetry broke a 1k run on 2026-08-30: the
+    # control row failed with 'no such solution', which is a fatal way to start
+    # since the whole ledger then has a None primary. run.py's allowed_dirs
+    # already permits both locations, so nothing new is reachable here.
+    full = (_resolve_solution_read(solution)
+            or os.path.join(SOLUTIONS_DIR, solution))
     result = _run(full, hypothesis=hypothesis, parent=parent, by='agent',
                   split=split, data_dir=DATA_DIR)
     return json.dumps(result, indent=2)

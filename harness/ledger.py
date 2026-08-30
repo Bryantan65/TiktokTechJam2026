@@ -85,7 +85,21 @@ def setup_control_row(run_dir: str):
     """
     dest_json = os.path.join(run_dir, '0001.json')
     if os.path.exists(dest_json):
-        return
+        # Idempotent only for a control row that actually SCORED. A failed one
+        # must be regenerated, not preserved: a 1k run on 2026-08-30 wrote a
+        # 0001.json whose solution lookup had failed, and because this guard
+        # treated it as "already set up" the run could never recover - every
+        # later iteration read a ledger whose only row had a None primary, and
+        # the agent spent twelve experiments trying to manufacture a scoreable
+        # root. An idempotence guard that caches failures is a trap.
+        try:
+            with open(dest_json, encoding='utf-8') as fh:
+                prior = json.load(fh)
+        except (ValueError, OSError):
+            prior = None
+        if prior is not None and isinstance(prior.get('valid_primary'),
+                                            (int, float)):
+            return
     src_json = os.path.join(ROOT, 'logs', 'iterations', '0001.json')
     if not os.path.isfile(src_json):
         return
