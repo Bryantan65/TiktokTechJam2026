@@ -2401,3 +2401,43 @@ has not been exercised by an agent.
 - The training tensors sit in host memory and are indexed there every batch
   (`xp = Xtr_t[ps].to(device)`). Moving them to the device once is the available
   speed win, and it is larger than the one the GPU itself bought.
+
+### UCT shakedown, 2026-08-30 — the adherence measurement
+
+`uct-shakedown-1`, stopped by hand at 27 records / 23 scored. Deleted after
+recording these numbers; it was a shakedown, not a record run, and its value was
+answering one question: does the agent actually use the ranking?
+
+**It does, and by a lot.**
+
+```
+chose the UCT-top node        83%   (19 of 23 turns)
+                              40%   (13 greedy runs, ranking not shown)
+rank of chosen parent         #1 x19   #2 x2   #3 x1   #6 x1
+divergence appeared late      ranks at iteration 20+: 1,1,2,6,3,1,2,1
+```
+
+That matters because the previous thing we tried advising - the plateau
+detector - was measurably ignored: runs 10 and 11 both ran with it and produced
+the two longest exploit chains in the archive (16 and 12). Advice does not
+automatically bind. This did.
+
+Early turns all sat at rank #1 because greedy and UCT agree until the incumbent
+has children; divergence only appears once a node has been expanded a few times,
+which is exactly when the greedy failure mode starts.
+
+**Score: undetermined, and the run was too short to say otherwise.**
+
+```
+at 20 scored   uct 0.605177   greedy best 0.605191  median 0.604746   2 of 11 ahead
+at 23 scored   uct 0.605177   greedy best 0.605353  median 0.605012   3 of 11 ahead
+```
+
+Above the greedy median, inside the greedy range. One run landing in the top
+quartile happens by chance about a quarter of the time, so this is not evidence
+of an effect. Reading it against runs 13 and 15 alone made it look stronger than
+it is - those are two of the weaker greedy runs.
+
+**One thing to watch:** 4 failed experiments (memory, timeouts) against 0 in each
+of runs 13 and 15. Possibly UCT steering toward more ambitious untried branches -
+DIN, LambdaRank and listwise all appear - or possibly noise at n=1.
