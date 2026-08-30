@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data import load                     # noqa: E402  official, unmodified
 from evaluate import evaluate             # noqa: E402  official, unmodified
 import ledger                             # noqa: E402
+import search                             # noqa: E402
 import devdata                            # noqa: E402  train-only holdout
 
 DATA_DIR = os.path.join(ROOT, 'rec_datasets', 'KuaiRand-Pure', 'data')
@@ -255,6 +256,12 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
         'solution': os.path.relpath(solution, ROOT).replace('\\', '/'),
         'hypothesis': hypothesis,
         'parent': parent,
+        # Where this parent sat in the UCT ranking the agent was shown. The
+        # ranking is advice, so whether it is followed has to be measured, not
+        # assumed - across the archived runs the agent picked the UCT-top node
+        # on 40% of turns, median rank #2. None means it branched from a node
+        # with no valid score, or from nothing.
+        'uct_rank': search.uct_rank_of(ledger._load_all(), parent),
         'by': by,
         'split': split,
         'seed': seed,

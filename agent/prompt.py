@@ -5,6 +5,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'harness'))
 import ledger  # noqa: E402
+import search  # noqa: E402
 
 SYSTEM_PROMPT = """\
 You are an ML experiment agent. Your goal: beat the FM baseline on \
@@ -487,6 +488,15 @@ def _ledger_table() -> str:
     if kids:
         shape = ', '.join('node %s -> %s' % (p, c) for p, c in sorted(kids.items()))
         lines += ['', '**Search shape.** %s.' % shape]
+        # Greedy expansion of the best node is what this agent does by default,
+        # and it is what MLE-bench measures greedy tree search losing by: 39.6%
+        # against 47.7% for non-greedy over the same operators. The UCT ranking
+        # adds the missing term - a node nobody has branched from is unmeasured,
+        # not known to be worse. Advisory, not binding: the agent still names
+        # its own parent, and run.py records where that choice ranked.
+        uct = search.render(recs)
+        if uct:
+            lines.append(uct)
         widest = max(kids.items(), key=lambda kv: len(kv[1]))
         if len(widest[1]) >= 3 and len(kids) <= 2:
             lines += [
