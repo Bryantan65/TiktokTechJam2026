@@ -89,13 +89,43 @@ def load(data_dir):
         for r in csv.DictReader(fh):
             vid2author[r['video_id']] = r['author_id']
 
+    def _num(x, default=0.0):
+        """Coerce a CSV cell, tolerating a malformed row.
+
+        csv.DictReader hands back None for any field a short row does not
+        reach, so a single ragged line makes float() raise and takes the whole
+        load down with it. KuaiRand-1k has exactly one such row in
+        log_standard_4_08_to_4_21_1k.csv - 19 header columns, one line with a
+        different count - and it was enough to break every 1k experiment before
+        a model was ever built. Pure has none, which is why this only ever
+        showed up on the bonus variants.
+
+        Defaulted rather than skipped, deliberately: a solution's prediction
+        array is indexed by row position, so dropping a row here would silently
+        misalign every downstream score.
+        """
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return default
+
     rows = []
+    bad = 0
     for path in _log_files(data_dir, v):
         with open(path, encoding='utf-8', newline='') as fh:
             for r in csv.DictReader(fh):
-                rows.append((int(r['date']), r['user_id'], r['video_id'],
-                             vid2author.get(r['video_id'], 'UNK'), r['tab'],
-                             float(r['duration_ms']), 1 if r[LABEL] != '0' else 0))
+                dur = _num(r.get('duration_ms'))
+                date = r.get('date')
+                if dur == 0.0 and not r.get('duration_ms'):
+                    bad += 1
+                rows.append((int(_num(date)), r.get('user_id') or '',
+                             r.get('video_id') or '',
+                             vid2author.get(r.get('video_id'), 'UNK'),
+                             r.get('tab') or '', dur,
+                             1 if (r.get(LABEL) or '0') != '0' else 0))
+    if bad:
+        print('data.py: %d malformed row(s) in %s logs - numeric fields '
+              'defaulted, row order preserved' % (bad, v))
 
     return {name: [x for x in rows if lo <= x[0] <= hi]
             for name, (lo, hi) in SPLITS.items()}

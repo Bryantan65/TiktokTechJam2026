@@ -110,7 +110,7 @@ def setup_control_row(run_dir: str):
         rec = json.load(fh)
     ledger_path = os.path.join(run_dir, 'LEDGER.md')
     with open(ledger_path, 'w', encoding='utf-8') as fh:
-        fh.write(HEADER)
+        fh.write(header())
         p = rec.get('valid_primary')
         sd = rec.get('primary_std')
         line = '| %d | %s | %s | %s | %s | %s | %s | %s |\n' % (
@@ -190,19 +190,35 @@ N_CONVERGE = 3           # official: 3 consecutive iterations below epsilon
 MIN_SCORED_BEFORE_CONVERGENCE = int(
     os.environ.get('HARNESS_MIN_SCORED', 30))
 
-HEADER = """# Experiment ledger
+_HEADER_TEMPLATE = """# Experiment ledger
 
 One line per experiment, read in full by the agent every iteration. Full
 records in `logs/iterations/NNN.json`; the code for each is `solutions/NNN_*.py`.
 
 `valid` is the **mean** validation primary across seeds; `+/-` is its standard
 deviation across those seeds. `delta` is against the reproduced official
-baseline (**0.6015**); a result counts only at **>= +0.002** (the official
-epsilon). Two rows closer together than their `+/-` have not been told apart.
+baseline (**%(baseline).4f**); a result counts only at **>= +0.002** (the
+official epsilon). Two rows closer together than their `+/-` have not been told
+apart.
 
 | # | parent | hypothesis | valid | +/- | delta | verdict | by |
 |---|---|---|---|---|---|---|---|
 """
+
+
+def header():
+    """The ledger preamble, with the ACTIVE baseline filled in.
+
+    This used to be a constant with 0.6015 baked into the text. On a 1k run
+    use_dataset('1k') sets BASELINE_VALID to 0.6451 and every delta is computed
+    against that - but the preamble kept saying 0.6015, and the agent reads the
+    preamble on EVERY iteration. Seen live on 2026-08-30: a 1k row scoring
+    0.6228 was stamped `worse` with delta -0.0223, while the header three lines
+    above it announced a baseline of 0.6015 that the row plainly beat. The
+    number was right and the explanation of it was wrong, which is the harder
+    of the two failures to notice.
+    """
+    return _HEADER_TEMPLATE % {'baseline': BASELINE_VALID}
 
 
 def log_event(kind, detail, **extra):
@@ -501,7 +517,7 @@ def write(record):
 
     if not os.path.exists(LEDGER):
         with open(LEDGER, 'w') as fh:
-            fh.write(HEADER)
+            fh.write(header())
 
     p = record.get('valid_primary')
     sd = record.get('primary_std')
