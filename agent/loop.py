@@ -421,10 +421,15 @@ def _setup_run_dir(run_name: str, run_id: str = None,
     else:
         run_dir = ledger.next_run_dir(run_name, logs_root=logs_root)
     ledger.init_run_dir(run_dir)
-    # Control row (iteration 1 = FM baseline) only exists for pure; skip it
-    # for other variants so the ledger starts fresh against their own baseline.
-    if dataset == 'pure':
-        ledger.setup_control_row(run_dir)
+    # Control row (iteration 1 = FM baseline), copied from the DATASET's own
+    # cached record. This used to be gated on `dataset == 'pure'`, because the
+    # only cached record was Pure's and copying its 0.6014 into a 1k ledger
+    # would put a wrong number in front of the agent every turn. The gate is now
+    # on whether a record exists rather than on the dataset's name, so a variant
+    # gains one the moment it is measured, and behaves exactly as before until
+    # then. Without it a 1k run starts empty: the agent's own first idea takes
+    # slot 1 and it has no floor to tell improvement from regression.
+    ledger.setup_control_row(run_dir, logs_root=logs_root)
     sol_dir = os.path.join(run_dir, 'solutions')
     init_solutions_dir(sol_dir)
     return run_dir

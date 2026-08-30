@@ -76,7 +76,7 @@ def next_run_dir(prefix: str = 'run', logs_root: str = None) -> str:
     return os.path.join(logs_dir, '%s-%d' % (prefix, highest + 1))
 
 
-def setup_control_row(run_dir: str):
+def setup_control_row(run_dir: str, logs_root: str = None):
     """Write the control row (iteration 1) into a fresh run folder.
 
     Copies 0001.json from the canonical logs/iterations/ source and writes
@@ -100,7 +100,13 @@ def setup_control_row(run_dir: str):
         if prior is not None and isinstance(prior.get('valid_primary'),
                                             (int, float)):
             return
-    src_json = os.path.join(ROOT, 'logs', 'iterations', '0001.json')
+    # Which dataset's cached control row to copy. Hardcoding Pure's path meant a
+    # 1k run could never have one, so its ledger started empty and the agent's
+    # own first idea took slot 1 with nothing to measure against. The isfile
+    # guard below keeps that behaviour for any dataset that has no cached record
+    # yet - 27k, for instance - rather than failing.
+    root = logs_root if logs_root is not None else os.path.join(ROOT, 'logs')
+    src_json = os.path.join(root, 'iterations', '0001.json')
     if not os.path.isfile(src_json):
         return
     os.makedirs(run_dir, exist_ok=True)

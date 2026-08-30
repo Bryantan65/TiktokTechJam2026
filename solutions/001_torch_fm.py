@@ -23,8 +23,17 @@ import time
 import numpy as np
 import torch
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                '..', 'kuairand-starter-kit'))
+# APPEND, not insert(0). The harness puts harness/ first on PYTHONPATH so that a
+# non-Pure variant resolves `data` to harness/data.py, which knows how to find
+# 1k and 27k filenames. Prepending the kit here overrode that, and the kit's
+# loader hardcodes video_features_basic_pure.csv - so this file could not run on
+# any dataset except Pure, which is why 1k never had a baseline control row.
+# Appending keeps a standalone run working (the kit is still found, just later)
+# while letting the harness's choice win. Pure is unaffected either way:
+# harness/data.py delegates to the kit's own load() and returns row-identical
+# splits on all three.
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             '..', 'kuairand-starter-kit'))
 from data import load, encode, FIELDS          # noqa: E402  official, unmodified
 from evaluate import evaluate                  # noqa: E402  official, unmodified
 
