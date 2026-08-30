@@ -1,0 +1,65 @@
+{
+  "iteration": 29,
+  "solution": "logs-1k/record-run-3/solutions/030_seed2_topcf.py",
+  "hypothesis": "improve 28: bagging raised GAUC but averaged away node-25 seed 2's strongest top-5, so fix the cached seed-2 members and gate CF weight by base rank (20% tail to 45% top). This targets the metric tradeoff directly: protect whole-list GAUC while letting the CF member act mainly where nDCG@5 is measured.",
+  "parent": "28",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T16:18:41+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.632999,
+  "GAUC": 0.668665,
+  "nDCG@5": 0.597334,
+  "source_hash": "3e6437f41756",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/022_mtl_auxheads_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nloaded cache pred_cache/026_svd_cf_valid_seed2.npy\nwrote 2,524,980 fixed-seed2 top-CF predictions for split=valid",
+  "predictions_hash": "cd8c2139c874",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668665,
+      "nDCG@5": 0.597334,
+      "primary": 0.632999
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668665,
+      "nDCG@5": 0.597334,
+      "primary": 0.632999
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668665,
+      "nDCG@5": 0.597334,
+      "primary": 0.632999
+    }
+  ],
+  "seconds": 89.5,
+  "verdict": "worse",
+  "delta": -0.012101,
+  "tokens_in": 126676,
+  "tokens_out": 7759,
+  "tokens_cached": 95744,
+  "cost_usd": 0.202792,
+  "model": "gpt-5.5",
+  "agent_iteration": 21,
+  "wall_seconds": 162.1,
+  "recovery_events": []
+}

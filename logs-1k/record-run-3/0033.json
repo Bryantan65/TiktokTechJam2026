@@ -1,0 +1,65 @@
+{
+  "iteration": 33,
+  "solution": "logs-1k/record-run-3/solutions/034_rrf_cf_fusion.py",
+  "hypothesis": "improve 29: the last variants added new high-variance members and hurt, so keep node-29's unchanged seed-2 members and change only the combiner to a top-heavy reciprocal-rank fusion blended back with node 29. This directly targets nDCG@5 while preserving the proven linear blend for GAUC.",
+  "parent": "29",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T16:32:44+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.63093,
+  "GAUC": 0.665185,
+  "nDCG@5": 0.596675,
+  "source_hash": "c33a0f27142c",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/022_mtl_auxheads_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nloaded cache pred_cache/026_svd_cf_valid_seed2.npy\nloaded cache pred_cache/033_repeat_hist_valid_seed2.npy\nwrote 2,524,980 RRF-CF predictions for split=valid",
+  "predictions_hash": "86a48fc4bbe4",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.665185,
+      "nDCG@5": 0.596675,
+      "primary": 0.63093
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.665185,
+      "nDCG@5": 0.596675,
+      "primary": 0.63093
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.665185,
+      "nDCG@5": 0.596675,
+      "primary": 0.63093
+    }
+  ],
+  "seconds": 91.9,
+  "verdict": "worse",
+  "delta": -0.01417,
+  "tokens_in": 78822,
+  "tokens_out": 4090,
+  "tokens_cached": 62976,
+  "cost_usd": 0.112003,
+  "model": "gpt-5.5",
+  "agent_iteration": 25,
+  "wall_seconds": 138.4,
+  "recovery_events": []
+}

@@ -1,0 +1,65 @@
+{
+  "iteration": 34,
+  "solution": "logs-1k/record-run-3/solutions/035_ips_debiased_stats.py",
+  "hypothesis": "draft 8: change mechanism to exposure debiasing using the label-free random log, inspired by IPS unbiased LTR (Joachims et al. https://www.ijcai.org/proceedings/2018/738). Estimate item/author/tab propensities from random-vs-standard exposure counts, build IPS-weighted historical rates, and blend at a readable 30% with node 29.",
+  "parent": "29",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T16:35:21+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.62698,
+  "GAUC": 0.669937,
+  "nDCG@5": 0.584023,
+  "source_hash": "9229345a840d",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/022_mtl_auxheads_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nloaded cache pred_cache/026_svd_cf_valid_seed2.npy\nreading label-free random exposure log from /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data/log_random_4_22_to_5_08_1k.csv\nrandom exposure rows 43028 unique video/author/tab 7388 0 4\nratio examples tab {'11': 5.0, '14': 5.0, '9': 5.0, '3': 1.108, '12': 5.0, '2': 0.2, '5': 3.07, '4': 0.2}\nIPS weighted global mean 0.2534299585781141 effective weight mean 0.7746225049569871\nwrote 2,524,980 IPS-debiased blend predictions for split=valid",
+  "predictions_hash": "cc30eb663d27",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669937,
+      "nDCG@5": 0.584023,
+      "primary": 0.62698
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669937,
+      "nDCG@5": 0.584023,
+      "primary": 0.62698
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669937,
+      "nDCG@5": 0.584023,
+      "primary": 0.62698
+    }
+  ],
+  "seconds": 329.7,
+  "verdict": "worse",
+  "delta": -0.01812,
+  "tokens_in": 140836,
+  "tokens_out": 5629,
+  "tokens_cached": 116480,
+  "cost_usd": 0.17542,
+  "model": "gpt-5.5",
+  "agent_iteration": 26,
+  "wall_seconds": 395.8,
+  "recovery_events": []
+}

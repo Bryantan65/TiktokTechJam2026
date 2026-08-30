@@ -1,0 +1,65 @@
+{
+  "iteration": 12,
+  "solution": "logs-1k/record-run-3/solutions/013_recent_positive_affinity.py",
+  "hypothesis": "improve 11: recency rates lifted GAUC but hurt top-5, so replace them with a sequence-like recent-positive affinity member (same user recently positive on same video/author/tab/duration) at 30%; BPRH-style heterogeneous implicit feedback motivates weighting positive histories by action strength/recency (https://www.sciencedirect.com/science/article/pii/S0020025516315742).",
+  "parent": "11",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T14:56:01+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.623904,
+  "GAUC": 0.668792,
+  "nDCG@5": 0.579017,
+  "source_hash": "97356b25795e",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/009_softmax_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nrecpos dim=2925549 positives=1332063 mean_wpos=0.161175\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "1c1fbea1192e",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.001483,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669416,
+      "nDCG@5": 0.581539,
+      "primary": 0.625477
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668735,
+      "nDCG@5": 0.578674,
+      "primary": 0.623704
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668224,
+      "nDCG@5": 0.576839,
+      "primary": 0.622532
+    }
+  ],
+  "seconds": 175.3,
+  "verdict": "worse",
+  "delta": -0.021196,
+  "tokens_in": 82319,
+  "tokens_out": 7507,
+  "tokens_cached": 62976,
+  "cost_usd": 0.154916,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 249.7,
+  "recovery_events": []
+}

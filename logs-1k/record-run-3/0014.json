@@ -1,0 +1,65 @@
+{
+  "iteration": 14,
+  "solution": "logs-1k/record-run-3/solutions/015_rank_fusion_softmax55.py",
+  "hypothesis": "improve 10: with added heuristic members hurting node 10, use cached node-10 members only and shift rank fusion to 55% softmax / 45% stats; ListNet-style listwise ranking emphasizes top ordering (https://ai-knowledge-tree.vercel.app/pillar/N/N4/listwise-ranking), so a small tilt may recover nDCG@5 without much GAUC loss.",
+  "parent": "10",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T15:03:46+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.627663,
+  "GAUC": 0.665621,
+  "nDCG@5": 0.589705,
+  "source_hash": "478e28ee3462",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/009_softmax_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "ac72b330065c",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.001437,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.666223,
+      "nDCG@5": 0.591366,
+      "primary": 0.628795
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.665591,
+      "nDCG@5": 0.586501,
+      "primary": 0.626046
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.665049,
+      "nDCG@5": 0.591247,
+      "primary": 0.628148
+    }
+  ],
+  "seconds": 85.7,
+  "verdict": "worse",
+  "delta": -0.017437,
+  "tokens_in": 92399,
+  "tokens_out": 4693,
+  "tokens_cached": 72192,
+  "cost_usd": 0.133544,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 135.4,
+  "recovery_events": []
+}

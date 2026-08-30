@@ -1,0 +1,65 @@
+{
+  "iteration": 22,
+  "solution": "logs-1k/record-run-3/solutions/023_stacked_blend.py",
+  "hypothesis": "improve 21: replace the fixed node-21 fusion with a supervised stacker trained on leave-one-out train-row base scores/ranks; competition ranking writeups often gain from learned second-stage blending, and here it can learn the GAUC/nDCG tradeoff directly from train labels. This uses only base predictions and tuple fields, not raw valid/test feedback.",
+  "parent": "21",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T15:46:40+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.621738,
+  "GAUC": 0.663619,
+  "nDCG@5": 0.579857,
+  "source_hash": "26f6d006f30d",
+  "stdout_tail": "mtl ep 03 loss 1.2652 primary 0.6074 6.7s\nmtl ep 04 loss 0.9994 primary 0.6097 7.0s\nmtl ep 05 loss 0.8630 primary 0.6153 6.8s\nmtl ep 06 loss 0.7654 primary 0.6125 7.9s\nmtl ep 07 loss 0.7665 primary 0.6127 8.1s\nmtl ep 08 loss 0.6084 primary 0.6152 8.8s\nmtl ep 09 loss 0.5725 primary 0.6167 8.7s\nmtl ep 10 loss 0.5676 primary 0.6133 7.1s\nmtl ep 11 loss 0.6382 primary 0.6124 5.9s\nmtl ep 12 loss 0.6020 primary 0.6131 5.7s\nmtl ep 13 loss 0.5254 primary 0.6139 5.5s\nmtl ep 14 loss 0.5666 primary 0.6138 5.6s\nmtl ep 15 loss 0.3973 primary 0.6130 5.7s\nstats target=train dim=2925549 gm=0.263463\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "a61134a56fa3",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.002143,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.665605,
+      "nDCG@5": 0.58244,
+      "primary": 0.624022
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.663354,
+      "nDCG@5": 0.576185,
+      "primary": 0.61977
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.661899,
+      "nDCG@5": 0.580947,
+      "primary": 0.621423
+    }
+  ],
+  "seconds": 568.7,
+  "verdict": "worse",
+  "delta": -0.023362,
+  "tokens_in": 78231,
+  "tokens_out": 10204,
+  "tokens_cached": 60928,
+  "cost_usd": 0.175761,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 681.5,
+  "recovery_events": []
+}

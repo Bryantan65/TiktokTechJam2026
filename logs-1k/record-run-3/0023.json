@@ -1,0 +1,65 @@
+{
+  "iteration": 23,
+  "solution": "logs-1k/record-run-3/solutions/024_gated_aux_top.py",
+  "hypothesis": "improve 21: node 21's auxiliary rank improved top-5 but diluted whole-list GAUC, so keep the node-19 50/50 main-stat base and gate auxiliary influence to the top tail where nDCG@5 is decided. This is a cheap fusion-only refinement using the unchanged cached node-21 members.",
+  "parent": "21",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T15:57:21+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.629883,
+  "GAUC": 0.667418,
+  "nDCG@5": 0.592348,
+  "source_hash": "384b7812191c",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/022_mtl_auxheads_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "86fec52358fc",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.001398,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667407,
+      "nDCG@5": 0.590093,
+      "primary": 0.62875
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667769,
+      "nDCG@5": 0.59114,
+      "primary": 0.629454
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667079,
+      "nDCG@5": 0.595811,
+      "primary": 0.631445
+    }
+  ],
+  "seconds": 86.4,
+  "verdict": "worse",
+  "delta": -0.015217,
+  "tokens_in": 209138,
+  "tokens_out": 7146,
+  "tokens_cached": 177152,
+  "cost_usd": 0.240001,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 158.7,
+  "recovery_events": []
+}

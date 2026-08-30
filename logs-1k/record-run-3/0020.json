@@ -1,0 +1,65 @@
+{
+  "iteration": 20,
+  "solution": "logs-1k/record-run-3/solutions/021_mtl_gain_softmax_fusion.py",
+  "hypothesis": "improve 19: node 19 showed auxiliary supervision helps; make it more ranking-aligned by weighting positive mass in the per-user softmax with bounded TRAIN-only engagement strength, so stronger positives shape top ranks without using auxiliary columns at prediction.",
+  "parent": "19",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T15:32:54+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.627288,
+  "GAUC": 0.666363,
+  "nDCG@5": 0.588212,
+  "source_hash": "649b235f4677",
+  "stdout_tail": "mtl_gain ep 02 loss 0.9322 primary 0.5961 7.2s\nmtl_gain ep 03 loss 1.0055 primary 0.6036 6.2s\nmtl_gain ep 04 loss 0.7517 primary 0.6078 6.1s\nmtl_gain ep 05 loss 0.6290 primary 0.6130 6.0s\nmtl_gain ep 06 loss 0.5410 primary 0.6090 6.2s\nmtl_gain ep 07 loss 0.5431 primary 0.6121 6.3s\nmtl_gain ep 08 loss 0.3831 primary 0.6148 6.4s\nmtl_gain ep 09 loss 0.3458 primary 0.6142 5.8s\nmtl_gain ep 10 loss 0.3249 primary 0.6118 6.4s\nmtl_gain ep 11 loss 0.4167 primary 0.6098 6.4s\nmtl_gain ep 12 loss 0.3732 primary 0.6106 6.8s\nmtl_gain ep 13 loss 0.2921 primary 0.6102 5.7s\nmtl_gain ep 14 loss 0.3266 primary 0.6088 5.9s\nloaded cache pred_cache/009_stats_valid_seed2.npy\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "6ce50fa82776",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.004058,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.66693,
+      "nDCG@5": 0.594681,
+      "primary": 0.630806
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.666498,
+      "nDCG@5": 0.579198,
+      "primary": 0.622848
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.66566,
+      "nDCG@5": 0.590757,
+      "primary": 0.628209
+    }
+  ],
+  "seconds": 320.9,
+  "verdict": "worse",
+  "delta": -0.017812,
+  "tokens_in": 110419,
+  "tokens_out": 5700,
+  "tokens_cached": 83456,
+  "cost_usd": 0.166135,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 371.4,
+  "recovery_events": []
+}

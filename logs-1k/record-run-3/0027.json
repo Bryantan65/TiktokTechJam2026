@@ -1,0 +1,65 @@
+{
+  "iteration": 27,
+  "solution": "logs-1k/record-run-3/solutions/028_heavy_pos_svd.py",
+  "hypothesis": "improve 25: signed SVD hurt, but node 25's positive-only CF raised nDCG; reuse the unchanged cached members and increase positive-SVD weight from 25% to 45% to see if the top-5 gain was underweighted. This is a readable blend-weight test of the drafted CF mechanism.",
+  "parent": "25",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T16:13:29+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.623832,
+  "GAUC": 0.655916,
+  "nDCG@5": 0.591747,
+  "source_hash": "e1727ce67e1f",
+  "stdout_tail": "{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/022_mtl_auxheads_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nloaded cache pred_cache/026_svd_cf_valid_seed2.npy\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "f27fde709829",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.002274,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.655503,
+      "nDCG@5": 0.589484,
+      "primary": 0.622493
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.656237,
+      "nDCG@5": 0.588852,
+      "primary": 0.622545
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.656008,
+      "nDCG@5": 0.596906,
+      "primary": 0.626457
+    }
+  ],
+  "seconds": 88.7,
+  "verdict": "worse",
+  "delta": -0.021268,
+  "tokens_in": 97452,
+  "tokens_out": 6459,
+  "tokens_cached": 78976,
+  "cost_usd": 0.150268,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 146.9,
+  "recovery_events": []
+}

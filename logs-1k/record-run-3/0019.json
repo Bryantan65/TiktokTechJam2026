@@ -1,0 +1,65 @@
+{
+  "iteration": 19,
+  "solution": "logs-1k/record-run-3/solutions/020_mtl_softmax_fusion.py",
+  "hypothesis": "debug 18: node 18 may have failed because auxiliary signals were used as a noisy standalone ranker; test the standard multi-task formulation instead, using raw feedback only as auxiliary training heads and predicting with the main long-view head at readable 50% fusion with stats.",
+  "parent": "18",
+  "uct_rank": 13,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T15:26:50+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.629061,
+  "GAUC": 0.667471,
+  "nDCG@5": 0.590651,
+  "source_hash": "d9feacbedd55",
+  "stdout_tail": "mtl ep 03 loss 1.2652 primary 0.6074 5.8s\nmtl ep 04 loss 0.9994 primary 0.6097 6.0s\nmtl ep 05 loss 0.8630 primary 0.6153 5.9s\nmtl ep 06 loss 0.7654 primary 0.6125 6.1s\nmtl ep 07 loss 0.7665 primary 0.6127 5.9s\nmtl ep 08 loss 0.6084 primary 0.6152 6.5s\nmtl ep 09 loss 0.5725 primary 0.6167 6.6s\nmtl ep 10 loss 0.5676 primary 0.6133 5.6s\nmtl ep 11 loss 0.6382 primary 0.6124 5.6s\nmtl ep 12 loss 0.6020 primary 0.6131 5.8s\nmtl ep 13 loss 0.5254 primary 0.6139 5.7s\nmtl ep 14 loss 0.5666 primary 0.6138 5.8s\nmtl ep 15 loss 0.3973 primary 0.6130 5.6s\nloaded cache pred_cache/009_stats_valid_seed2.npy\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "94aacfcc42d3",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.001107,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667465,
+      "nDCG@5": 0.588945,
+      "primary": 0.628205
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667813,
+      "nDCG@5": 0.58952,
+      "primary": 0.628666
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667134,
+      "nDCG@5": 0.593489,
+      "primary": 0.630311
+    }
+  ],
+  "seconds": 313.5,
+  "verdict": "worse",
+  "delta": -0.016039,
+  "tokens_in": 156047,
+  "tokens_out": 8235,
+  "tokens_cached": 129408,
+  "cost_usd": 0.213651,
+  "model": "gpt-5.5",
+  "agent_iteration": 11,
+  "wall_seconds": 404.2,
+  "recovery_events": []
+}

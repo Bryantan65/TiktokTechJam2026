@@ -1,0 +1,65 @@
+{
+  "iteration": 28,
+  "solution": "logs-1k/record-run-3/solutions/029_bagged_node25.py",
+  "hypothesis": "improve 25: node 25 is the best but its seed spread is large and seed 2 is much stronger, so average node-25 predictions from seeds 0/1/2 inside each run using the existing member caches. This tests whether variance reduction, not a new weak member, can lock in the high-seed ranking.",
+  "parent": "25",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T16:15:57+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.63114,
+  "GAUC": 0.66867,
+  "nDCG@5": 0.59361,
+  "source_hash": "8514df78ae4a",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/022_mtl_auxheads_valid_seed0.npy\nloaded cache pred_cache/009_stats_valid_seed0.npy\nloaded cache pred_cache/026_svd_cf_valid_seed0.npy\nloaded cache pred_cache/022_mtl_auxheads_valid_seed1.npy\nloaded cache pred_cache/009_stats_valid_seed1.npy\nloaded cache pred_cache/026_svd_cf_valid_seed1.npy\nloaded cache pred_cache/022_mtl_auxheads_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nloaded cache pred_cache/026_svd_cf_valid_seed2.npy\nwrote 2,524,980 bagged predictions for split=valid",
+  "predictions_hash": "6828370c0eec",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.66867,
+      "nDCG@5": 0.59361,
+      "primary": 0.63114
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.66867,
+      "nDCG@5": 0.59361,
+      "primary": 0.63114
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.66867,
+      "nDCG@5": 0.59361,
+      "primary": 0.63114
+    }
+  ],
+  "seconds": 90.2,
+  "verdict": "worse",
+  "delta": -0.01396,
+  "tokens_in": 125094,
+  "tokens_out": 6563,
+  "tokens_cached": 98432,
+  "cost_usd": 0.181501,
+  "model": "gpt-5.5",
+  "agent_iteration": 20,
+  "wall_seconds": 149.3,
+  "recovery_events": []
+}

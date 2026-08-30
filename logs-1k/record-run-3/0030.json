@@ -1,0 +1,65 @@
+{
+  "iteration": 30,
+  "solution": "logs-1k/record-run-3/solutions/031_sharper_topcf.py",
+  "hypothesis": "improve 29: node 29 showed CF is useful mainly for top-5, so sharpen the same cached seed-2 CF gate from 20%+25%*base^8 to 12%+48%*base^12. This should reduce tail CF damage to GAUC while giving higher CF authority only among candidates likely to affect nDCG@5.",
+  "parent": "29",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T16:20:49+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.631716,
+  "GAUC": 0.668603,
+  "nDCG@5": 0.594828,
+  "source_hash": "0d3f91d9e2ce",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/022_mtl_auxheads_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nloaded cache pred_cache/026_svd_cf_valid_seed2.npy\nwrote 2,524,980 sharper top-CF predictions for split=valid",
+  "predictions_hash": "47986953c2c0",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668603,
+      "nDCG@5": 0.594828,
+      "primary": 0.631716
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668603,
+      "nDCG@5": 0.594828,
+      "primary": 0.631716
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668603,
+      "nDCG@5": 0.594828,
+      "primary": 0.631716
+    }
+  ],
+  "seconds": 88.2,
+  "verdict": "worse",
+  "delta": -0.013384,
+  "tokens_in": 74289,
+  "tokens_out": 5127,
+  "tokens_cached": 53120,
+  "cost_usd": 0.130752,
+  "model": "gpt-5.5",
+  "agent_iteration": 22,
+  "wall_seconds": 127.1,
+  "recovery_events": []
+}

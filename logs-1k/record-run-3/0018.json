@@ -1,0 +1,65 @@
+{
+  "iteration": 18,
+  "solution": "logs-1k/record-run-3/solutions/019_aux_feedback_rank_fusion.py",
+  "hypothesis": "draft 3: multi-task/auxiliary feedback ranking uses clicks, likes and dwell-style signals as side objectives (e.g. auxiliary feedback overview https://arxiv.org/abs/1911.07423); instead of low-weight blending, add a readable 30% rank member from TRAIN-only raw auxiliary-feedback aggregates to node-10 fusion.",
+  "parent": "10",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T15:20:39+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.615645,
+  "GAUC": 0.661847,
+  "nDCG@5": 0.569444,
+  "source_hash": "15aa793b4185",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/009_softmax_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nreading aux from /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data/log_standard_4_08_to_4_21_1k.csv\naux columns ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward', 'is_hate', 'is_profile_enter', 'play_time_ms', 'profile_stay_time', 'comment_stay_time']\naux_feedback dim=2925549 members=7bin/3cont wsum=35.371\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "d3b750214830",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.002515,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.662426,
+      "nDCG@5": 0.57467,
+      "primary": 0.618548
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.661723,
+      "nDCG@5": 0.566835,
+      "primary": 0.614279
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.661391,
+      "nDCG@5": 0.566828,
+      "primary": 0.614109
+    }
+  ],
+  "seconds": 279.9,
+  "verdict": "worse",
+  "delta": -0.029455,
+  "tokens_in": 105591,
+  "tokens_out": 7075,
+  "tokens_cached": 59904,
+  "cost_usd": 0.21492,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 348.9,
+  "recovery_events": []
+}

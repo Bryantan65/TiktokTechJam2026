@@ -1,0 +1,65 @@
+{
+  "iteration": 32,
+  "solution": "logs-1k/record-run-3/solutions/033_histrepeat_boost.py",
+  "hypothesis": "improve 29: node 29's best gain is top-5 personalization, so add a TRAIN-only repeat-history member for user-video/user-author positive repeats and gate it only near the base top. This is the most likely last-shot move because repeated impressions are known non-unique and can affect nDCG@5 without replacing the proven node-29 blend.",
+  "parent": "29",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T16:29:01+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.63136,
+  "GAUC": 0.668506,
+  "nDCG@5": 0.594214,
+  "source_hash": "9494e625f9e5",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/022_mtl_auxheads_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nloaded cache pred_cache/026_svd_cf_valid_seed2.npy\nrepeat hist nonzero uv/ua 0.0031913124064349026 0.33696187692575785 score std 0.917408649611796\nwrote 2,524,980 repeat-history boosted predictions for split=valid",
+  "predictions_hash": "ca6e0b7abbd6",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668506,
+      "nDCG@5": 0.594214,
+      "primary": 0.63136
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668506,
+      "nDCG@5": 0.594214,
+      "primary": 0.63136
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668506,
+      "nDCG@5": 0.594214,
+      "primary": 0.63136
+    }
+  ],
+  "seconds": 176.4,
+  "verdict": "worse",
+  "delta": -0.01374,
+  "tokens_in": 94609,
+  "tokens_out": 7500,
+  "tokens_cached": 66432,
+  "cost_usd": 0.178658,
+  "model": "gpt-5.5",
+  "agent_iteration": 24,
+  "wall_seconds": 242.4,
+  "recovery_events": []
+}

@@ -1,0 +1,65 @@
+{
+  "iteration": 31,
+  "solution": "logs-1k/record-run-3/solutions/032_watchtime_cf.py",
+  "hypothesis": "improve 29: implicit-feedback MF commonly weights observed interactions by confidence/strength such as dwell time (Hu-Koren-Volinsky implicit MF, e.g. https://doi.org/10.1109/ICDM.2008.22); replace node-29 binary positive SVD with TRAIN-only log play_time_ms weights. This tests whether CF should distinguish strong positives without reading any target-row auxiliary columns.",
+  "parent": "29",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T16:23:26+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.630602,
+  "GAUC": 0.668529,
+  "nDCG@5": 0.592676,
+  "source_hash": "8995814a2bdc",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nloaded cache pred_cache/022_mtl_auxheads_valid_seed2.npy\nloaded cache pred_cache/009_stats_valid_seed2.npy\nreading play_time_ms train weights from /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data/log_standard_4_08_to_4_21_1k.csv\nplay weight stats mean/med/max 0.9111641049385071 0.7479196190834045 3.064173460006714\nweighted svd matrix (984, 2119511) nnz=1328262 k=64 seed=2\nweighted svd matrix (984, 805028) nnz=1076885 k=48 seed=19\nwrote 2,524,980 watchtime-CF predictions for split=valid",
+  "predictions_hash": "c8031f481bdb",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668529,
+      "nDCG@5": 0.592676,
+      "primary": 0.630602
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668529,
+      "nDCG@5": 0.592676,
+      "primary": 0.630602
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668529,
+      "nDCG@5": 0.592676,
+      "primary": 0.630602
+    }
+  ],
+  "seconds": 268.8,
+  "verdict": "worse",
+  "delta": -0.014498,
+  "tokens_in": 149713,
+  "tokens_out": 7040,
+  "tokens_cached": 120576,
+  "cost_usd": 0.203531,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 337.9,
+  "recovery_events": []
+}
