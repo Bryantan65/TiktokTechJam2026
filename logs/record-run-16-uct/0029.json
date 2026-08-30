@@ -1,0 +1,33 @@
+{
+  "iteration": 29,
+  "solution": "logs/record-run-16-uct/solutions/029_time_residual.py",
+  "hypothesis": "draft time features: branch from the best despite UCT because the convergence watch needs a higher-payoff new mechanism; CTR writeups commonly use hour/weekday/recency features (Kaggle kernels index https://www.kaggle.com/kernels), so join raw CSV hourmin and add a small smoothed TRAIN-only user-hour/user-weekday residual to node 024.",
+  "parent": "24",
+  "uct_rank": 11,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:32:32+08:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "2ef0c4cbb0ea",
+  "seeds_completed": 0,
+  "seconds": 902.1,
+  "verdict": "failed",
+  "tokens_in": 116502,
+  "tokens_out": 7316,
+  "tokens_cached": 93312,
+  "cost_usd": 0.177791,
+  "model": "gpt-5.5",
+  "agent_iteration": 28,
+  "wall_seconds": 987.5,
+  "recovery_events": []
+}

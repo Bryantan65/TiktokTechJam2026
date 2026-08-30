@@ -1,0 +1,64 @@
+{
+  "iteration": 20,
+  "solution": "logs/record-run-16-uct/solutions/020_hist_global_blend.py",
+  "hypothesis": "improve 19: the train-only residual prior helped, so make it stronger and add smoothed global video/author/tab residuals to cover users without repeated user-context matches.",
+  "parent": "19",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:18:57+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604073,
+  "GAUC": 0.670738,
+  "nDCG@5": 0.537408,
+  "source_hash": "00f5f9e3cd77",
+  "predictions_hash": "5fb7c65cef70",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670738,
+      "nDCG@5": 0.537408,
+      "primary": 0.604073
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670738,
+      "nDCG@5": 0.537408,
+      "primary": 0.604073
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670738,
+      "nDCG@5": 0.537408,
+      "primary": 0.604073
+    }
+  ],
+  "seconds": 28.8,
+  "verdict": "KEPT",
+  "delta": 0.002573,
+  "tokens_in": 51449,
+  "tokens_out": 4178,
+  "tokens_cached": 38784,
+  "cost_usd": 0.092835,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 60.5,
+  "recovery_events": []
+}

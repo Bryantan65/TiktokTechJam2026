@@ -1,0 +1,65 @@
+{
+  "iteration": 8,
+  "solution": "logs/record-run-16-uct/solutions/008_soft_hard_bpr_fm.py",
+  "hypothesis": "debug 7: pure max hard-negative BPR likely collapsed because one noisy early negative got all gradient; use detached softmax weighting over five same-user candidates so the model emphasizes hard negatives without discarding the stabilizing easy-negative signal.",
+  "parent": "7",
+  "uct_rank": 5,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T17:55:51+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603296,
+  "GAUC": 0.669722,
+  "nDCG@5": 0.536871,
+  "source_hash": "b6312611aeb7",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "5b596a634246",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000223,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669784,
+      "nDCG@5": 0.537322,
+      "primary": 0.603553
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.66939,
+      "nDCG@5": 0.536906,
+      "primary": 0.603148
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669991,
+      "nDCG@5": 0.536385,
+      "primary": 0.603188
+    }
+  ],
+  "seconds": 64.4,
+  "verdict": "noise",
+  "delta": 0.001796,
+  "tokens_in": 156442,
+  "tokens_out": 7873,
+  "tokens_cached": 133120,
+  "cost_usd": 0.203595,
+  "model": "gpt-5.5",
+  "agent_iteration": 7,
+  "wall_seconds": 148.5,
+  "recovery_events": []
+}

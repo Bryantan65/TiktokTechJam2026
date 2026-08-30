@@ -1,0 +1,64 @@
+{
+  "iteration": 19,
+  "solution": "logs/record-run-16-uct/solutions/019_hist_residual_blend.py",
+  "hypothesis": "improve 18: add a readable 10% train-only historical residual prior for repeated user-video/user-author/user-tab contexts, a common recommender ensemble feature/stacking trick (rank-fusion background search returned RRF form but no useful cited writeup).",
+  "parent": "18",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:17:59+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604759,
+  "GAUC": 0.671491,
+  "nDCG@5": 0.538027,
+  "source_hash": "21166e6c6f66",
+  "predictions_hash": "03185ba38766",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671491,
+      "nDCG@5": 0.538027,
+      "primary": 0.604759
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671491,
+      "nDCG@5": 0.538027,
+      "primary": 0.604759
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671491,
+      "nDCG@5": 0.538027,
+      "primary": 0.604759
+    }
+  ],
+  "seconds": 26.6,
+  "verdict": "KEPT",
+  "delta": 0.003259,
+  "tokens_in": 62275,
+  "tokens_out": 5648,
+  "tokens_cached": 49664,
+  "cost_usd": 0.112839,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 91.9,
+  "recovery_events": []
+}

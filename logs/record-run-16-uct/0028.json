@@ -1,0 +1,64 @@
+{
+  "iteration": 28,
+  "solution": "logs/record-run-16-uct/solutions/028_itemcf_negative.py",
+  "hypothesis": "debug 27: the 20% positive item-CF author co-occurrence blend caused a large GAUC drop, so test the concrete bug/assumption that this signal is an anti-novelty residual by subtracting it at 10% from the node-024-style ensemble instead of adding it.",
+  "parent": "27",
+  "uct_rank": 17,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:30:36+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604173,
+  "GAUC": 0.670769,
+  "nDCG@5": 0.537576,
+  "source_hash": "4098bf23bb6a",
+  "predictions_hash": "0b01dfca6d49",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670769,
+      "nDCG@5": 0.537576,
+      "primary": 0.604173
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670769,
+      "nDCG@5": 0.537576,
+      "primary": 0.604173
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670769,
+      "nDCG@5": 0.537576,
+      "primary": 0.604173
+    }
+  ],
+  "seconds": 30.7,
+  "verdict": "KEPT",
+  "delta": 0.002673,
+  "tokens_in": 101782,
+  "tokens_out": 4638,
+  "tokens_cached": 82048,
+  "cost_usd": 0.136739,
+  "model": "gpt-5.5",
+  "agent_iteration": 27,
+  "wall_seconds": 84.7,
+  "recovery_events": []
+}

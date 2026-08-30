@@ -1,0 +1,64 @@
+{
+  "iteration": 30,
+  "solution": "logs/record-run-16-uct/solutions/030_debug_time_date.py",
+  "hypothesis": "debug 29: the time-feature draft timed out in the raw CSV hourmin join, so keep the time hypothesis but replace it with cheap tuple-only weekday/date-trend residuals blended at 3% on node 024; this tests whether calendar time carries signal before attempting a faster hourmin join.",
+  "parent": "29",
+  "uct_rank": null,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:48:32+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604641,
+  "GAUC": 0.671342,
+  "nDCG@5": 0.537941,
+  "source_hash": "c04a08bfb133",
+  "predictions_hash": "306a37e2e7c0",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671342,
+      "nDCG@5": 0.537941,
+      "primary": 0.604641
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671342,
+      "nDCG@5": 0.537941,
+      "primary": 0.604641
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671342,
+      "nDCG@5": 0.537941,
+      "primary": 0.604641
+    }
+  ],
+  "seconds": 49.4,
+  "verdict": "KEPT",
+  "delta": 0.003141,
+  "tokens_in": 69075,
+  "tokens_out": 6010,
+  "tokens_cached": 50048,
+  "cost_usd": 0.132691,
+  "model": "gpt-5.5",
+  "agent_iteration": 29,
+  "wall_seconds": 106.4,
+  "recovery_events": []
+}

@@ -115,6 +115,7 @@ would leave the fixes looking like guesses.
 | `logs/record-run-12/` | 34 experiments, converged, best 0.605216 | Zheng's, on the cleaned prompt; run 3 held |
 | `logs/record-run-13/` | 32 experiments, converged, best 0.605484 | first run on the broadened web_search; run 3 held |
 | `logs/record-run-15-bryan-pure/` | 30 experiments, converged, best 0.605499 | 30/30 scored, no failures; run 3 held |
+| `logs/record-run-16-uct/` | 30 experiments, converged, best 0.604830 | UCT non-greedy search; null on score, fastest run on record; run 3 held |
 
 **Reading a ledger programmatically: filter on `verdict`.** Run 12's highest
 `primary` across its JSON records is 0.605885 at experiment 5, which is *not* a
@@ -2441,3 +2442,137 @@ it is - those are two of the weaker greedy runs.
 **One thing to watch:** 4 failed experiments (memory, timeouts) against 0 in each
 of runs 13 and 15. Possibly UCT steering toward more ambitious untried branches -
 DIN, LambdaRank and listwise all appear - or possibly noise at n=1.
+
+### Three mechanisms tested, three nulls, 2026-08-30
+
+Each of these changed agent behaviour by a measurable amount. None moved the
+score. Recorded together because the pattern is the finding: **behaviour is
+changeable, the ceiling is not.**
+
+#### 1. Diverse reserves — refuted
+
+The agent discards every solution below the incumbent. The proposal was to keep
+weaker-but-decorrelated ones, on the theory that a model scoring 0.6017 which
+*orders users differently* adds more in a blend than one scoring 0.6052 that
+agrees everywhere.
+
+Tested directly rather than built: run 15's winner blended against six of its own
+rejected solutions, weights chosen cross-fitted (picked on half the users by
+hash, scored on the other half, both ways) so the answer is transferable gain.
+
+```
+candidate                          solo      rho    cross-fitted gain
+017_lgbm_pointwise_te_blend30   0.601697   0.9141      +0.000155
+015_listwise_blend50            0.604090   0.9460      +0.000061
+002_bpr_fm                      0.602686   0.9187      +0.000012
+016_lambdarank_te_blend30       0.600108   0.8841      -0.000033
+008_bpr3neg_rrf_blend           0.603839   0.9388      -0.000067
+021_sequence_overlap_blend      0.599748   0.8855      -0.000473
+```
+
+Best case is under half a run-to-run sd, and three of six make it worse. The
+mechanism fails in a specific way worth recording: **the two most decorrelated
+candidates performed worst.** `016` (rho 0.8841) and `021` (rho 0.8855) are the
+most different from the incumbent and gave the worst results. Diversity does not
+predict blend value here - those models are decorrelated because they are wrong
+in different places, not because they capture complementary signal. That
+distinction is the whole idea, and it does not hold on this data.
+
+Script: `scratchpad/reserves.py`.
+
+#### 2. UCT non-greedy search — null on score, real on cost
+
+Built and run properly: `harness/search.py`, tagged `uct-search-v1`, recorded per
+experiment as `uct_rank`. MLE-bench reports AIDE's greedy tree search at 39.6% on
+MLE-bench Lite against 47.7% for non-greedy over the same operators, and our
+agent is greedy - it expands the best node, which conflates "scored lower" with
+"barely tested".
+
+```
+UCT(n) = value(n) + C*sqrt(ln N / (1 + children(n)))     C = 0.5
+value scaled by the organisers' epsilon: 1.0 at the best, 0.0 a full 0.002 below
+```
+
+Scaling by epsilon rather than (max-min) matters: raw primaries span ~0.006, so
+range-normalising would turn seed noise into large ranking differences and the
+search would chase measurement error.
+
+**Behaviour changed a lot.** Across the archive, UCT points somewhere other than
+greedy on 58% of turns, and the agent had been choosing the UCT-top node on only
+40%. With the ranking shown it chose it on 83% (shakedown) and 72% (run 16).
+Notable because the last thing we tried advising - the plateau detector - was
+measurably ignored: runs 10 and 11 both ran with it and produced the two longest
+exploit chains in the archive.
+
+**Score: null.** `record-run-16-uct` converged at 0.604830, 1.1 sd below the
+greedy median of 0.605216 and inside the greedy range (run 4 finished lower,
+greedily). The shakedown had sat at the 82nd percentile. Two draws straddling the
+median is a null, not a harm.
+
+**Cost: the fastest run in the archive.**
+
+```
+run 16-uct   49m compute   1.26h wall    98 s/experiment
+run 8        67m           1.63h        134 s/exp    <- previous best
+run 15       80m           1.66h        160 s/exp
+```
+
+23% faster wall clock than the best greedy run, at the same 30 scored
+experiments. There is a mechanism: greedy keeps expanding the incumbent, so the
+incumbent grows into an ever-heavier ensemble and each experiment costs more.
+UCT spreads across untouched nodes, which are shallower and cheaper to fit. **The
+exploration bonus acts as an implicit cost control.** Tokens went the other way
+(2.74M against a 2.3M median), so it is not a clean sweep.
+
+Kept, but for cost rather than score. n=1 on the wall-clock claim too, and the
+run carried 2 no-ops and 1 failure against zero of either in run 15.
+
+#### 3. On-device tensors and per-batch loss sync — both rejected
+
+Live GPU sampling showed 99% spikes falling to 4-7%, which read as a starved
+card. Two targeted fixes, both measured against the baseline on identical work:
+
+```
+                best    median   speedup   predictions
+baseline        31.1s    31.2s      -
+on-device       34.0s    34.1s     0.91x    identical
+no-sync         30.3s    30.8s     1.02x    identical
+```
+
+**Moving the training set onto the GPU made it slower.** The baseline was already
+doing the smarter thing: it gathers on the CPU - sequential, cache-friendly - and
+copies only the gathered batch, about 320 KB. The variant copies a small index
+but then does a *scattered* gather across a 46 MB device tensor, which is the
+access pattern GPUs are worst at. The copy removed was cheaper than the gather
+created.
+
+Removing ~140 GPU-to-CPU syncs per epoch bought 0.8 s, inside run-to-run noise.
+
+The likely explanation for the low readings: sampling ran at 2-second intervals
+across the whole run, which includes the ~34% of wall clock where the agent is
+thinking rather than training. Those readings were between experiments. The card
+appears genuinely busy during training - which is what two null results say.
+
+`solutions/001_torch_fm.py` untouched.
+
+### Where Pure stands after all of it
+
+```
+run 15      0.605499
+run 3       0.605493   <- submission of record, test 0.598508, +0.0039
+run 13      0.605484
+run 16-uct  0.604830
+```
+
+Every identified mechanism is now measured rather than assumed: capacity,
+regularisation, optimisation, auxiliary labels, both ensemble axes, blend
+weights, 1k depth, GroupCE, tie-breaking, cross-run decorrelation, diverse
+reserves, and non-greedy search. The train+valid refit was declined on organiser
+guidance with the payoff estimated (~11% more rows at the flat end of the data
+curve - 12 to 13 days is worth +0.0005/day against +0.0023/day at 6 to 12).
+
+The honest claim is not "Pure cannot be improved". It is that **every mechanism
+we can identify is measured, and the measurements are flat** - and the reason is
+in the data: user embeddings get 52 observations each against videos' 190, about
+3 per embedding dimension, and the one escape we could test (27k-level per-user
+depth via 1k) moved GAUC by +0.00073, t = 0.33.

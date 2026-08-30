@@ -1,0 +1,64 @@
+{
+  "iteration": 24,
+  "solution": "logs/record-run-16-uct/solutions/024_rank60_power_rank.py",
+  "hypothesis": "improve 22: node 022's stronger 60% rank blend hurt slightly, likely because plain percentile rank over-weights mid-list swaps; square the per-member rank percentile before fusion to emphasize the top of each user's list where nDCG@5 is measured.",
+  "parent": "22",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:24:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60483,
+  "GAUC": 0.671633,
+  "nDCG@5": 0.538027,
+  "source_hash": "1f70af538ded",
+  "predictions_hash": "ed19f7b9abf4",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671633,
+      "nDCG@5": 0.538027,
+      "primary": 0.60483
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671633,
+      "nDCG@5": 0.538027,
+      "primary": 0.60483
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671633,
+      "nDCG@5": 0.538027,
+      "primary": 0.60483
+    }
+  ],
+  "seconds": 26.7,
+  "verdict": "KEPT",
+  "delta": 0.00333,
+  "tokens_in": 119002,
+  "tokens_out": 5064,
+  "tokens_cached": 98048,
+  "cost_usd": 0.152049,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 78.1,
+  "recovery_events": []
+}

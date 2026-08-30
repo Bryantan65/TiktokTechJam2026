@@ -1,0 +1,64 @@
+{
+  "iteration": 15,
+  "solution": "logs/record-run-16-uct/solutions/015_history_affinity_blend.py",
+  "hypothesis": "draft 2: add a DIN-inspired user behaviour history signal (DIN paper https://arxiv.org/abs/1904.00177) to node 12: smoothed same-user item/author/tab/duration affinities from training history, blended at 30% after per-user z-normalisation.",
+  "parent": "12",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:10:19+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602738,
+  "GAUC": 0.669093,
+  "nDCG@5": 0.536384,
+  "source_hash": "b74e3f839a4b",
+  "predictions_hash": "13c40bca7e47",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669093,
+      "nDCG@5": 0.536384,
+      "primary": 0.602738
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669093,
+      "nDCG@5": 0.536384,
+      "primary": 0.602738
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669093,
+      "nDCG@5": 0.536384,
+      "primary": 0.602738
+    }
+  ],
+  "seconds": 33.3,
+  "verdict": "noise",
+  "delta": 0.001238,
+  "tokens_in": 86029,
+  "tokens_out": 5938,
+  "tokens_cached": 66048,
+  "cost_usd": 0.142356,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 92.9,
+  "recovery_events": []
+}

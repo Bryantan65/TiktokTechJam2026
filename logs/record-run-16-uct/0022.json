@@ -1,0 +1,64 @@
+{
+  "iteration": 22,
+  "solution": "logs/record-run-16-uct/solutions/022_rank60_hist10.py",
+  "hypothesis": "improve 19: node 020 showed stronger history/global priors hurt, so keep node-019's 10% user-context prior and instead test the only remaining monotone signal: increasing rank-percentile fusion from 50% to 60% while leaving cached members fixed.",
+  "parent": "19",
+  "uct_rank": 2,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:21:46+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60466,
+  "GAUC": 0.671387,
+  "nDCG@5": 0.537934,
+  "source_hash": "bd195dcee0d6",
+  "predictions_hash": "57d1b9ebcd3e",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671387,
+      "nDCG@5": 0.537934,
+      "primary": 0.60466
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671387,
+      "nDCG@5": 0.537934,
+      "primary": 0.60466
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671387,
+      "nDCG@5": 0.537934,
+      "primary": 0.60466
+    }
+  ],
+  "seconds": 27.0,
+  "verdict": "KEPT",
+  "delta": 0.00316,
+  "tokens_in": 168054,
+  "tokens_out": 4622,
+  "tokens_cached": 142720,
+  "cost_usd": 0.180915,
+  "model": "gpt-5.5",
+  "agent_iteration": 21,
+  "wall_seconds": 69.7,
+  "recovery_events": []
+}

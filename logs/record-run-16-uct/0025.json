@@ -1,0 +1,64 @@
+{
+  "iteration": 25,
+  "solution": "logs/record-run-16-uct/solutions/025_rank60_power3.py",
+  "hypothesis": "improve 24: p^2 rank fusion improved node 022 by top-emphasizing ranks; increase the rank-percentile power to p^3 while keeping the 60% rank blend and 10% history prior fixed to test whether sharper nDCG@5 focus helps further.",
+  "parent": "24",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:25:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60455,
+  "GAUC": 0.671275,
+  "nDCG@5": 0.537826,
+  "source_hash": "418e7846b611",
+  "predictions_hash": "a618dc004a1e",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671275,
+      "nDCG@5": 0.537826,
+      "primary": 0.60455
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671275,
+      "nDCG@5": 0.537826,
+      "primary": 0.60455
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671275,
+      "nDCG@5": 0.537826,
+      "primary": 0.60455
+    }
+  ],
+  "seconds": 26.9,
+  "verdict": "KEPT",
+  "delta": 0.00305,
+  "tokens_in": 71686,
+  "tokens_out": 4139,
+  "tokens_cached": 52096,
+  "cost_usd": 0.116413,
+  "model": "gpt-5.5",
+  "agent_iteration": 24,
+  "wall_seconds": 59.8,
+  "recovery_events": []
+}

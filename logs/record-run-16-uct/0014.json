@@ -1,0 +1,64 @@
+{
+  "iteration": 14,
+  "solution": "logs/record-run-16-uct/solutions/014_lgbm_stacked_ranker.py",
+  "hypothesis": "improve 13: RRF showed hand-crafted rank fusion is sensitive; train a small LightGBM LambdaRank stacker on cached member score/rank features and blend it at 30% with node-12's proven rank-percentile score, so the new combiner has readable weight without retraining members.",
+  "parent": "13",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:05:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604104,
+  "GAUC": 0.670704,
+  "nDCG@5": 0.537504,
+  "source_hash": "22f41dcd730b",
+  "predictions_hash": "e57ef6b12a58",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670704,
+      "nDCG@5": 0.537504,
+      "primary": 0.604104
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670704,
+      "nDCG@5": 0.537504,
+      "primary": 0.604104
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670704,
+      "nDCG@5": 0.537504,
+      "primary": 0.604104
+    }
+  ],
+  "seconds": 235.0,
+  "verdict": "KEPT",
+  "delta": 0.002604,
+  "tokens_in": 103928,
+  "tokens_out": 6377,
+  "tokens_cached": 82688,
+  "cost_usd": 0.158214,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 304.1,
+  "recovery_events": []
+}

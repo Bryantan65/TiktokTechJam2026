@@ -1,0 +1,65 @@
+{
+  "iteration": 31,
+  "solution": "logs/record-run-16-uct/solutions/031_hourmin_residual.py",
+  "hypothesis": "improve 30: tuple-only weekday/date residual was weak, so test the intended time feature with a faster occurrence-safe raw CSV hourmin join and a small 3% per-user-normalized hour residual on the node-024 blend.",
+  "parent": "30",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:50:15+08:00",
+  "status": "no-op",
+  "error": "no-op: identical GAUC and nDCG@5 as iteration 24 (024_rank60_power_rank.py). Different code, same model - nothing was actually tested. Common cause: the new method ran but a \"keep the best checkpoint\" rule discarded its result, so the final model is the parent. Check that your change reaches the model that gets saved. This is NOT evidence about the technique.",
+  "valid_primary": 0.60483,
+  "GAUC": 0.671633,
+  "nDCG@5": 0.538027,
+  "source_hash": "778a451eccd6",
+  "predictions_hash": "713385be37be",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671633,
+      "nDCG@5": 0.538027,
+      "primary": 0.60483
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671633,
+      "nDCG@5": 0.538027,
+      "primary": 0.60483
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671633,
+      "nDCG@5": 0.538027,
+      "primary": 0.60483
+    }
+  ],
+  "no_op_twin": 24,
+  "seconds": 41.0,
+  "verdict": "no-op",
+  "delta": 0.00333,
+  "tokens_in": 76331,
+  "tokens_out": 6139,
+  "tokens_cached": 59904,
+  "cost_usd": 0.13241,
+  "model": "gpt-5.5",
+  "agent_iteration": 30,
+  "wall_seconds": 95.4,
+  "recovery_events": []
+}

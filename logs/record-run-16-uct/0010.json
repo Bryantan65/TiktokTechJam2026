@@ -1,0 +1,64 @@
+{
+  "iteration": 10,
+  "solution": "logs/record-run-16-uct/solutions/010_bpr_soft_ensemble.py",
+  "hypothesis": "improve 8: soft-hard BPR is close to node 2 but may rank different users' top items; following common CTR/ranking blending practice with time/drift-aware heldout discipline (Avazu feature engineering URL: https://www.kaggle.com/competitions/avazu-ctr-prediction/data), fuse node-2 BPR and node-8 soft-hard at readable 60/40 weight with per-user z-score normalization and cached member predictions.",
+  "parent": "8",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:00:09+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603809,
+  "GAUC": 0.670304,
+  "nDCG@5": 0.537314,
+  "source_hash": "f1473078ef6b",
+  "predictions_hash": "e1b4cf8c8c07",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000226,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670477,
+      "nDCG@5": 0.537661,
+      "primary": 0.604069
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670327,
+      "nDCG@5": 0.537069,
+      "primary": 0.603698
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670107,
+      "nDCG@5": 0.537212,
+      "primary": 0.60366
+    }
+  ],
+  "seconds": 90.3,
+  "verdict": "KEPT",
+  "delta": 0.002309,
+  "tokens_in": 78399,
+  "tokens_out": 6116,
+  "tokens_cached": 62592,
+  "cost_usd": 0.131973,
+  "model": "gpt-5.5",
+  "agent_iteration": 9,
+  "wall_seconds": 167.6,
+  "recovery_events": []
+}
