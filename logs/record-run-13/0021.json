@@ -1,0 +1,64 @@
+{
+  "iteration": 21,
+  "solution": "logs/record-run-13/solutions/021_listwise_fm_blend.py",
+  "hypothesis": "draft loss: listwise softmax over each user's impressions directly optimizes within-user probability mass on positives, closer to GAUC/nDCG than pointwise BCE or pairwise BPR; blend a new listwise FM member at a readable 30% with the unchanged node-13 cache.",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:41:50+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604172,
+  "GAUC": 0.670934,
+  "nDCG@5": 0.537409,
+  "source_hash": "6f729dc1acf6",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "c11390496201",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 5.9e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670916,
+      "nDCG@5": 0.537292,
+      "primary": 0.604104
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670898,
+      "nDCG@5": 0.53751,
+      "primary": 0.604204
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670988,
+      "nDCG@5": 0.537425,
+      "primary": 0.604207
+    }
+  ],
+  "seconds": 398.1,
+  "verdict": "KEPT",
+  "delta": 0.002672,
+  "tokens_in": 168552,
+  "tokens_out": 8184,
+  "tokens_cached": 140672,
+  "cost_usd": 0.221876,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 485.3,
+  "recovery_events": []
+}

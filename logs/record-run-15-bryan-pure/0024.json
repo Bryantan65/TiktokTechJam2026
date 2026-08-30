@@ -1,0 +1,64 @@
+{
+  "iteration": 24,
+  "solution": "logs/record-run-15-bryan-pure/solutions/024_multitask_seq_aux.py",
+  "hypothesis": "draft 3: add an auxiliary-feedback multi-task sequence FM at 30% blend, following MTL recommender practice such as Google MMoE (https://research.google/pubs/modeling-task-relationships-in-multi-task-learning-with-multi-gate-mixture-of-experts/) but using shared FM embeddings plus aux BCE heads for raw like/follow/comment/forward/play signals.",
+  "parent": "22",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T03:40:46+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604587,
+  "GAUC": 0.671261,
+  "nDCG@5": 0.537912,
+  "source_hash": "dc5e5803c807",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=node22+seq_mtl_aux\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "7917909902ee",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 7.8e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67112,
+      "nDCG@5": 0.537874,
+      "primary": 0.604497
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671336,
+      "nDCG@5": 0.537938,
+      "primary": 0.604637
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671328,
+      "nDCG@5": 0.537925,
+      "primary": 0.604627
+    }
+  ],
+  "seconds": 387.1,
+  "verdict": "KEPT",
+  "delta": 0.003087,
+  "tokens_in": 101694,
+  "tokens_out": 7121,
+  "tokens_cached": 82048,
+  "cost_usd": 0.161349,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 461.9,
+  "recovery_events": []
+}

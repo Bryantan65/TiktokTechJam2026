@@ -1,0 +1,30 @@
+{
+  "iteration": 15,
+  "solution": "logs/record-run-13/solutions/014_time_features_seedbag5.py",
+  "hypothesis": "improve 14: the dev screen verified that raw hourmin joins hit every row, so spend the counted valid run on the same date/dow/4-hour augmented BCE+BPR seed bag. This directly tests whether the time-aware signal transfers from train-holdout to official valid.",
+  "parent": "14",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:22:58+08:00",
+  "status": "duplicate",
+  "error": "identical source already run at iteration 14 (valid_primary 0.610867)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "aa9a913c50a5",
+  "verdict": "duplicate",
+  "tokens_in": 56444,
+  "tokens_out": 5639,
+  "tokens_cached": 44928,
+  "cost_usd": 0.107645,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 415.1,
+  "recovery_events": []
+}

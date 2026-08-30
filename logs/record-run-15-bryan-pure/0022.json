@@ -1,0 +1,64 @@
+{
+  "iteration": 22,
+  "solution": "logs/record-run-15-bryan-pure/solutions/022_seq_context_fm.py",
+  "hypothesis": "debug 21: the hand-weighted sequence overlap likely imposed the wrong signs/scales; learn the prior-history buckets as FM features with the same successful BPR objective, then blend this sequence-context member at 30%.",
+  "parent": "21",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T03:32:26+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605012,
+  "GAUC": 0.67173,
+  "nDCG@5": 0.538295,
+  "source_hash": "874bdd85872f",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=node20+learned_seq_context\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "14af7010e880",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000201,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67133,
+      "nDCG@5": 0.538304,
+      "primary": 0.604817
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671929,
+      "nDCG@5": 0.538507,
+      "primary": 0.605218
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67193,
+      "nDCG@5": 0.538075,
+      "primary": 0.605002
+    }
+  ],
+  "seconds": 291.1,
+  "verdict": "KEPT",
+  "delta": 0.003512,
+  "tokens_in": 56075,
+  "tokens_out": 3382,
+  "tokens_cached": 41856,
+  "cost_usd": 0.090296,
+  "model": "gpt-5.5",
+  "agent_iteration": 21,
+  "wall_seconds": 321.9,
+  "recovery_events": []
+}

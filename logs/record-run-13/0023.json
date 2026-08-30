@@ -1,0 +1,64 @@
+{
+  "iteration": 23,
+  "solution": "logs/record-run-13/solutions/023_history_te_blend.py",
+  "hypothesis": "improve 17: the previous history proxy was too diluted; use explicit train-only user-conditioned target encodings for repeated user-video/user-author/user-tab affinities centered by each user's prior, then blend at 20% with node 13.",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:52:28+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604013,
+  "GAUC": 0.670773,
+  "nDCG@5": 0.537253,
+  "source_hash": "0c749d8f1398",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nhistory TE: target rows=124909 uv_hits=2028 ua_hits=4223 global_rate=0.3366\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "1234fdebc808",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 1.9e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670765,
+      "nDCG@5": 0.537235,
+      "primary": 0.604
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670742,
+      "nDCG@5": 0.537266,
+      "primary": 0.604004
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670811,
+      "nDCG@5": 0.537257,
+      "primary": 0.604034
+    }
+  ],
+  "seconds": 39.0,
+  "verdict": "KEPT",
+  "delta": 0.002513,
+  "tokens_in": 87996,
+  "tokens_out": 6917,
+  "tokens_cached": 67072,
+  "cost_usd": 0.155016,
+  "model": "gpt-5.5",
+  "agent_iteration": 21,
+  "wall_seconds": 99.6,
+  "recovery_events": []
+}

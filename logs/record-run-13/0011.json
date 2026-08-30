@@ -1,0 +1,64 @@
+{
+  "iteration": 11,
+  "solution": "logs/record-run-13/solutions/011_seedbag5_node8.py",
+  "hypothesis": "improve 10: the 3-seed bag won by variance reduction; average the same unchanged node-8 member formulation over seeds 0..4 and reduce the harness-seed perturbation to 2%.",
+  "parent": "10",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:08:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604638,
+  "GAUC": 0.671549,
+  "nDCG@5": 0.537726,
+  "source_hash": "97280fff4007",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "a465bcdbb4a7",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 6.2e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671614,
+      "nDCG@5": 0.537759,
+      "primary": 0.604687
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671601,
+      "nDCG@5": 0.537715,
+      "primary": 0.604658
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671433,
+      "nDCG@5": 0.537703,
+      "primary": 0.604568
+    }
+  ],
+  "seconds": 148.2,
+  "verdict": "KEPT",
+  "delta": 0.003138,
+  "tokens_in": 64430,
+  "tokens_out": 4592,
+  "tokens_cached": 49664,
+  "cost_usd": 0.107667,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 187.4,
+  "recovery_events": []
+}

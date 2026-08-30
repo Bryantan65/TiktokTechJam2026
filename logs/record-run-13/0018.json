@@ -1,0 +1,64 @@
+{
+  "iteration": 18,
+  "solution": "logs/record-run-13/solutions/018_history_useronly.py",
+  "hypothesis": "improve 17: the first history proxy was diluted by global popularity backoffs and a heavy 30% blend; remove global video/author terms and use only user-conditioned behaviour preferences at a still-readable 20% weight.",
+  "parent": "17",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:32:15+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603475,
+  "GAUC": 0.669843,
+  "nDCG@5": 0.537107,
+  "source_hash": "b7ab0ef222df",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nuser-only history touched rows: 121758/124909\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "042708db8512",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 3.5e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669804,
+      "nDCG@5": 0.537089,
+      "primary": 0.603446
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669838,
+      "nDCG@5": 0.537091,
+      "primary": 0.603465
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669887,
+      "nDCG@5": 0.53714,
+      "primary": 0.603513
+    }
+  ],
+  "seconds": 41.0,
+  "verdict": "noise",
+  "delta": 0.001975,
+  "tokens_in": 72407,
+  "tokens_out": 4734,
+  "tokens_cached": 51072,
+  "cost_usd": 0.126214,
+  "model": "gpt-5.5",
+  "agent_iteration": 16,
+  "wall_seconds": 76.8,
+  "recovery_events": []
+}

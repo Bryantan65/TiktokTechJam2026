@@ -1,0 +1,64 @@
+{
+  "iteration": 26,
+  "solution": "logs/record-run-13/solutions/026_lgbm_lambdarank_blend.py",
+  "hypothesis": "draft different models: add a standalone LightGBM LambdaRank member at 30% weight, using categorical ids plus smoothed CTR/count features; LightGBM docs note LambdaRank optimizes NDCG and categorical features are integer-coded (https://lightgbm.readthedocs.io/en/latest/Advanced-Topics.html).",
+  "parent": "25",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:59:18+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603904,
+  "GAUC": 0.670656,
+  "nDCG@5": 0.537152,
+  "source_hash": "2ba0178135c9",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\ntime feature hour lookup hits: 1436609/1436609\naugmented fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'date', 'dow', 'hour4'] dim 40260->40303\nLightGBM LambdaRank best_iter=101 trained in 133.1s\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "d126c0550881",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000161,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670547,
+      "nDCG@5": 0.537015,
+      "primary": 0.603781
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670654,
+      "nDCG@5": 0.537037,
+      "primary": 0.603846
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670768,
+      "nDCG@5": 0.537404,
+      "primary": 0.604086
+    }
+  ],
+  "seconds": 224.3,
+  "verdict": "KEPT",
+  "delta": 0.002404,
+  "tokens_in": 122716,
+  "tokens_out": 10899,
+  "tokens_cached": 100096,
+  "cost_usd": 0.215588,
+  "model": "gpt-5.5",
+  "agent_iteration": 24,
+  "wall_seconds": 335.2,
+  "recovery_events": []
+}

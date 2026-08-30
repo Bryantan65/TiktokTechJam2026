@@ -1,0 +1,64 @@
+{
+  "iteration": 19,
+  "solution": "logs/record-run-13/solutions/019_watchtime_weighted_bpr.py",
+  "hypothesis": "draft watch-time modelling: ABPR-style confidence weighting for heterogeneous implicit feedback (https://www.sciencedirect.com/science/article/abs/pii/S0950705114003530) suggests long watches are stronger positives; train a same-user BPR member weighted by play_time/completion and blend it at a readable 30% with node 13.",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:34:06+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604449,
+  "GAUC": 0.671442,
+  "nDCG@5": 0.537455,
+  "source_hash": "86ba1f52fa1c",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwatch weights: raw hits 0/1141112 mean 1.000 min 1.000 max 1.000\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "93ddc2dca6e7",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 8e-06,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671447,
+      "nDCG@5": 0.537463,
+      "primary": 0.604455
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67143,
+      "nDCG@5": 0.53745,
+      "primary": 0.60444
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67145,
+      "nDCG@5": 0.537453,
+      "primary": 0.604451
+    }
+  ],
+  "seconds": 160.3,
+  "verdict": "KEPT",
+  "delta": 0.002949,
+  "tokens_in": 166381,
+  "tokens_out": 6436,
+  "tokens_cached": 139648,
+  "cost_usd": 0.201016,
+  "model": "gpt-5.5",
+  "agent_iteration": 17,
+  "wall_seconds": 230.0,
+  "recovery_events": []
+}

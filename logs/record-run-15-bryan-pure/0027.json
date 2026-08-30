@@ -1,0 +1,64 @@
+{
+  "iteration": 27,
+  "solution": "logs/record-run-15-bryan-pure/solutions/027_adaptive_tseq_weight.py",
+  "hypothesis": "improve 25: uniform 40% overweights the time-aware sequence member, so keep all cached members unchanged but use a user-history adaptive 18-33% weight: cold users trust the incumbent more, heavy-history users get slightly more time-context.",
+  "parent": "25",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T03:56:39+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605234,
+  "GAUC": 0.67209,
+  "nDCG@5": 0.538378,
+  "source_hash": "fa717491faa4",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=node25_adaptive_tseq_weight\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "3137adff1214",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000134,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671999,
+      "nDCG@5": 0.538458,
+      "primary": 0.605228
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672071,
+      "nDCG@5": 0.53867,
+      "primary": 0.60537
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.6722,
+      "nDCG@5": 0.538005,
+      "primary": 0.605103
+    }
+  ],
+  "seconds": 152.2,
+  "verdict": "KEPT",
+  "delta": 0.003734,
+  "tokens_in": 88263,
+  "tokens_out": 3728,
+  "tokens_cached": 71808,
+  "cost_usd": 0.114322,
+  "model": "gpt-5.5",
+  "agent_iteration": 26,
+  "wall_seconds": 194.2,
+  "recovery_events": []
+}

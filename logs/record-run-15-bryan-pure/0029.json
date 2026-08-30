@@ -1,0 +1,64 @@
+{
+  "iteration": 29,
+  "solution": "logs/record-run-15-bryan-pure/solutions/029_time_seq_exposure_context.py",
+  "hypothesis": "improve 25: the time-sequence member helped; add leakage-safe label-free prior exposure/recency within the target split so repeated valid/test impressions for a user can be distinguished without reading labels.",
+  "parent": "25",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T04:07:47+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605499,
+  "GAUC": 0.672312,
+  "nDCG@5": 0.538686,
+  "source_hash": "8446ae2e5fc8",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=node22+time_seq_exposure_context\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8b2c365eec97",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000171,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672137,
+      "nDCG@5": 0.538757,
+      "primary": 0.605447
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672066,
+      "nDCG@5": 0.538652,
+      "primary": 0.605359
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672732,
+      "nDCG@5": 0.538648,
+      "primary": 0.60569
+    }
+  ],
+  "seconds": 332.1,
+  "verdict": "KEPT",
+  "delta": 0.003999,
+  "tokens_in": 172349,
+  "tokens_out": 8309,
+  "tokens_cached": 145792,
+  "cost_usd": 0.222379,
+  "model": "gpt-5.5",
+  "agent_iteration": 28,
+  "wall_seconds": 417.6,
+  "recovery_events": []
+}

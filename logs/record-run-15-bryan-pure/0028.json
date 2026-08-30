@@ -1,0 +1,64 @@
+{
+  "iteration": 28,
+  "solution": "logs/record-run-15-bryan-pure/solutions/028_time_seq_mtl_aux001.py",
+  "hypothesis": "debug 24: auxiliary MTL hurt on the plain sequence rows and may have dominated BPR; apply the same raw-feedback aux heads to node25's successful time-sequence rows with aux_lambda reduced from 0.05 to 0.01, blended at the readable 30% weight.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T03:59:41+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60511,
+  "GAUC": 0.671942,
+  "nDCG@5": 0.538279,
+  "source_hash": "b732a3170950",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=node22+time_seq_mtl_aux001\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "dee263042978",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000173,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671618,
+      "nDCG@5": 0.538381,
+      "primary": 0.605
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.6721,
+      "nDCG@5": 0.538521,
+      "primary": 0.60531
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672108,
+      "nDCG@5": 0.537934,
+      "primary": 0.605021
+    }
+  ],
+  "seconds": 399.8,
+  "verdict": "KEPT",
+  "delta": 0.00361,
+  "tokens_in": 89161,
+  "tokens_out": 3018,
+  "tokens_cached": 69120,
+  "cost_usd": 0.114843,
+  "model": "gpt-5.5",
+  "agent_iteration": 27,
+  "wall_seconds": 430.0,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 25,
+  "solution": "logs/record-run-13/solutions/025_blend_time_base_5050.py",
+  "hypothesis": "improve 24: the 40% time-aware blend improved both metrics, so move further along the same complementary direction with a readable 50/50 base-time fusion using unchanged cached members.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:56:14+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605129,
+  "GAUC": 0.672114,
+  "nDCG@5": 0.538144,
+  "source_hash": "1f8c69b67ad8",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\ntime feature hour lookup hits: 1436609/1436609\naugmented fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'date', 'dow', 'hour4'] dim 40260->40303\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "db3be9a68d4a",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 1.2e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672095,
+      "nDCG@5": 0.53816,
+      "primary": 0.605128
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672145,
+      "nDCG@5": 0.53814,
+      "primary": 0.605142
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672103,
+      "nDCG@5": 0.538133,
+      "primary": 0.605118
+    }
+  ],
+  "seconds": 75.3,
+  "verdict": "KEPT",
+  "delta": 0.003629,
+  "tokens_in": 68437,
+  "tokens_out": 5521,
+  "tokens_cached": 49024,
+  "cost_usd": 0.128254,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 116.3,
+  "recovery_events": []
+}

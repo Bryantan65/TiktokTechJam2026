@@ -55,6 +55,42 @@ Seed std is **0.0008** on every metric (5 seeds, organiser-measured).
 0.6016. All within seed noise, so our numbers are comparable to the official
 ones. Run takes 50 s; valid peaks at **epoch 7** and overfits after.
 
+## The bonus benchmarks — call `use_dataset` or your run is ungraded
+
+Pure is the required benchmark. **KuaiRand-1k and -27k are bonus**, and the
+organisers published a baseline for **Pure only** (`baseline_scores.json` says
+`"dataset": "KuaiRand-Pure"`). The scoring formula is per-dataset —
+`delta(m) = score_agent(m) − score_baseline(m)` on the hidden test set — so a
+bonus run has no reference number unless one is measured.
+
+We measured 1k by running the kit's own `baseline.py` unmodified on 1k data. It
+is their pipeline, not one we invented; the problem statement defines the
+baseline as a *pipeline*, not a number. See `docs/bonus-baselines.md`.
+
+| | GAUC | nDCG@5 | primary |
+| --- | --- | --- | --- |
+| Pure test (organiser-published) | 0.6610 | 0.5282 | 0.5946 |
+| **1k test (measured here)** | **0.6730** | **0.6049** | **0.6390** |
+| Pure valid | 0.6674 | 0.5357 | 0.6016 |
+| 1k valid | 0.6749 | 0.6153 | 0.6451 |
+
+27k is **not measured**. `ledger.py` will refuse to grade it.
+
+**Before running the agent on 1k, call `ledger.use_dataset('1k')`.** Skipping it
+fails *silently*: 1k's nDCG@5 is +0.08 above Pure's (1k users have far more
+impressions each, so the per-user metric sits somewhere else entirely), so every
+experiment computes `delta ≈ +0.043` against Pure's 0.6015 and is stamped
+`KEPT`. Convergence still works — it compares against the running best — but the
+verdict column becomes noise and the agent is told it beat the target on
+iteration 1. Nothing in the logs looks wrong.
+
+Loading is handled by `harness/data.py`, which detects the variant from the
+files present. It changes *which filenames are opened* and nothing else — Pure
+delegates to the kit's own `load()` verbatim, so the starter kit stays
+byte-identical to the official release. Do not edit
+`kuairand-starter-kit/data.py` to add variant support; a judge diffing the kit
+should find nothing.
+
 ## Facts that will mislead you
 
 - **nDCG@5's ceiling is 0.729, not 1.0.** 27.1% of test users have no positives

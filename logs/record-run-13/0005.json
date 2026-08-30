@@ -1,0 +1,64 @@
+{
+  "iteration": 5,
+  "solution": "logs/record-run-13/solutions/005_soft_hard_bpr_fm.py",
+  "hypothesis": "debug 4: the large drop likely came from mining mostly hard negatives from an untrained/early model; delay hard mining and use only 10% sampled hard negatives so the BPR signal remains close to node 2 while testing whether gentle top-list correction helps.",
+  "parent": "4",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:00:26+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.596626,
+  "GAUC": 0.660926,
+  "nDCG@5": 0.532327,
+  "source_hash": "9589126806e3",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "04748d9accb0",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.001444,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.663013,
+      "nDCG@5": 0.533481,
+      "primary": 0.598247
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.659382,
+      "nDCG@5": 0.531571,
+      "primary": 0.595477
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.660382,
+      "nDCG@5": 0.531929,
+      "primary": 0.596155
+    }
+  ],
+  "seconds": 81.9,
+  "verdict": "worse",
+  "delta": -0.004874,
+  "tokens_in": 50332,
+  "tokens_out": 3686,
+  "tokens_cached": 35712,
+  "cost_usd": 0.091266,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 113.9,
+  "recovery_events": []
+}

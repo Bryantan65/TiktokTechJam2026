@@ -1,0 +1,64 @@
+{
+  "iteration": 25,
+  "solution": "logs/record-run-15-bryan-pure/solutions/025_time_seq_context.py",
+  "hypothesis": "improve 22: the learned sequence member helped while time members helped separately; add a readable 30% time-aware sequence BPR member with hour/tab-hour context and prior per-user hour buckets, keeping node20 and node22 cached members unchanged.",
+  "parent": "22",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T03:47:50+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605249,
+  "GAUC": 0.672139,
+  "nDCG@5": 0.538359,
+  "source_hash": "56e97c1c3ddd",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=node22+time_seq_context\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e741899b8638",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000105,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671996,
+      "nDCG@5": 0.538407,
+      "primary": 0.605202
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672143,
+      "nDCG@5": 0.538596,
+      "primary": 0.60537
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672277,
+      "nDCG@5": 0.538075,
+      "primary": 0.605176
+    }
+  ],
+  "seconds": 313.2,
+  "verdict": "KEPT",
+  "delta": 0.003749,
+  "tokens_in": 90882,
+  "tokens_out": 4142,
+  "tokens_cached": 71168,
+  "cost_usd": 0.126289,
+  "model": "gpt-5.5",
+  "agent_iteration": 24,
+  "wall_seconds": 351.0,
+  "recovery_events": []
+}

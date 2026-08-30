@@ -1,0 +1,64 @@
+{
+  "iteration": 7,
+  "solution": "logs/record-run-15-bryan-pure/solutions/007_bpr3neg_user_z_fusion.py",
+  "hypothesis": "improve 6: keep the node-6 BPR members unchanged but fuse their per-user z-scored predictions so one seed's score scale cannot dominate another; this is a cheap cached combination test targeted at within-user ranking.",
+  "parent": "6",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T02:48:20+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60398,
+  "GAUC": 0.670612,
+  "nDCG@5": 0.537348,
+  "source_hash": "c0cb6a0410b9",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "3db7582041cc",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000232,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67045,
+      "nDCG@5": 0.537363,
+      "primary": 0.603907
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670941,
+      "nDCG@5": 0.537539,
+      "primary": 0.60424
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670446,
+      "nDCG@5": 0.537142,
+      "primary": 0.603794
+    }
+  ],
+  "seconds": 19.8,
+  "verdict": "KEPT",
+  "delta": 0.00248,
+  "tokens_in": 36624,
+  "tokens_out": 3109,
+  "tokens_cached": 26496,
+  "cost_usd": 0.069658,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 45.3,
+  "recovery_events": []
+}

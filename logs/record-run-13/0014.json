@@ -1,0 +1,64 @@
+{
+  "iteration": 14,
+  "solution": "logs/record-run-13/solutions/014_time_features_seedbag5.py",
+  "hypothesis": "draft time features: KuaiRand includes timestamp/hourmin fields (official repo https://github.com/chongminggao/KuaiRand and paper https://arxiv.org/abs/2208.08696); add date, day-of-week, and 4-hour bucket to the current BCE/BPR ensemble, screening on dev first because raw CSV joining can fail silently.",
+  "parent": "13",
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:18:31+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.610867,
+  "GAUC": 0.667613,
+  "nDCG@5": 0.55412,
+  "source_hash": "aa9a913c50a5",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1011214, 'valid': 129898} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\ntime feature hour lookup hits: 1141112/1141112\naugmented fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'date', 'dow', 'hour4'] dim 39770->39796\nwrote 129,898 predictions for split=dev",
+  "predictions_hash": "fa367ea67c7e",
+  "users": 22111,
+  "rows": 129898,
+  "primary_std": 1.6e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667605,
+      "nDCG@5": 0.554093,
+      "primary": 0.610849
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667617,
+      "nDCG@5": 0.554141,
+      "primary": 0.610879
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667617,
+      "nDCG@5": 0.554127,
+      "primary": 0.610872
+    }
+  ],
+  "seconds": 257.9,
+  "verdict": "screen",
+  "delta": 0.009367,
+  "tokens_in": 73462,
+  "tokens_out": 8295,
+  "tokens_cached": 54784,
+  "cost_usd": 0.157037,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 344.8,
+  "recovery_events": []
+}

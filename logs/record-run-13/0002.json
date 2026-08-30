@@ -1,0 +1,64 @@
+{
+  "iteration": 2,
+  "solution": "logs/record-run-13/solutions/002_bpr_fm.py",
+  "hypothesis": "draft loss: replace pointwise BCE with same-user BPR pairs so positives are optimized above negatives within the ranked user list, following Rendle et al. https://www.alphaxiv.org/abs/1205.2618 .",
+  "parent": "1",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T00:55:24+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602611,
+  "GAUC": 0.668779,
+  "nDCG@5": 0.536444,
+  "source_hash": "df7f37b5a09f",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "3e1116d22298",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000681,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668603,
+      "nDCG@5": 0.536548,
+      "primary": 0.602576
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669542,
+      "nDCG@5": 0.537077,
+      "primary": 0.603309
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668191,
+      "nDCG@5": 0.535706,
+      "primary": 0.601948
+    }
+  ],
+  "seconds": 70.0,
+  "verdict": "noise",
+  "delta": 0.001111,
+  "tokens_in": 38355,
+  "tokens_out": 3527,
+  "tokens_cached": 25472,
+  "cost_usd": 0.080213,
+  "model": "gpt-5.5",
+  "agent_iteration": 1,
+  "wall_seconds": 113.2,
+  "recovery_events": []
+}

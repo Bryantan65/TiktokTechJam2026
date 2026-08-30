@@ -1,0 +1,64 @@
+{
+  "iteration": 10,
+  "solution": "logs/record-run-13/solutions/010_seedbag_node8.py",
+  "hypothesis": "improve 8: node 8 is strong but seed-noisy; bag node-8 predictions across member seeds 0/1/2 using cached unchanged BCE/BPR members, with a tiny harness-seed component only to keep outputs non-identical.",
+  "parent": "8",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:07:10+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604058,
+  "GAUC": 0.670842,
+  "nDCG@5": 0.537273,
+  "source_hash": "1980c9f98c90",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "452ed45dc723",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 4.2e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670859,
+      "nDCG@5": 0.5373,
+      "primary": 0.60408
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670843,
+      "nDCG@5": 0.537325,
+      "primary": 0.604084
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670825,
+      "nDCG@5": 0.537193,
+      "primary": 0.604009
+    }
+  ],
+  "seconds": 35.7,
+  "verdict": "KEPT",
+  "delta": 0.002558,
+  "tokens_in": 42343,
+  "tokens_out": 5160,
+  "tokens_cached": 30592,
+  "cost_usd": 0.096273,
+  "model": "gpt-5.5",
+  "agent_iteration": 9,
+  "wall_seconds": 84.0,
+  "recovery_events": []
+}
