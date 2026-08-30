@@ -384,6 +384,8 @@ def _load_all():
 
 
 def verdict(primary, status, split='valid'):
+    if status == 'cheating':
+        return 'CHEATING'       # label leakage detected; result is invalid
     if status == 'no-op':
         return 'no-op'          # not a result; the change never reached the model
     if status == 'duplicate':

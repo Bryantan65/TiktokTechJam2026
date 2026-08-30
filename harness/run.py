@@ -425,6 +425,27 @@ def run_experiment(solution, hypothesis='', parent=None, by='agent',
                 'seeds_run': [p['seed'] for p in per_seed],
                 'per_seed': per_seed})
 
+    # --- Label-leakage guardrail ---
+    # A legitimate model on this data cannot exceed ~0.85 primary (the oracle
+    # ceiling). Anything above 0.90 almost certainly reconstructed the label
+    # from raw columns (play_time_ms / duration_ms) or read long_view directly.
+    # Flag it loudly so neither the agent nor the human misses it.
+    if rec['valid_primary'] is not None and rec['valid_primary'] > 0.90:
+        ledger.log_event(
+            'label_leakage_alert',
+            'iteration %d scored %.4f primary — this is above the oracle '
+            'ceiling (0.8484) and almost certainly involves label leakage. '
+            'The solution likely reads long_view or reconstructs the label '
+            'from play_time_ms/duration_ms in the raw CSV. This result is '
+            'INVALID.' % (rec['iteration'], rec['valid_primary']),
+            iteration=rec['iteration'])
+        rec['status'] = 'cheating'
+        rec['error'] = (
+            'LABEL LEAKAGE DETECTED: primary %.4f exceeds the oracle ceiling '
+            '(0.8484). The solution is reading the target label or '
+            'reconstructing it from raw signals. This result is invalid and '
+            'will not be counted.' % rec['valid_primary'])
+
     twin, why = ledger.find_twin(rec['predictions_hash'], rec,
                                  exclude_iteration=rec['iteration'])
     if twin is not None:

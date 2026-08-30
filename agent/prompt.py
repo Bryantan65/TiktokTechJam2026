@@ -126,6 +126,23 @@ separately and fuse.
 - Read every column in the raw CSVs; the tuple loader strips most of them, \
 and any correlated signal is a useful auxiliary training objective.
 - Ensemble diversity comes from different mechanisms, not different hyperparameters.
+- A loss that directly approximates the ranking metric (e.g. a differentiable \
+surrogate for nDCG) removes the proxy gap that pairwise losses still leave.
+- When classes are imbalanced, down-weighting easy-to-classify examples \
+(focal-style) lets the model focus on the boundary that matters.
+- Soft labels (label smoothing) regularise better than hard 0/1 — the model \
+learns "probably positive" instead of memorising each row.
+- Feature crosses (hash two IDs into one embedding) can capture interactions \
+that additive models miss, cheaply.
+- Items that appear very often dominate training; weighting negatives by \
+inverse popularity forces the model to learn about the long tail.
+- Input interpolation (mixup between training examples) smooths decision \
+boundaries and is free regularisation.
+- A cyclical or warm-restart learning-rate schedule can escape local minima \
+that a monotonic decay gets stuck in.
+- When you have several strong models, a second-stage model trained on their \
+held-out predictions (stacking) can learn complementarity that simple \
+averaging cannot.
 
 ## The run ends if you stop making progress — read this
 The run stops automatically when the best valid primary has not improved by
@@ -423,6 +440,14 @@ the metric ranks within a user, so cross-user pairs teach nothing about it.
 - Write the COMPLETE solution file every time — it must run standalone.
 - Whole file for a new idea. Targeted edit (copy parent, change one thing) \
 for a bugfix or parameter tweak.
+- **NEVER read the target label (`long_view`) from raw CSVs and use it as a
+  prediction feature or to reconstruct the label via play_time and duration.**
+  The label is only available through `data.load()`, which provides it in
+  position 6 of each tuple for TRAINING. Using auxiliary columns (play_time_ms,
+  duration_ms) to reconstruct the label rule is label leakage and will be
+  flagged as cheating. Auxiliary columns are legitimate as TRAINING signals
+  (multi-task heads, pair weighting) but never as direct prediction inputs.
+  A suspiciously high score (primary > 0.90) triggers an automatic alert.
 - Prefer many small experiments over one big change. Compute is cheap (~2 min a
   run), but tokens are not: every extra tool round resends the whole
   conversation. Run ONE experiment per turn, then stop and let the next
