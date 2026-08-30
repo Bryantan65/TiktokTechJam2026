@@ -1,0 +1,65 @@
+{
+  "iteration": 3,
+  "solution": "logs/record-run-16-uct/solutions/003_bpr_3neg_fm.py",
+  "hypothesis": "improve 2: sample three same-user negatives per positive instead of one, so BPR sees a broader set of bad impressions for each user while keeping the successful pairwise mechanism unchanged.",
+  "parent": "2",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T17:41:12+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60309,
+  "GAUC": 0.669646,
+  "nDCG@5": 0.536535,
+  "source_hash": "52c276f0978a",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "4cef488357bf",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000409,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670355,
+      "nDCG@5": 0.536762,
+      "primary": 0.603559
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668969,
+      "nDCG@5": 0.536845,
+      "primary": 0.602907
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669613,
+      "nDCG@5": 0.535997,
+      "primary": 0.602805
+    }
+  ],
+  "seconds": 60.1,
+  "verdict": "noise",
+  "delta": 0.00159,
+  "tokens_in": 40320,
+  "tokens_out": 3022,
+  "tokens_cached": 34688,
+  "cost_usd": 0.061644,
+  "model": "gpt-5.5",
+  "agent_iteration": 2,
+  "wall_seconds": 93.0,
+  "recovery_events": []
+}

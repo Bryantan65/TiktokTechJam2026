@@ -1,0 +1,64 @@
+{
+  "iteration": 27,
+  "solution": "logs/record-run-16-uct/solutions/027_author_itemcf.py",
+  "hypothesis": "draft item-CF: change mechanism rather than another near-tie blend tweak; following item-based CF/top-N recommendation work (DeepICF DOI https://doi.org/10.1145/3314578), blend node 024 with a readable 20% author-author cosine co-occurrence score from each user's positive TRAIN history.",
+  "parent": "24",
+  "uct_rank": 9,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:29:12+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603186,
+  "GAUC": 0.669089,
+  "nDCG@5": 0.537283,
+  "source_hash": "258e642dfe60",
+  "predictions_hash": "dccaa5505f11",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669089,
+      "nDCG@5": 0.537283,
+      "primary": 0.603186
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669089,
+      "nDCG@5": 0.537283,
+      "primary": 0.603186
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669089,
+      "nDCG@5": 0.537283,
+      "primary": 0.603186
+    }
+  ],
+  "seconds": 29.9,
+  "verdict": "noise",
+  "delta": 0.001686,
+  "tokens_in": 125248,
+  "tokens_out": 7429,
+  "tokens_cached": 101504,
+  "cost_usd": 0.184402,
+  "model": "gpt-5.5",
+  "agent_iteration": 26,
+  "wall_seconds": 116.8,
+  "recovery_events": []
+}

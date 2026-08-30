@@ -1,0 +1,64 @@
+{
+  "iteration": 11,
+  "solution": "logs/record-run-16-uct/solutions/011_seedbag_bpr_soft_ensemble.py",
+  "hypothesis": "improve 10: keep the two mechanisms and 60/40 per-user-z fusion fixed, but bag member seeds 0/1/2 inside each prediction to reduce variance and stabilize top-5 rankings; member training is unchanged and reuses node-10 prediction caches.",
+  "parent": "10",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:02:08+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604222,
+  "GAUC": 0.670825,
+  "nDCG@5": 0.537619,
+  "source_hash": "f547b95fa5d6",
+  "predictions_hash": "e9cf8c519b8d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670825,
+      "nDCG@5": 0.537619,
+      "primary": 0.604222
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670825,
+      "nDCG@5": 0.537619,
+      "primary": 0.604222
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670825,
+      "nDCG@5": 0.537619,
+      "primary": 0.604222
+    }
+  ],
+  "seconds": 24.3,
+  "verdict": "KEPT",
+  "delta": 0.002722,
+  "tokens_in": 49505,
+  "tokens_out": 3311,
+  "tokens_cached": 35712,
+  "cost_usd": 0.085448,
+  "model": "gpt-5.5",
+  "agent_iteration": 10,
+  "wall_seconds": 52.8,
+  "recovery_events": []
+}

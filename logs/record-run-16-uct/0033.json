@@ -1,0 +1,64 @@
+{
+  "iteration": 33,
+  "solution": "logs/record-run-16-uct/solutions/033_invert_hour_residual.py",
+  "hypothesis": "improve 32: the hour join is now live but the positive residual hurt, so test whether the simple time residual is anti-correlated with useful within-user ranking by blending it at -4% rather than abandoning the debugged feature.",
+  "parent": "32",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:53:59+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604687,
+  "GAUC": 0.671452,
+  "nDCG@5": 0.537923,
+  "source_hash": "cc39d561910c",
+  "predictions_hash": "59c2eddda6fe",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671452,
+      "nDCG@5": 0.537923,
+      "primary": 0.604687
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671452,
+      "nDCG@5": 0.537923,
+      "primary": 0.604687
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671452,
+      "nDCG@5": 0.537923,
+      "primary": 0.604687
+    }
+  ],
+  "seconds": 47.9,
+  "verdict": "KEPT",
+  "delta": 0.003187,
+  "tokens_in": 89897,
+  "tokens_out": 5265,
+  "tokens_cached": 70144,
+  "cost_usd": 0.137104,
+  "model": "gpt-5.5",
+  "agent_iteration": 32,
+  "wall_seconds": 100.7,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 26,
+  "solution": "logs/record-run-16-uct/solutions/026_hist_duration.py",
+  "hypothesis": "improve 24: target/user-history encodings are common in ranking blends (e.g. Kaggle TE guide https://www.kaggle.com/c/home-credit-default-risk/discussion/116344); add a small smoothed user-duration-bucket residual to node 024's 10% train-only history prior to capture within-user duration preference without retraining members.",
+  "parent": "24",
+  "uct_rank": 4,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:27:18+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60452,
+  "GAUC": 0.671264,
+  "nDCG@5": 0.537777,
+  "source_hash": "cfb4506c0604",
+  "predictions_hash": "47c5bd324d7d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671264,
+      "nDCG@5": 0.537777,
+      "primary": 0.60452
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671264,
+      "nDCG@5": 0.537777,
+      "primary": 0.60452
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671264,
+      "nDCG@5": 0.537777,
+      "primary": 0.60452
+    }
+  ],
+  "seconds": 28.6,
+  "verdict": "KEPT",
+  "delta": 0.00302,
+  "tokens_in": 145464,
+  "tokens_out": 6660,
+  "tokens_cached": 121216,
+  "cost_usd": 0.187828,
+  "model": "gpt-5.5",
+  "agent_iteration": 25,
+  "wall_seconds": 114.7,
+  "recovery_events": []
+}

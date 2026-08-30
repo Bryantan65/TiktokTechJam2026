@@ -1,0 +1,64 @@
+{
+  "iteration": 12,
+  "solution": "logs/record-run-16-uct/solutions/012_seedbag_rankblend.py",
+  "hypothesis": "improve 11: the seed-bagged score average improved both metrics; add a 30% per-user rank-percentile fusion signal using the same cached members to emphasize top-of-list ordering for nDCG@5 without retraining.",
+  "parent": "11",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:03:02+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60461,
+  "GAUC": 0.671269,
+  "nDCG@5": 0.537951,
+  "source_hash": "a399135f6f68",
+  "predictions_hash": "36d033dc801d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671269,
+      "nDCG@5": 0.537951,
+      "primary": 0.60461
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671269,
+      "nDCG@5": 0.537951,
+      "primary": 0.60461
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671269,
+      "nDCG@5": 0.537951,
+      "primary": 0.60461
+    }
+  ],
+  "seconds": 22.3,
+  "verdict": "KEPT",
+  "delta": 0.00311,
+  "tokens_in": 42573,
+  "tokens_out": 3535,
+  "tokens_cached": 30592,
+  "cost_usd": 0.080599,
+  "model": "gpt-5.5",
+  "agent_iteration": 11,
+  "wall_seconds": 52.1,
+  "recovery_events": []
+}

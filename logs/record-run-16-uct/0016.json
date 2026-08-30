@@ -1,0 +1,64 @@
+{
+  "iteration": 16,
+  "solution": "logs/record-run-16-uct/solutions/016_oof_lgbm_stack.py",
+  "hypothesis": "improve 14: node 014's stacker may overfit because it trained on in-sample TRAIN member predictions; train LambdaRank on a chronological TRAIN-only holdout predicted by early-window members, then apply it at 25% to node-12 target predictions.",
+  "parent": "14",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:11:42+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604514,
+  "GAUC": 0.671148,
+  "nDCG@5": 0.53788,
+  "source_hash": "6cb1eccf7cb0",
+  "predictions_hash": "913b3f3bc362",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671148,
+      "nDCG@5": 0.53788,
+      "primary": 0.604514
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671148,
+      "nDCG@5": 0.53788,
+      "primary": 0.604514
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671148,
+      "nDCG@5": 0.53788,
+      "primary": 0.604514
+    }
+  ],
+  "seconds": 200.8,
+  "verdict": "KEPT",
+  "delta": 0.003014,
+  "tokens_in": 116459,
+  "tokens_out": 5418,
+  "tokens_cached": 93952,
+  "cost_usd": 0.157423,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 250.9,
+  "recovery_events": []
+}

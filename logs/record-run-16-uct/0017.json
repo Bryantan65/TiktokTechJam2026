@@ -1,0 +1,64 @@
+{
+  "iteration": 17,
+  "solution": "logs/record-run-16-uct/solutions/017_rankblend40.py",
+  "hypothesis": "improve 12: node 012's 30% rank-percentile fusion was the largest clean gain after ensembling; keep all cached members fixed and test a stronger 40% rank signal, which is cheap and directly targets top-of-list nDCG.",
+  "parent": "12",
+  "uct_rank": 2,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:15:43+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604698,
+  "GAUC": 0.67143,
+  "nDCG@5": 0.537965,
+  "source_hash": "ece35a2900bf",
+  "predictions_hash": "a7ee8f8bd011",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67143,
+      "nDCG@5": 0.537965,
+      "primary": 0.604698
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67143,
+      "nDCG@5": 0.537965,
+      "primary": 0.604698
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67143,
+      "nDCG@5": 0.537965,
+      "primary": 0.604698
+    }
+  ],
+  "seconds": 24.2,
+  "verdict": "KEPT",
+  "delta": 0.003198,
+  "tokens_in": 95856,
+  "tokens_out": 4266,
+  "tokens_cached": 72192,
+  "cost_usd": 0.137916,
+  "model": "gpt-5.5",
+  "agent_iteration": 16,
+  "wall_seconds": 63.7,
+  "recovery_events": []
+}

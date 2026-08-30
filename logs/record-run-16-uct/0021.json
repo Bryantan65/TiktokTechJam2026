@@ -1,0 +1,64 @@
+{
+  "iteration": 21,
+  "solution": "logs/record-run-16-uct/solutions/021_oof_stack_base19.py",
+  "hypothesis": "improve 16: expand the untouched OOF LambdaRank stacker by training/applying it on the stronger node-019 feature set, including the 50/50 rank fusion and 10% user-context history prior, with a conservative 20% meta blend.",
+  "parent": "16",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:20:17+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604506,
+  "GAUC": 0.671115,
+  "nDCG@5": 0.537898,
+  "source_hash": "f880fdbe3be0",
+  "predictions_hash": "48efd2e899e6",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671115,
+      "nDCG@5": 0.537898,
+      "primary": 0.604506
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671115,
+      "nDCG@5": 0.537898,
+      "primary": 0.604506
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671115,
+      "nDCG@5": 0.537898,
+      "primary": 0.604506
+    }
+  ],
+  "seconds": 45.5,
+  "verdict": "KEPT",
+  "delta": 0.003006,
+  "tokens_in": 76424,
+  "tokens_out": 6139,
+  "tokens_cached": 58880,
+  "cost_usd": 0.13469,
+  "model": "gpt-5.5",
+  "agent_iteration": 20,
+  "wall_seconds": 97.4,
+  "recovery_events": []
+}

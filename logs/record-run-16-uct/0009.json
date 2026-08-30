@@ -1,0 +1,65 @@
+{
+  "iteration": 9,
+  "solution": "logs/record-run-16-uct/solutions/009_watch_weighted_bpr1_fm.py",
+  "hypothesis": "debug 6: the watch-time weighted BPR run was a no-op, likely because the raw CSV join used too-strict keys; match play_time_ms by (date,user,video,tab) and apply it to the best 1-negative BPR so the weighting must affect the saved checkpoint.",
+  "parent": "6",
+  "uct_rank": null,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T17:57:51+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602975,
+  "GAUC": 0.669335,
+  "nDCG@5": 0.536614,
+  "source_hash": "eb4e29263525",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "e859bf6d2f98",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000237,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669697,
+      "nDCG@5": 0.536713,
+      "primary": 0.603205
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669303,
+      "nDCG@5": 0.536673,
+      "primary": 0.602988
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669006,
+      "nDCG@5": 0.536456,
+      "primary": 0.602731
+    }
+  ],
+  "seconds": 59.5,
+  "verdict": "noise",
+  "delta": 0.001475,
+  "tokens_in": 71611,
+  "tokens_out": 5372,
+  "tokens_cached": 50048,
+  "cost_usd": 0.132652,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 115.5,
+  "recovery_events": []
+}

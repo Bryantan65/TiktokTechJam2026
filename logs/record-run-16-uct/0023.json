@@ -1,0 +1,64 @@
+{
+  "iteration": 23,
+  "solution": "logs/record-run-16-uct/solutions/023_mech50_hist10.py",
+  "hypothesis": "improve 19: the rank/history knobs appear locally peaked, so test a different high-leverage blend parameter: increase the readable soft-hard BPR family from 40% to 50% while keeping node-019's 50/50 score-rank fusion and 10% user-context prior fixed.",
+  "parent": "19",
+  "uct_rank": 6,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:23:07+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604408,
+  "GAUC": 0.67105,
+  "nDCG@5": 0.537765,
+  "source_hash": "3834fcfbf705",
+  "predictions_hash": "76a6b30222f3",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67105,
+      "nDCG@5": 0.537765,
+      "primary": 0.604408
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67105,
+      "nDCG@5": 0.537765,
+      "primary": 0.604408
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67105,
+      "nDCG@5": 0.537765,
+      "primary": 0.604408
+    }
+  ],
+  "seconds": 26.8,
+  "verdict": "KEPT",
+  "delta": 0.002908,
+  "tokens_in": 70558,
+  "tokens_out": 5805,
+  "tokens_cached": 51072,
+  "cost_usd": 0.132301,
+  "model": "gpt-5.5",
+  "agent_iteration": 22,
+  "wall_seconds": 80.5,
+  "recovery_events": []
+}

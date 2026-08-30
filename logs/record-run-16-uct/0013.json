@@ -1,0 +1,64 @@
+{
+  "iteration": 13,
+  "solution": "logs/record-run-16-uct/solutions/013_rrf_fusion.py",
+  "hypothesis": "improve 12: keep the cached six-member ensemble but replace linear rank-percentile fusion with reciprocal-rank fusion (c=10), concentrating the 30% rank signal on top positions that drive nDCG@5.",
+  "parent": "12",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:03:53+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604174,
+  "GAUC": 0.670652,
+  "nDCG@5": 0.537697,
+  "source_hash": "4385a66d6eb3",
+  "predictions_hash": "c68758925838",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670652,
+      "nDCG@5": 0.537697,
+      "primary": 0.604174
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670652,
+      "nDCG@5": 0.537697,
+      "primary": 0.604174
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670652,
+      "nDCG@5": 0.537697,
+      "primary": 0.604174
+    }
+  ],
+  "seconds": 22.0,
+  "verdict": "KEPT",
+  "delta": 0.002674,
+  "tokens_in": 43688,
+  "tokens_out": 3550,
+  "tokens_cached": 31616,
+  "cost_usd": 0.081488,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 51.1,
+  "recovery_events": []
+}

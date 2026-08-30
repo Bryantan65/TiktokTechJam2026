@@ -1,0 +1,64 @@
+{
+  "iteration": 18,
+  "solution": "logs/record-run-16-uct/solutions/018_rankblend50.py",
+  "hypothesis": "improve 17: rank-percentile weight improved from 30% to 40%, so keep all cached members fixed and test 50/50 score-vs-rank fusion to see whether the rank-heavy trend continues or peaks.",
+  "parent": "17",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:16:30+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60471,
+  "GAUC": 0.671438,
+  "nDCG@5": 0.537983,
+  "source_hash": "ee6e140e0ce6",
+  "predictions_hash": "9e549f15b330",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671438,
+      "nDCG@5": 0.537983,
+      "primary": 0.60471
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671438,
+      "nDCG@5": 0.537983,
+      "primary": 0.60471
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671438,
+      "nDCG@5": 0.537983,
+      "primary": 0.60471
+    }
+  ],
+  "seconds": 24.0,
+  "verdict": "KEPT",
+  "delta": 0.00321,
+  "tokens_in": 53156,
+  "tokens_out": 3128,
+  "tokens_cached": 39808,
+  "cost_usd": 0.084554,
+  "model": "gpt-5.5",
+  "agent_iteration": 17,
+  "wall_seconds": 46.3,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 32,
+  "solution": "logs/record-run-16-uct/solutions/032_debug_hour_roworder.py",
+  "hypothesis": "debug 31: the hourmin residual was a no-op, so diagnose the join by normalizing CSV tuple keys and falling back to documented raw-file/date row order, then use an 8% live hour residual to ensure the time feature reaches predictions.",
+  "parent": "31",
+  "uct_rank": null,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:52:18+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604699,
+  "GAUC": 0.671392,
+  "nDCG@5": 0.538006,
+  "source_hash": "a4116b24e484",
+  "predictions_hash": "f2d84795a2fa",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671392,
+      "nDCG@5": 0.538006,
+      "primary": 0.604699
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671392,
+      "nDCG@5": 0.538006,
+      "primary": 0.604699
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671392,
+      "nDCG@5": 0.538006,
+      "primary": 0.604699
+    }
+  ],
+  "seconds": 49.2,
+  "verdict": "KEPT",
+  "delta": 0.003199,
+  "tokens_in": 109078,
+  "tokens_out": 7673,
+  "tokens_cached": 88192,
+  "cost_usd": 0.173041,
+  "model": "gpt-5.5",
+  "agent_iteration": 31,
+  "wall_seconds": 129.7,
+  "recovery_events": []
+}
