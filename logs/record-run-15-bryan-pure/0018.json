@@ -1,0 +1,64 @@
+{
+  "iteration": 18,
+  "solution": "logs/record-run-15-bryan-pure/solutions/018_time_hour_bpr_blend30.py",
+  "hypothesis": "draft 6: KuaiRand includes temporal context useful for sequential/ranking models (dataset repo https://github.com/chongminggao/KuaiRand); add a BPR FM member with hour-of-day bucket and day-of-week raw CSV features, blended at a readable 30% with node 14.",
+  "parent": "14",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T03:18:15+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604691,
+  "GAUC": 0.671557,
+  "nDCG@5": 0.537825,
+  "source_hash": "a907487216ec",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hour4+dow\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "b41a53cb694e",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000162,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671541,
+      "nDCG@5": 0.537854,
+      "primary": 0.604697
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671599,
+      "nDCG@5": 0.538101,
+      "primary": 0.60485
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671531,
+      "nDCG@5": 0.537521,
+      "primary": 0.604526
+    }
+  ],
+  "seconds": 256.1,
+  "verdict": "KEPT",
+  "delta": 0.003191,
+  "tokens_in": 146983,
+  "tokens_out": 7713,
+  "tokens_cached": 122240,
+  "cost_usd": 0.200107,
+  "model": "gpt-5.5",
+  "agent_iteration": 17,
+  "wall_seconds": 332.4,
+  "recovery_events": []
+}

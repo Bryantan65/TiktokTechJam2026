@@ -1,0 +1,64 @@
+{
+  "iteration": 20,
+  "solution": "logs/record-run-15-bryan-pure/solutions/020_dual_time_blend40.py",
+  "hypothesis": "improve 19: node 18 and 19 time members have similar primary but different GAUC/nDCG tilt; use their cached predictions as two complementary temporal views and raise total time weight to 40%.",
+  "parent": "19",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T03:28:04+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604807,
+  "GAUC": 0.671594,
+  "nDCG@5": 0.538019,
+  "source_hash": "8245fa8b695a",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+coarse/rich_time_blend\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "923581585226",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00034,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671408,
+      "nDCG@5": 0.537905,
+      "primary": 0.604657
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671935,
+      "nDCG@5": 0.538457,
+      "primary": 0.605196
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671439,
+      "nDCG@5": 0.537695,
+      "primary": 0.604567
+    }
+  ],
+  "seconds": 82.7,
+  "verdict": "KEPT",
+  "delta": 0.003307,
+  "tokens_in": 66737,
+  "tokens_out": 6334,
+  "tokens_cached": 48000,
+  "cost_usd": 0.134183,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 128.4,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 13,
+  "solution": "logs/record-run-13/solutions/013_weighted_seedbag5.py",
+  "hypothesis": "improve 11: node 12 showed extra seeds can dilute, while node 11's gain came from adding seeds 3/4; keep unchanged cached node-8 members but weight seeds 3/4 more heavily than 0/1/2.",
+  "parent": "11",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:16:34+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604672,
+  "GAUC": 0.671576,
+  "nDCG@5": 0.537768,
+  "source_hash": "0ef5d21750df",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8f69ca4089c7",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 3.9e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671534,
+      "nDCG@5": 0.537744,
+      "primary": 0.604639
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671559,
+      "nDCG@5": 0.537764,
+      "primary": 0.604662
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671635,
+      "nDCG@5": 0.537795,
+      "primary": 0.604715
+    }
+  ],
+  "seconds": 30.0,
+  "verdict": "KEPT",
+  "delta": 0.003172,
+  "tokens_in": 65801,
+  "tokens_out": 5040,
+  "tokens_cached": 49664,
+  "cost_usd": 0.115574,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 75.7,
+  "recovery_events": []
+}

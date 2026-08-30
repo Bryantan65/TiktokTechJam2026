@@ -1,0 +1,235 @@
+"""Improve node 25: add label-free within-split exposure context to the time-sequence member.
+
+Node25's time-aware sequence member uses train-history positives/negatives for
+valid/test, but ignores the known order of earlier impressions in the target
+split.  This keeps the node22 incumbent and blend weight, and replaces the
+30% time-sequence member with a superset whose features also include prior
+label-free exposures (video/author/tab/duration/hour/tab-hour counts and
+recencies), updated online within valid/test without reading their labels.
+"""
+import argparse, os, sys, importlib.util
+from collections import defaultdict
+import numpy as np
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, '..', 'kuairand-starter-kit'))
+
+spec25 = importlib.util.spec_from_file_location('node25', os.path.join(HERE, '025_time_seq_context.py'))
+node25 = importlib.util.module_from_spec(spec25); spec25.loader.exec_module(node25)
+node22 = node25.node22
+node20 = node25.node20
+from data import load, encode
+
+
+def dur_bucket(ms):
+    return node25.dur_bucket(ms)
+
+
+def cb(x):
+    x = int(x)
+    if x <= 0: return '0'
+    if x == 1: return '1'
+    if x <= 3: return '2-3'
+    if x <= 7: return '4-7'
+    return '8+'
+
+
+def rb(age):
+    if age is None: return 'none'
+    if age <= 1: return '1'
+    if age <= 3: return '2-3'
+    if age <= 10: return '4-10'
+    if age <= 50: return '11-50'
+    return '50+'
+
+
+def h4_of(hour):
+    return node25.h4_of(hour)
+
+
+def empty_hist():
+    return {
+        'pv': defaultdict(int), 'nv': defaultdict(int),
+        'pa': defaultdict(int), 'na': defaultdict(int),
+        'pt': defaultdict(int), 'nt': defaultdict(int),
+        'pd': defaultdict(int), 'nd': defaultdict(int),
+        'ph': defaultdict(int), 'nh': defaultdict(int),
+        'pth': defaultdict(int), 'nth': defaultdict(int),
+        'lv': {}, 'la': {}, 'lh': {}, 'cnt': 0, 'pos': 0, 'neg': 0,
+        # label-free exposure counts/recencies; these can be updated within
+        # valid/test because they do not use target labels.
+        'ev': defaultdict(int), 'ea': defaultdict(int), 'et': defaultdict(int),
+        'ed': defaultdict(int), 'eh': defaultdict(int), 'eth': defaultdict(int),
+        'lev': {}, 'lea': {}, 'leh': {}, 'ecnt': 0,
+    }
+
+
+def clone_hist(h):
+    g = empty_hist()
+    for k in ['pv','nv','pa','na','pt','nt','pd','nd','ph','nh','pth','nth','ev','ea','et','ed','eh','eth']:
+        g[k].update(h[k])
+    for k in ['lv','la','lh','lev','lea','leh']:
+        g[k].update(h[k])
+    for k in ['cnt','pos','neg','ecnt']:
+        g[k] = h[k]
+    return g
+
+
+def copy_all_hist(hist):
+    out = defaultdict(empty_hist)
+    for u, h in hist.items():
+        out[u] = clone_hist(h)
+    return out
+
+
+def keys(r, hour):
+    v = str(r[2]); a = str(r[3]); t = str(r[4]); d = str(dur_bucket(r[5])); hb = h4_of(hour); th = t + '_' + hb
+    return v, a, t, d, hb, th
+
+
+def hist_vals(h, r, hour):
+    v, a, t, d, hb, th = keys(r, hour)
+    c = h['cnt']; ec = h['ecnt']
+    return (
+        cb(h['pv'].get(v,0)), cb(h['nv'].get(v,0)),
+        cb(h['pa'].get(a,0)), cb(h['na'].get(a,0)),
+        cb(h['pt'].get(t,0)), cb(h['nt'].get(t,0)),
+        cb(h['pd'].get(d,0)), cb(h['nd'].get(d,0)),
+        cb(h['ph'].get(hb,0)), cb(h['nh'].get(hb,0)),
+        cb(h['pth'].get(th,0)), cb(h['nth'].get(th,0)),
+        rb(None if v not in h['lv'] else c - h['lv'][v]),
+        rb(None if a not in h['la'] else c - h['la'][a]),
+        rb(None if hb not in h['lh'] else c - h['lh'][hb]),
+        cb(h['pos']), cb(h['neg']),
+        cb(h['ev'].get(v,0)), cb(h['ea'].get(a,0)), cb(h['et'].get(t,0)),
+        cb(h['ed'].get(d,0)), cb(h['eh'].get(hb,0)), cb(h['eth'].get(th,0)),
+        rb(None if v not in h['lev'] else ec - h['lev'][v]),
+        rb(None if a not in h['lea'] else ec - h['lea'][a]),
+        rb(None if hb not in h['leh'] else ec - h['leh'][hb]),
+        cb(h['ecnt'])
+    )
+
+
+def add_exposure(h, r, hour):
+    v, a, t, d, hb, th = keys(r, hour)
+    h['ecnt'] += 1; ec = h['ecnt']
+    h['ev'][v] += 1; h['ea'][a] += 1; h['et'][t] += 1; h['ed'][d] += 1; h['eh'][hb] += 1; h['eth'][th] += 1
+    h['lev'][v] = ec; h['lea'][a] = ec; h['leh'][hb] = ec
+
+
+def add_labeled_hist(h, r, hour):
+    v, a, t, d, hb, th = keys(r, hour)
+    y = int(r[6]); h['cnt'] += 1; c = h['cnt']
+    if y > 0:
+        h['pv'][v] += 1; h['pa'][a] += 1; h['pt'][t] += 1; h['pd'][d] += 1
+        h['ph'][hb] += 1; h['pth'][th] += 1
+        h['lv'][v] = c; h['la'][a] = c; h['lh'][hb] = c; h['pos'] += 1
+    else:
+        h['nv'][v] += 1; h['na'][a] += 1; h['nt'][t] += 1; h['nd'][d] += 1
+        h['nh'][hb] += 1; h['nth'][th] += 1; h['neg'] += 1
+    add_exposure(h, r, hour)
+
+
+def build_time_seq_exposure_rows(splits, hours):
+    vals_by = {}
+    nfields = 5 + 3 + 27  # base + time + history/exposure context
+    maps = [dict() for _ in range(nfields)]
+
+    hist = defaultdict(empty_hist); vals = []
+    htrain = hours.get('train', np.full(len(splits['train']), 24, dtype=np.int64))
+    for i, r in enumerate(splits['train']):
+        hb = h4_of(htrain[i]); dow = str(node20.day_of_week(r[0])); tab = str(r[4])
+        base = (str(r[1]), str(r[2]), str(r[3]), tab, str(dur_bucket(r[5])), hb, dow, tab + '_' + hb)
+        u = str(r[1]); vr = base + hist_vals(hist[u], r, htrain[i])
+        vals.append(vr); add_labeled_hist(hist[u], r, htrain[i])
+    vals_by['train'] = vals
+    for vr in vals:
+        for j, v in enumerate(vr):
+            if v not in maps[j]: maps[j][v] = len(maps[j])
+
+    base_hist = hist
+    for sp in splits:
+        if sp == 'train':
+            continue
+        # Each non-train split starts from train history.  Within that split we
+        # update only exposure features, never positive/negative label counts.
+        shist = copy_all_hist(base_hist)
+        vals = []; hs = hours.get(sp, np.full(len(splits[sp]), 24, dtype=np.int64))
+        for i, r in enumerate(splits[sp]):
+            hb = h4_of(hs[i]); dow = str(node20.day_of_week(r[0])); tab = str(r[4])
+            base = (str(r[1]), str(r[2]), str(r[3]), tab, str(dur_bucket(r[5])), hb, dow, tab + '_' + hb)
+            u = str(r[1]); vr = base + hist_vals(shist[u], r, hs[i])
+            vals.append(vr); add_exposure(shist[u], r, hs[i])
+        vals_by[sp] = vals
+        for vr in vals:
+            for j, v in enumerate(vr):
+                if v not in maps[j]: maps[j][v] = len(maps[j])
+
+    offsets = []; off = 0
+    for m in maps:
+        offsets.append(off); off += len(m)
+    enc = {}
+    for sp, vals in vals_by.items():
+        X = np.zeros((len(vals), len(maps)), dtype=np.int64)
+        for i, vr in enumerate(vals):
+            for j, v in enumerate(vr):
+                X[i, j] = offsets[j] + maps[j][v]
+        enc[sp] = (X, np.asarray([r[6] for r in splits[sp]], dtype=np.float32), np.asarray([r[1] for r in splits[sp]], dtype=object))
+    return enc, off
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+    ap.add_argument('--split', default='valid', choices=['train','valid','test','dev'])
+    ap.add_argument('--out', default=None)
+    ap.add_argument('--k', type=int, default=16)
+    ap.add_argument('--lr', type=float, default=0.001)
+    ap.add_argument('--epochs', type=int, default=50)
+    ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--device', default='cpu', choices=['cpu','cuda'])
+    a = ap.parse_args()
+    print(f'loading {a.data_dir} ...')
+    if a.split == 'dev':
+        from devdata import load as load_dev
+        splits = load_dev(a.data_dir); target = 'valid'
+    else:
+        splits = load(a.data_dir); target = a.split
+    print({k: len(v) for k, v in splits.items()}, 'fields=node22+time_seq_exposure_context')
+
+    pz = node22.per_user_zscore
+    enc0, _ = encode(splits); users = enc0[target][2]
+    member_seeds = [a.seed + 1000 * m for m in range(3)]
+
+    # Node22 incumbent: node20 base plus learned sequence context.
+    base = node20.run_solution(splits, target, a.split, a.data_dir, k=a.k, lr=a.lr,
+                               epochs=a.epochs, seed=a.seed, device=a.device,
+                               verbose=a.out is None)
+    senc, sdim = node22.build_seq_rows(splits)
+    seq_members = []
+    for ms in member_seeds:
+        p = node20.cached_predictions(senc, sdim, target, a.split, ms, a.device, a.out is None,
+                                      '022_seq_context_bpr_member', 'bpr', None, 3, a.k, a.lr, a.epochs)
+        seq_members.append(pz(p, users))
+    seq = pz(np.mean(np.vstack(seq_members), axis=0), users)
+    incumbent = 0.70 * pz(base, users) + 0.30 * seq
+
+    hours = node20.load_hours(a.data_dir, splits, verbose=a.out is None)
+    eenc, edim = build_time_seq_exposure_rows(splits, hours)
+    exp_members = []
+    for ms in member_seeds:
+        p = node20.cached_predictions(eenc, edim, target, a.split, ms, a.device, a.out is None,
+                                      '029_time_seq_exposure_bpr_member', 'bpr', None, 3, a.k, a.lr, a.epochs)
+        exp_members.append(pz(p, users))
+    expseq = pz(np.mean(np.vstack(exp_members), axis=0), users)
+    scores = 0.70 * pz(incumbent, users) + 0.30 * expseq
+
+    if a.out:
+        np.save(a.out, scores.astype(np.float64))
+        print(f'wrote {len(scores):,d} predictions for split={a.split}')
+    else:
+        print(f'produced {len(scores):,d} predictions for split={a.split}')
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,64 @@
+{
+  "iteration": 16,
+  "solution": "logs/record-run-13/solutions/016_time_features_valid.py",
+  "hypothesis": "improve 14: the dev screen verified that raw hourmin joins hit every row, so spend the counted valid run on the same date/dow/4-hour augmented BCE+BPR seed bag. This directly tests whether the time-aware signal transfers from train-holdout to official valid.",
+  "parent": "14",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:24:14+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604607,
+  "GAUC": 0.67152,
+  "nDCG@5": 0.537694,
+  "source_hash": "482d736cd191",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\ntime feature hour lookup hits: 1436609/1436609\naugmented fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'date', 'dow', 'hour4'] dim 40260->40303\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "aa40255d843d",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 1.2e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67153,
+      "nDCG@5": 0.537676,
+      "primary": 0.604603
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671513,
+      "nDCG@5": 0.537728,
+      "primary": 0.604621
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671516,
+      "nDCG@5": 0.537679,
+      "primary": 0.604597
+    }
+  ],
+  "seconds": 330.5,
+  "verdict": "KEPT",
+  "delta": 0.003107,
+  "tokens_in": 56444,
+  "tokens_out": 5639,
+  "tokens_cached": 44928,
+  "cost_usd": 0.107645,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 415.1,
+  "recovery_events": []
+}

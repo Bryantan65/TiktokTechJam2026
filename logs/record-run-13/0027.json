@@ -1,0 +1,64 @@
+{
+  "iteration": 27,
+  "solution": "logs/record-run-13/solutions/027_user_te_blend.py",
+  "hypothesis": "improve 23: the history/target-encoding proxy was only tested away from the best time ensemble; blend explicit train-only user-conditioned affinities for video/author/tab/duration/hour into node 25 at 30% so the behavioural signal is readable.",
+  "parent": "23",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T02:04:04+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604282,
+  "GAUC": 0.670856,
+  "nDCG@5": 0.537709,
+  "source_hash": "025f5efc5c56",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\ntime feature hour lookup hits: 1436609/1436609\naugmented fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'date', 'dow', 'hour4'] dim 40260->40303\nTE cols=(0, 1) unique=1092750\nTE cols=(0, 2) unique=1070326\nTE cols=(0, 3) unique=63579\nTE cols=(0, 4) unique=212001\nTE cols=(0, 7) unique=116583\nTE cols=(0, 2, 7) unique=1102349\nTE cols=(1,) unique=7538\nTE cols=(2,) unique=6482\nTE cols=(2, 7) unique=34708\nTE cols=(3, 7) unique=88\nTE cols=(4, 7) unique=60\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "371be76ffc38",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 1.5e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670885,
+      "nDCG@5": 0.537715,
+      "primary": 0.6043
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670827,
+      "nDCG@5": 0.537718,
+      "primary": 0.604273
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670855,
+      "nDCG@5": 0.537693,
+      "primary": 0.604274
+    }
+  ],
+  "seconds": 87.9,
+  "verdict": "KEPT",
+  "delta": 0.002782,
+  "tokens_in": 75658,
+  "tokens_out": 7247,
+  "tokens_cached": 54144,
+  "cost_usd": 0.153327,
+  "model": "gpt-5.5",
+  "agent_iteration": 25,
+  "wall_seconds": 147.4,
+  "recovery_events": []
+}

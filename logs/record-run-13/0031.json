@@ -1,0 +1,64 @@
+{
+  "iteration": 31,
+  "solution": "logs/record-run-13/solutions/031_time_tab_hour.py",
+  "hypothesis": "improve 30: tab has very different base positive rates by product surface, so hour effects may be tab-specific; add a date-free tab\u00d74-hour categorical cross to the time FM and keep the 60% time blend.",
+  "parent": "30",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T02:21:05+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604786,
+  "GAUC": 0.671704,
+  "nDCG@5": 0.537868,
+  "source_hash": "77561ebf7a25",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\ntime feature hour lookup hits: 1436609/1436609\naugmented fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour4', 'tab_hour4'] dim 40260->40362\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "33e27aa90eee",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 1.3e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.6717,
+      "nDCG@5": 0.537881,
+      "primary": 0.604791
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671708,
+      "nDCG@5": 0.537884,
+      "primary": 0.604796
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671703,
+      "nDCG@5": 0.537839,
+      "primary": 0.604771
+    }
+  ],
+  "seconds": 328.5,
+  "verdict": "KEPT",
+  "delta": 0.003286,
+  "tokens_in": 55715,
+  "tokens_out": 4726,
+  "tokens_cached": 40832,
+  "cost_usd": 0.104884,
+  "model": "gpt-5.5",
+  "agent_iteration": 29,
+  "wall_seconds": 363.9,
+  "recovery_events": []
+}

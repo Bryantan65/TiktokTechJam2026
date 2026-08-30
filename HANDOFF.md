@@ -113,6 +113,8 @@ would leave the fixes looking like guesses.
 | `logs/record-run-10/` | 31 experiments, converged, best 0.604931 | the LightGBM/LambdaMART family; run 3 held |
 | `logs/record-run-11/` | 30 experiments, converged, best 0.604653 | semi-hard sampling and LambdaRank weighting; run 3 held |
 | `logs/record-run-12/` | 34 experiments, converged, best 0.605216 | Zheng's, on the cleaned prompt; run 3 held |
+| `logs/record-run-13/` | 32 experiments, converged, best 0.605484 | first run on the broadened web_search; run 3 held |
+| `logs/record-run-15-bryan-pure/` | 30 experiments, converged, best 0.605499 | 30/30 scored, no failures; run 3 held |
 
 **Reading a ledger programmatically: filter on `verdict`.** Run 12's highest
 `primary` across its JSON records is 0.605885 at experiment 5, which is *not* a
@@ -2162,10 +2164,13 @@ run-9   0.605738  031_global_ctr_tiebreak.py               2           FORBIDDEN
 winners forbidden: 5 of 12 runs (6 of 12 with a noise margin)
 ```
 
-Run 3 is **our submission of record**. Run 9 at 0.605738 is the best single-run
-result we have. Run 5's winner arrived after *six* consecutive non-improving
-children of the same parent. Winners routinely arrive after a string of failures
-on one node; that is persistence paying off, not grinding.
+Run 3 is **our submission of record**. Run 9's 0.605738 is the seed-picked figure
+- its honest 3-seed value is 0.605353, see *Zheng's 0.6057 is seed-picked* above
+- but the replay question is unaffected either way, since the gate would have
+closed that branch before the experiment ran at all. Run 5's winner arrived after
+*six* consecutive non-improving children of the same parent. Winners routinely
+arrive after a string of failures on one node; that is persistence paying off,
+not grinding.
 
 This independently rediscovers the calibration already recorded in
 `agent/prompt.py`: the plateau detector's threshold comment says *"At 4 or 5 it
@@ -2291,3 +2296,108 @@ binding plateau detector      OPEN      one flag; replay it against all 12 runs 
 
 **This was a search-policy question, not a multi-agent one.** Every architectural
 proposal died against the logs; the survivors are instrumentation.
+
+### Runs 13 and 15, and what four clean runs agree on, 2026-08-30
+
+Two runs overnight, both converged on the organisers' rule with experiments to
+spare. Run 15 is the first run on the fixed duplicate guard and the cleanest run
+in the archive: 30 records, 30 scored, no failure, no no-op, no duplicate.
+
+```
+                    primary     GAUC       nDCG@5     winner
+run 3    (submitted) 0.605493   0.672469   0.538518   027_deepfm_member.py
+run 13               0.605484   0.672606   0.538361   030_time_nodate_60.py
+run 15               0.605499   0.672312   0.538686   029_time_seq_exposure_context.py
+run 9    (3-seed)    0.605353   -          -          seed-picked headline was 0.605738
+```
+
+**Three independent searches, three unrelated winning mechanisms, a spread of
+0.000015.** DeepFM ensemble member; time features blended at 60%; time plus
+sequence plus exposure context. Against a seed sd of 0.0008 and a run-to-run sd
+of 0.00034, that is four runs measuring the same ceiling with different
+instruments. Nothing here promotes: the bar is +0.0016 over run 3 and the whole
+spread is a hundredth of that.
+
+Run 15's nominal +0.000006 over run 3 is six millionths. It is not a result.
+
+### The broadened web_search changed behaviour, measurably
+
+Run 13 was the first run on the 2026-08-30 prompt change (four named source
+families, ask for the URL inside the query). Run 15 followed.
+
+```
+                            all 12 prior runs    run 15
+searches                    86                   8
+reached a practitioner source  0                 4
+results retaining any URL      6                 21
+```
+
+Zero for eighty-six became four for eight. One query was explicitly
+`Kaggle CTR ranking competition target encoding user item author historical
+features leakage safe cite URL`, and the agent acted on it: iterations 16 and 17
+were LambdaRank and LightGBM target-encoding blends. Both scored badly
+(0.600108, 0.601697), so the Kaggle-derived idea failed on its merits - but the
+change in *where the agent looks* is unambiguous, and the citation trail is now
+21 URLs instead of 6 across a run an order of magnitude longer.
+
+### GPU: about 1.4x, not the four hours it looks like
+
+```
+run                 recs    wall    sec/exp
+record-run-3          30   6.48h        711   CPU
+record-run-5          28   4.29h        500   CPU
+record-run-9          33   3.63h        329   CPU
+record-run-8          31   1.63h        130   CPU   <- faster than either GPU run
+--------------------------------- GPU wired 08-29 23:53 ---------------------------
+record-run-13         32   1.65h        138
+record-run-15         30   1.66h        160
+```
+
+Comparing run 15 to run 3 suggests a 4.8-hour saving. It is not: run 8 finished
+in 1.63h on the CPU, faster than both GPU runs. Per-experiment cost swings 5x on
+the *same hardware* depending on whether the agent is fitting one FM or a
+ten-member bag, and run 3 spent its time on heavy blends.
+
+Against the CPU mean of 3.08h the GPU saves about 1.4h; against the CPU best it
+saves nothing. **The controlled measurement - 1.40x on identical work - remains
+the number to quote.** Live sampling agrees: utilisation spikes to 99% then falls
+to 4-7% between bursts, because a k=16 FM over 7.5k videos cannot saturate a 3060
+Ti and the per-batch host-to-device copy dominates. A bigger card buys nothing;
+moving the training tensors onto the device once at startup might.
+
+So "every run now finishes in 2 hours" is not safe from n=2. A run that stays on
+light models does; a run that goes ensemble-heavy would still be 4h+ even at
+1.40x.
+
+### The duplicate guard had two defects, and the test found the second
+
+Fixed in `44a63e6`, before run 15.
+
+`find_by_hash` keyed on source alone, so the dev holdout's whole point - screen
+cheaply, then confirm on valid - was blocked: run 13 screened at iteration 14,
+tried the same code on valid at 15, and was rejected as a duplicate. One slot out
+of 50 spent learning nothing, and the idea left neither confirmed nor refuted.
+
+The first fix (key on `(source_hash, split)`) still failed, and only the test
+showed why: **duplicate records were themselves being indexed**, so the rejection
+became the prior that rejects the retry. A refusal is not a run and must not
+enter the index.
+
+Verified against all 13 archived runs: zero same-source-same-split collisions the
+guard would no longer catch. It has in fact never caught a real rerun - its only
+firing in the project's history is the false positive above.
+
+**Untested live.** Run 15 used no dev screens at all, so the promotion path still
+has not been exercised by an agent.
+
+### Open, for whoever picks this up
+
+- `harness/data.py` (main) and Zheng's `feature/kuairand-1k` solve the same
+  variant-loading problem two ways. His edits `kuairand-starter-kit/data.py`
+  directly, which forfeits the property that our copy of the kit is byte-identical
+  to the official release - and deletes an organiser comment marking where
+  students are meant to add features. The branch also removes the
+  `filter on verdict` warning from this file. Resolve before merging.
+- The training tensors sit in host memory and are indexed there every batch
+  (`xp = Xtr_t[ps].to(device)`). Moving them to the device once is the available
+  speed win, and it is larger than the one the GPU itself bought.

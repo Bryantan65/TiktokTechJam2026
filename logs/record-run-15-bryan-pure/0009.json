@@ -1,0 +1,64 @@
+{
+  "iteration": 9,
+  "solution": "logs/record-run-15-bryan-pure/solutions/009_watchtime_weighted_bpr.py",
+  "hypothesis": "draft 4: use watch-time as a confidence weight on the successful same-user BPR pairs, following implicit-feedback BPR (https://arxiv.org/abs/1205.2618) and watch-time preference work (https://doi.org/10.1609/aaai.v40i18.38555); longer-watched positives should be more informative for top-5 ranking.",
+  "parent": "7",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T02:50:36+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.59722,
+  "GAUC": 0.661278,
+  "nDCG@5": 0.533161,
+  "source_hash": "bbf028e89344",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "20e10a99d19f",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000112,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.661358,
+      "nDCG@5": 0.533305,
+      "primary": 0.597331
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.661112,
+      "nDCG@5": 0.533104,
+      "primary": 0.597108
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.661365,
+      "nDCG@5": 0.533075,
+      "primary": 0.59722
+    }
+  ],
+  "seconds": 204.5,
+  "verdict": "worse",
+  "delta": -0.00428,
+  "tokens_in": 110976,
+  "tokens_out": 5540,
+  "tokens_cached": 92544,
+  "cost_usd": 0.147752,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 265.4,
+  "recovery_events": []
+}

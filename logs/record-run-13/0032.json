@@ -1,0 +1,64 @@
+{
+  "iteration": 32,
+  "solution": "logs/record-run-13/solutions/032_time_hour24_nodate.py",
+  "hypothesis": "improve 30: node 31 showed crosses hurt, but node 28 hinted sharper time helped nDCG; replace only coarse 4-hour with reusable 24-hour buckets while keeping date-free dow and the proven 60% time blend.",
+  "parent": "30",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T02:27:29+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605277,
+  "GAUC": 0.672252,
+  "nDCG@5": 0.538302,
+  "source_hash": "cda1527ba73e",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\ntime feature hour lookup hits: 1436609/1436609\naugmented fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket', 'dow', 'hour24'] dim 40260->40291\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8a82fea9078c",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 1.4e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67225,
+      "nDCG@5": 0.538272,
+      "primary": 0.605261
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672243,
+      "nDCG@5": 0.538325,
+      "primary": 0.605284
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672263,
+      "nDCG@5": 0.53831,
+      "primary": 0.605287
+    }
+  ],
+  "seconds": 366.9,
+  "verdict": "KEPT",
+  "delta": 0.003777,
+  "tokens_in": 157546,
+  "tokens_out": 6205,
+  "tokens_cached": 130432,
+  "cost_usd": 0.195051,
+  "model": "gpt-5.5",
+  "agent_iteration": 30,
+  "wall_seconds": 421.2,
+  "recovery_events": []
+}

@@ -1,0 +1,64 @@
+{
+  "iteration": 19,
+  "solution": "logs/record-run-15-bryan-pure/solutions/019_rich_time_bpr_blend30.py",
+  "hypothesis": "improve 18: the time member clearly helped; replace coarse hour4+dow with a richer time encoding (hour24, date, weekday and tab-hour cross) while keeping the successful 30% readable blend with node 14.",
+  "parent": "18",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T03:23:19+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604694,
+  "GAUC": 0.67145,
+  "nDCG@5": 0.537938,
+  "source_hash": "7865eeb65f4b",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+rich_time\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "b78ec6159fca",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000287,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671182,
+      "nDCG@5": 0.537873,
+      "primary": 0.604527
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671911,
+      "nDCG@5": 0.538139,
+      "primary": 0.605025
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671256,
+      "nDCG@5": 0.537803,
+      "primary": 0.60453
+    }
+  ],
+  "seconds": 238.3,
+  "verdict": "KEPT",
+  "delta": 0.003194,
+  "tokens_in": 111147,
+  "tokens_out": 5903,
+  "tokens_cached": 84480,
+  "cost_usd": 0.167937,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 286.3,
+  "recovery_events": []
+}

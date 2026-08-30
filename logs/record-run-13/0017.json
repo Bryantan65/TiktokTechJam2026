@@ -1,0 +1,64 @@
+{
+  "iteration": 17,
+  "solution": "logs/record-run-13/solutions/017_history_blend.py",
+  "hypothesis": "draft user behaviour sequences: DIN weights historical behaviours by relevance to the target item (AAAI paper https://ojs.aaai.org/index.php/AAAI/article/view/4545); as a cheap readable probe, blend node-13 with a 30% train-history relevance score for user-video/author/tab/duration preferences.",
+  "parent": "13",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T01:30:47+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603547,
+  "GAUC": 0.670215,
+  "nDCG@5": 0.53688,
+  "source_hash": "01b8356775f9",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nhistory score touched rows: 124907/124909\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "3df55a657c8c",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 1.6e-05,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67023,
+      "nDCG@5": 0.536899,
+      "primary": 0.603565
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670229,
+      "nDCG@5": 0.536857,
+      "primary": 0.603543
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670185,
+      "nDCG@5": 0.536884,
+      "primary": 0.603534
+    }
+  ],
+  "seconds": 52.2,
+  "verdict": "KEPT",
+  "delta": 0.002047,
+  "tokens_in": 151157,
+  "tokens_out": 6350,
+  "tokens_cached": 121600,
+  "cost_usd": 0.198192,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 114.7,
+  "recovery_events": []
+}

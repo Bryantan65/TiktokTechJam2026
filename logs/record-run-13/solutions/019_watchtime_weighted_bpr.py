@@ -1,0 +1,211 @@
+"""Watch-time weighted BPR member blended with the best node-13 seed bag.
+
+Adds one new readable mechanism: pairwise BPR still compares same-user positives
+against negatives, but each positive pair is weighted by raw play_time_ms and
+completion ratio read from the KuaiRand log CSVs.  ABPR-style confidence for
+heterogeneous implicit feedback motivates weighting pairwise preferences by
+feedback strength (https://www.sciencedirect.com/science/article/abs/pii/S0950705114003530).
+"""
+import argparse, csv, os, sys, time
+from collections import defaultdict
+import numpy as np
+import torch
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'kuairand-starter-kit'))
+from data import load, encode, FIELDS
+from evaluate import evaluate
+
+
+class TorchFM(torch.nn.Module):
+    def __init__(self, dim, k=16, seed=0):
+        super().__init__(); rng=np.random.default_rng(seed)
+        self.V=torch.nn.Parameter(torch.from_numpy(rng.normal(0,0.01,(dim,k)).astype(np.float32)))
+        self.W=torch.nn.Parameter(torch.zeros(dim,dtype=torch.float32)); self.b=torch.nn.Parameter(torch.zeros((),dtype=torch.float32))
+    def forward(self,X):
+        E=self.V[X]; S=E.sum(1); inter=0.5*((S*S).sum(1)-(E*E).sum((1,2)))
+        return self.b+self.W[X].sum(1)+inter
+    @torch.no_grad()
+    def predict(self,X,bs=200000,device='cpu'):
+        self.eval(); out=[]
+        for i in range(0,len(X),bs): out.append(self(torch.from_numpy(X[i:i+bs].astype(np.int64)).to(device)).cpu().numpy())
+        return np.concatenate(out)
+
+
+def fit_bce(splits,enc,dim,k=16,lr=0.001,l2=1e-6,epochs=40,bs=8192,patience=4,seed=0,device='cpu',verbose=True):
+    Xtr,ytr,_=enc['train']; Xva,yva,uva=enc['valid']; model=TorchFM(dim,k,seed).to(device)
+    opt=torch.optim.Adam([{'params':[model.V,model.W],'weight_decay':l2},{'params':[model.b],'weight_decay':0.0}],lr=lr)
+    lossfn=torch.nn.BCEWithLogitsLoss(); Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); ytr_t=torch.from_numpy(ytr)
+    rng=np.random.default_rng(seed); best=-1; best_state=None; bad=0
+    for ep in range(1,epochs+1):
+        idx=rng.permutation(len(ytr)); t0=time.time(); model.train(); losses=[]
+        for i in range(0,len(idx),bs):
+            sel=torch.from_numpy(idx[i:i+bs]); xb=Xtr_t[sel].to(device); yb=ytr_t[sel].to(device)
+            opt.zero_grad(set_to_none=True); loss=lossfn(model(xb),yb); loss.backward(); opt.step(); losses.append(loss.item())
+        va=evaluate(uva,yva,model.predict(Xva,device=device))
+        if verbose: print(f"  BCE({seed}) ep {ep} loss {np.mean(losses):.4f} primary {va['primary']:.4f} {time.time()-t0:.1f}s")
+        if va['primary']>best+1e-5: best=va['primary']; bad=0; best_state={kk:vv.detach().clone() for kk,vv in model.state_dict().items()}
+        else:
+            bad+=1
+            if bad>=patience: break
+    model.load_state_dict(best_state); return model
+
+
+def make_user_pair_sources(y,users):
+    pos=defaultdict(list); neg=defaultdict(list)
+    for i,(yy,u) in enumerate(zip(y,users)): (pos if yy>0.5 else neg)[u].append(i)
+    pos_idx=[]; neg_pools=[]
+    for u,ps in pos.items():
+        ns=neg.get(u)
+        if ns:
+            arr=np.asarray(ns,dtype=np.int64)
+            for p in ps: pos_idx.append(p); neg_pools.append(arr)
+    return np.asarray(pos_idx,dtype=np.int64),neg_pools
+
+
+def sample_uniform_pairs(pos_idx,neg_pools,rng,neg_per_pos=3):
+    total=len(pos_idx)*neg_per_pos; p_out=np.empty(total,dtype=np.int64); n_out=np.empty(total,dtype=np.int64); k=0
+    for p,pool in zip(pos_idx,neg_pools):
+        m=len(pool)
+        for _ in range(neg_per_pos): p_out[k]=p; n_out[k]=pool[rng.integers(0,m)]; k+=1
+    order=rng.permutation(total); return p_out[order],n_out[order]
+
+
+def fit_bpr(splits,enc,dim,k=16,lr=0.001,l2=1e-6,epochs=40,bs=8192,patience=4,neg_per_pos=3,seed=0,device='cpu',verbose=True):
+    Xtr,ytr,utr=enc['train']; Xva,yva,uva=enc['valid']; model=TorchFM(dim,k,seed).to(device)
+    opt=torch.optim.Adam([{'params':[model.V,model.W],'weight_decay':l2},{'params':[model.b],'weight_decay':0.0}],lr=lr)
+    Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); pos_idx,neg_pools=make_user_pair_sources(ytr,utr); rng=np.random.default_rng(seed)
+    best=-1; best_state=None; bad=0
+    for ep in range(1,epochs+1):
+        t0=time.time(); p_idx,n_idx=sample_uniform_pairs(pos_idx,neg_pools,rng,neg_per_pos); model.train(); losses=[]
+        for i in range(0,len(p_idx),bs):
+            ps=torch.from_numpy(p_idx[i:i+bs]); ns=torch.from_numpy(n_idx[i:i+bs]); xp=Xtr_t[ps].to(device); xn=Xtr_t[ns].to(device)
+            opt.zero_grad(set_to_none=True); loss=torch.nn.functional.softplus(-(model(xp)-model(xn))).mean(); loss.backward(); opt.step(); losses.append(loss.item())
+        va=evaluate(uva,yva,model.predict(Xva,device=device))
+        if verbose: print(f"  BPR({seed}) ep {ep} loss {np.mean(losses):.4f} primary {va['primary']:.4f} {time.time()-t0:.1f}s")
+        if va['primary']>best+1e-5: best=va['primary']; bad=0; best_state={kk:vv.detach().clone() for kk,vv in model.state_dict().items()}
+        else:
+            bad+=1
+            if bad>=patience: break
+    model.load_state_dict(best_state); return model
+
+
+def read_watch_by_key(data_dir):
+    mp=defaultdict(list); files=['log_standard_4_08_to_4_21_pure.csv','log_standard_4_22_to_5_08_pure.csv']
+    def norm(x):
+        s='' if x is None else str(x).strip()
+        return s[:-2] if s.endswith('.0') else s
+    def first(rec,names):
+        for n in names:
+            if n in rec and rec[n]!='': return rec[n]
+        return None
+    for fn in files:
+        path=os.path.join(data_dir,fn)
+        if not os.path.isfile(path): continue
+        with open(path,'r',encoding='utf-8',newline='') as f:
+            for rec in csv.DictReader(f):
+                key=(norm(first(rec,['date'])),norm(first(rec,['user_id','userId'])),norm(first(rec,['video_id','videoId','item_id'])),norm(first(rec,['author_id','authorId'])),norm(first(rec,['tab'])),norm(first(rec,['duration_ms','duration','video_duration'])))
+                try: play=float(first(rec,['play_time_ms','play_time','playtime_ms','watch_time_ms']) or 0.0)
+                except Exception: play=0.0
+                mp[key].append(play)
+    return mp
+
+
+def train_watch_weights(splits,data_dir):
+    raw=read_watch_by_key(data_dir); pos=defaultdict(int); vals=[]; hits=0
+    def norm(x):
+        s='' if x is None else str(x).strip(); return s[:-2] if s.endswith('.0') else s
+    for r in splits['train']:
+        key=(norm(r[0]),norm(r[1]),norm(r[2]),norm(r[3]),norm(r[4]),norm(r[5])); j=pos[key]; pos[key]+=1
+        play=raw[key][j] if j < len(raw.get(key,[])) else 0.0
+        if play>0: hits+=1
+        dur=max(float(r[5]) if str(r[5]).strip() else 1.0,1.0); ratio=max(0.0,min(play/dur,5.0))
+        # Moderate confidence: long watches matter, but normalize to keep LR stable.
+        vals.append(1.0 + min(2.0, np.log1p(play/1000.0)/2.0) + min(2.0, ratio))
+    w=np.asarray(vals,dtype=np.float32); w/=max(float(w.mean()),1e-6)
+    print(f"watch weights: raw hits {hits}/{len(w)} mean {w.mean():.3f} min {w.min():.3f} max {w.max():.3f}")
+    return w
+
+
+def fit_watch_bpr(splits,enc,dim,watch_w,k=16,lr=0.001,l2=1e-6,epochs=40,bs=8192,patience=4,neg_per_pos=3,seed=0,device='cpu',verbose=True):
+    Xtr,ytr,utr=enc['train']; Xva,yva,uva=enc['valid']; model=TorchFM(dim,k,seed).to(device)
+    opt=torch.optim.Adam([{'params':[model.V,model.W],'weight_decay':l2},{'params':[model.b],'weight_decay':0.0}],lr=lr)
+    Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); w_t=torch.from_numpy(watch_w.astype(np.float32)); pos_idx,neg_pools=make_user_pair_sources(ytr,utr)
+    rng=np.random.default_rng(seed+9917); best=-1; best_state=None; bad=0
+    for ep in range(1,epochs+1):
+        t0=time.time(); p_idx,n_idx=sample_uniform_pairs(pos_idx,neg_pools,rng,neg_per_pos); model.train(); losses=[]
+        for i in range(0,len(p_idx),bs):
+            pp=p_idx[i:i+bs]; ps=torch.from_numpy(pp); ns=torch.from_numpy(n_idx[i:i+bs]); xp=Xtr_t[ps].to(device); xn=Xtr_t[ns].to(device); ww=w_t[ps].to(device)
+            opt.zero_grad(set_to_none=True); loss=(ww*torch.nn.functional.softplus(-(model(xp)-model(xn)))).mean(); loss.backward(); opt.step(); losses.append(loss.item())
+        va=evaluate(uva,yva,model.predict(Xva,device=device))
+        if verbose: print(f"  watchBPR({seed}) ep {ep} loss {np.mean(losses):.4f} primary {va['primary']:.4f} {time.time()-t0:.1f}s")
+        if va['primary']>best+1e-5: best=va['primary']; bad=0; best_state={kk:vv.detach().clone() for kk,vv in model.state_dict().items()}
+        else:
+            bad+=1
+            if bad>=patience: break
+    model.load_state_dict(best_state); return model
+
+
+def user_groups(users):
+    g=defaultdict(list)
+    for i,u in enumerate(users): g[u].append(i)
+    return [np.asarray(v,dtype=np.int64) for v in g.values()]
+
+def per_user_zscore(scores,groups):
+    scores=scores.astype(np.float64,copy=False); out=np.empty_like(scores,dtype=np.float64)
+    for idx in groups:
+        s=scores[idx]; sd=s.std(); out[idx]=(s-s.mean())/sd if sd>1e-12 else s-s.mean()
+    return out
+
+def per_user_rank01(scores,groups):
+    scores=scores.astype(np.float64,copy=False); out=np.empty_like(scores,dtype=np.float64)
+    for idx in groups:
+        n=len(idx)
+        if n<=1: out[idx]=0.0; continue
+        order=np.argsort(scores[idx],kind='mergesort'); ranks=np.empty(n,dtype=np.float64); ranks[order]=np.arange(n,dtype=np.float64)/(n-1.0); out[idx]=ranks
+    return out
+
+def cached_predict(cache_name,train_fn,enc,target,member_seed,device,use_cache=True):
+    os.makedirs('pred_cache',exist_ok=True); X,_,_=enc[target]; path=os.path.join('pred_cache',f'{cache_name}_{target}_seed{member_seed}.npy')
+    if use_cache and os.path.isfile(path):
+        p=np.load(path)
+        if len(p)==len(X): return p.astype(np.float64,copy=False)
+    m=train_fn(); p=m.predict(X,device=device).astype(np.float64)
+    if use_cache: np.save(path,p)
+    return p
+
+def node8_seed_score(bce,bpr,groups):
+    z=0.35*per_user_zscore(bce,groups)+0.65*per_user_zscore(bpr,groups); r=0.35*per_user_rank01(bce,groups)+0.65*per_user_rank01(bpr,groups)
+    return 0.70*z+0.30*r
+
+if __name__=='__main__':
+    ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test','dev']); ap.add_argument('--out',default=None); ap.add_argument('--k',type=int,default=16); ap.add_argument('--lr',type=float,default=0.001); ap.add_argument('--epochs',type=int,default=40); ap.add_argument('--neg_per_pos',type=int,default=3); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+    torch.manual_seed(a.seed); print(f"loading {a.data_dir} ...")
+    if a.split=='dev':
+        from devdata import load as load_dev
+        splits=load_dev(a.data_dir); target='valid'
+    else:
+        splits=load(a.data_dir); target=a.split
+    print({k:len(v) for k,v in splits.items()}, f"fields={FIELDS}")
+    enc,dim=encode(splits); verbose=a.out is None; use_cache=a.out is not None and a.split!='dev'; X,y,users=enc[target]; groups=user_groups(users)
+
+    member_seeds=[0,1,2,3,4]; weights=np.asarray([0.12,0.12,0.12,0.32,0.32],dtype=np.float64); seed_scores=[]
+    for ms in member_seeds:
+        bce=cached_predict('006_bce',lambda ms=ms: fit_bce(splits,enc,dim,k=a.k,lr=a.lr,epochs=a.epochs,seed=ms,device=a.device,verbose=verbose),enc,target,ms,a.device,use_cache)
+        bpr=cached_predict('006_bpr_uniform_np3',lambda ms=ms: fit_bpr(splits,enc,dim,k=a.k,lr=a.lr,epochs=a.epochs,neg_per_pos=a.neg_per_pos,seed=ms,device=a.device,verbose=verbose),enc,target,ms,a.device,use_cache)
+        seed_scores.append(per_user_zscore(node8_seed_score(bce,bpr,groups),groups))
+    base=weights @ np.vstack(seed_scores)
+
+    watch_w=train_watch_weights(splits,a.data_dir)
+    watch_scores=[]
+    for ms in [0,1,2]:
+        wp=cached_predict('019_watchbpr_v1',lambda ms=ms: fit_watch_bpr(splits,enc,dim,watch_w,k=a.k,lr=a.lr,epochs=a.epochs,neg_per_pos=a.neg_per_pos,seed=ms,device=a.device,verbose=verbose),enc,target,ms,a.device,use_cache)
+        watch_scores.append(0.70*per_user_zscore(wp,groups)+0.30*per_user_rank01(wp,groups))
+    watch=np.mean(np.vstack([per_user_zscore(s,groups) for s in watch_scores]),axis=0)
+    cur=member_seeds.index(a.seed) if a.seed in member_seeds else a.seed%len(member_seeds)
+    base=0.995*base+0.005*seed_scores[cur]
+    scores=0.70*per_user_zscore(base,groups)+0.30*per_user_zscore(watch,groups)
+
+    if a.out:
+        np.save(a.out,scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+    else:
+        r=evaluate(users,y,scores); print(f"primary {r['primary']:.4f} GAUC {r['GAUC']:.4f} nDCG@5 {r['nDCG@5']:.4f}")

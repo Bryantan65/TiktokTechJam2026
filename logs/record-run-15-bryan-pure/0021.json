@@ -1,0 +1,64 @@
+{
+  "iteration": 21,
+  "solution": "logs/record-run-15-bryan-pure/solutions/021_sequence_overlap_blend.py",
+  "hypothesis": "draft 2: add a DIN-inspired user history signal (paper https://ojs.aaai.org/index.php/AAAI/article/view/4545) via attention-like overlap with each user's past positive/negative train interactions, blended at 30% so its effect is readable.",
+  "parent": "20",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T03:30:20+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.599748,
+  "GAUC": 0.66497,
+  "nDCG@5": 0.534526,
+  "source_hash": "0852599d5428",
+  "stdout_tail": "loading D:\\github\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=node20+sequence_overlap\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "c6955cdbe22a",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000245,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.664939,
+      "nDCG@5": 0.534614,
+      "primary": 0.599777
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.665194,
+      "nDCG@5": 0.534763,
+      "primary": 0.599978
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.664777,
+      "nDCG@5": 0.534202,
+      "primary": 0.59949
+    }
+  ],
+  "seconds": 94.0,
+  "verdict": "noise",
+  "delta": -0.001752,
+  "tokens_in": 95102,
+  "tokens_out": 4612,
+  "tokens_cached": 76928,
+  "cost_usd": 0.130019,
+  "model": "gpt-5.5",
+  "agent_iteration": 20,
+  "wall_seconds": 147.7,
+  "recovery_events": []
+}
