@@ -1,0 +1,64 @@
+{
+  "iteration": 32,
+  "solution": "logs-1k/record-run-2/solutions/032_bpr4_userstats_blend.py",
+  "hypothesis": "improve 28: instead of timing out on a learned user-author embedding, add a cheap smoothed within-user memory ranker over (user,video)/(user,author)/(user,tab)/(user,duration) and blend it at 30% with the cached BPR ensemble; repeated interactions are common in KuaiRand (https://doi.org/10.1145/3511808.3557624) so this should target nDCG@5 directly.",
+  "parent": "28",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:36:21+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.659508,
+  "GAUC": 0.680945,
+  "nDCG@5": 0.638072,
+  "source_hash": "cb8b90a2d43b",
+  "stdout_tail": "loading C:\\Users\\kaiba\\Documents\\GitHub\\TiktokTechJam2026\\rec_datasets\\KuaiRand-1K\\data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nuser-stat pred built in 45.9s; uv hits 8,058/2,524,980, ua hits 850,822/2,524,980\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "30a3f70b1b5a",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.000815,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.680876,
+      "nDCG@5": 0.638706,
+      "primary": 0.659791
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.681086,
+      "nDCG@5": 0.639203,
+      "primary": 0.660144
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.680873,
+      "nDCG@5": 0.636308,
+      "primary": 0.65859
+    }
+  ],
+  "seconds": 128.4,
+  "verdict": "KEPT",
+  "delta": 0.014408,
+  "tokens_in": 164054,
+  "tokens_out": 7429,
+  "tokens_cached": 132224,
+  "cost_usd": 0.219977,
+  "model": "gpt-5.5",
+  "agent_iteration": 20,
+  "wall_seconds": 206.2,
+  "recovery_events": []
+}
