@@ -270,6 +270,61 @@ function el(tag, attrs, parent) {
   return n;
 }
 
+/* Node glyphs, drawn around the origin so the parent <g> can place them with a
+ * translate and the arrival animation can be a transform scale.
+ *
+ * Shape carries the verdict class as well as colour does, which is what makes
+ * the tree readable in greyscale and to a red/green-colourblind reader - the
+ * palette leans on exactly that pair.
+ */
+function nodeGlyph(rec, unranked) {
+  // Order matters: a crash is also unranked, so testing `unranked` first meant
+  // every failure drew as a hollow ring and the x was unreachable.
+  if (rec.status === 'error') return { kind: 'cross', r: 5.6 };
+  // Hollow reads as "nothing was measured here", which is exactly what a
+  // same-model, a dev screen and a duplicate all are.
+  if (rec.verdict === 'no-op' || unranked) return { kind: 'ring', r: 5 };
+  if (rec.verdict === 'worse') return { kind: 'down', r: 5.4 };
+  if (rec.verdict === 'KEPT') return { kind: 'kept', r: 5 };
+  return { kind: 'dot', r: 4.6 };
+}
+
+function drawGlyph(parent, glyph, colour) {
+  const r = glyph.r;
+  if (glyph.kind === 'down') {
+    // a wedge pointing down: this branch lost ground
+    return el('path', {
+      d: `M${-r},${-r * 0.72} L${r},${-r * 0.72} L0,${r * 1.04} Z`,
+      fill: colour, class: 'glyph filled'
+    }, parent);
+  }
+  if (glyph.kind === 'cross') {
+    // an x: it never produced a number at all
+    const a = r * 0.78;
+    return el('path', {
+      d: `M${-a},${-a} L${a},${a} M${-a},${a} L${a},${-a}`,
+      stroke: colour, 'stroke-width': 2.4, 'stroke-linecap': 'round',
+      fill: 'none', class: 'glyph stroked'
+    }, parent);
+  }
+  if (glyph.kind === 'ring') {
+    // hollow: nothing was measured, so there is nothing to fill in
+    return el('circle', {
+      r: r, fill: 'var(--bg)', stroke: colour, 'stroke-width': 1.6,
+      class: 'glyph stroked ring'
+    }, parent);
+  }
+  if (glyph.kind === 'kept') {
+    // a filled core inside its own ring: this one counted
+    const g = el('g', { class: 'glyph' }, parent);
+    el('circle', { r: r + 2.6, fill: 'none', stroke: colour,
+                   'stroke-width': 1.2, opacity: .55, class: 'keptring' }, g);
+    el('circle', { r: r, fill: colour, class: 'filled' }, g);
+    return g;
+  }
+  return el('circle', { r: r, fill: colour, class: 'glyph filled' }, parent);
+}
+
 /* Incremental, animated tree rendering.
  *
  * The first version cleared the SVG and redrew everything on every tick, which
@@ -316,11 +371,17 @@ function animateEdge(path, dur) {
   };
 }
 
-function animateNode(g, circle, radius, dur, delay) {
+/* Scale the shape group rather than animating a circle's r. The parent <g>
+ * carries the translate, so the shape's own origin is the node centre and a
+ * plain transform scales about it - and unlike `r`, transform is animatable
+ * everywhere without depending on SVG geometry properties being exposed to CSS. */
+function animateNode(g, shape, dur, delay) {
   g.animate([{ opacity: 0 }, { opacity: 0 }, { opacity: 1 }],
     { duration: delay + dur, easing: 'linear', fill: 'backwards' });
-  circle.animate(
-    [{ r: 0 }, { r: radius * 1.45 }, { r: radius }],
+  shape.animate(
+    [{ transform: 'scale(0)' },
+     { transform: 'scale(1.5)' },
+     { transform: 'scale(1)' }],
     { duration: dur, delay: delay, easing: 'cubic-bezier(.34,1.56,.64,1)',
       fill: 'backwards' });
 }
@@ -417,29 +478,36 @@ function drawTree(svgSel, recs, cursor, opts) {
     }
 
     const unranked = pos.get(it).unranked;
-    const g = el('g', { class: 'node' + (unranked ? ' unranked' : '') },
-      svg._nodeLayer);
-    const failed = r.status === 'error';
-    const radius = failed ? 5.5 : 5;
     const colour = VERDICT_COLOR[r.verdict] || 'var(--noise)';
-    const circle = el('circle', {
-      cx: X(it), cy: Y(it), r: radius,
-      fill: unranked ? 'var(--bg)' : colour,
-      stroke: unranked ? colour : null
-    }, g);
-    el('text', { x: X(it), y: Y(it) - 9, 'text-anchor': 'middle' }, g)
-      .textContent = it;
+    const glyph = nodeGlyph(r, unranked);
+
+    // translate on the parent, geometry at the origin: the shape can then be
+    // scaled, swapped or restyled without recomputing any coordinates
+    const g = el('g', {
+      class: 'node' + (unranked ? ' unranked' : ''),
+      transform: `translate(${X(it)},${Y(it)})`
+    }, svg._nodeLayer);
+    // A soft disc behind the glyph reads as a glow without an SVG filter, so it
+    // costs one more circle instead of a per-node render pass.
+    el('circle', { r: glyph.r * 2.5, fill: colour, class: 'halo' }, g);
+    const shape = el('g', { class: 'nodeshape' }, g);
+    drawGlyph(shape, glyph, colour);
+
+    el('text', { y: -(glyph.r + 5), 'text-anchor': 'middle' }, g).textContent = it;
     el('title', {}, g).textContent =
       `#${it}  ${verdictLabel(r.verdict)}  ${fmt(r.valid_primary, 5)}`;
-    g.addEventListener('click', () => {
-      if (opts.onclick) opts.onclick(it);
-    });
-    g._radius = radius;
+    g.addEventListener('click', () => { if (opts.onclick) opts.onclick(it); });
+    // Hovering a node lights the whole line of descent behind it, which is the
+    // question the tree exists to answer: where did this come from?
+    g.addEventListener('mouseenter', () => markLineage(svg, reg, byIter, it));
+    g.addEventListener('mouseleave', () => clearLineage(svg));
+    g._shape = shape;
+    g._colour = colour;
     reg.nodes.set(it, g);
 
     if (isNew) {
       const delay = reg.edges.has(it) ? edgeMs : 0;
-      animateNode(g, circle, radius, nodeMs, delay);
+      animateNode(g, shape, nodeMs, delay);
       setTimeout(() => {
         if (g.isConnected) ping(svg._nodeLayer, X(it), Y(it), colour, dur);
       }, delay);
@@ -450,10 +518,6 @@ function drawTree(svgSel, recs, cursor, opts) {
   reg.nodes.forEach((g, it) => {
     g.classList.toggle('cur', it === cursor);
     g.classList.toggle('best', !!best && it === best.iteration);
-    const c = g.firstChild;
-    if (c && c.tagName === 'circle') {
-      c.setAttribute('r', it === cursor ? g._radius + 2 : g._radius);
-    }
   });
   reg.edges.forEach((pth, it) => pth.classList.toggle('hot', it === cursor));
 
@@ -466,6 +530,30 @@ function drawTree(svgSel, recs, cursor, opts) {
       wrap.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
     }
   }
+}
+
+/* Walk parents from a node back to the root and flag that chain. Bounded by the
+ * node count, so a malformed parent pointer cannot spin here. */
+function markLineage(svg, reg, byIter, from) {
+  clearLineage(svg);
+  let it = from, guard = 0;
+  const seen = new Set();
+  while (it != null && !seen.has(it) && guard++ < 500) {
+    seen.add(it);
+    const node = reg.nodes.get(it);
+    if (node) node.classList.add('lineage');
+    const edge = reg.edges.get(it);
+    if (edge) edge.classList.add('lineage');
+    const rec = byIter.get(it);
+    const p = rec ? parseInt(rec.parent, 10) : NaN;
+    it = Number.isFinite(p) && reg.nodes.has(p) ? p : null;
+  }
+  svg.classList.add('tracing');
+}
+
+function clearLineage(svg) {
+  svg.classList.remove('tracing');
+  $$('.lineage', svg).forEach(e => e.classList.remove('lineage'));
 }
 
 function bestSoFar(recs, cursor) {

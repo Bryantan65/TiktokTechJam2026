@@ -336,19 +336,57 @@ body::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
 
 /* tree svg */
 .edge { stroke: var(--line); fill: none; stroke-width: 1.5;
-        transition: stroke .3s ease, stroke-width .3s ease; }
+        transition: stroke .3s ease, stroke-width .3s ease, opacity .18s ease; }
 .edge.hot { stroke: var(--accent); stroke-width: 2.2; }
 .edge.recover { stroke: var(--kept); stroke-dasharray: 3 3; stroke-width: 2; }
 .node { cursor: pointer; }
-.node circle { stroke: var(--bg); stroke-width: 2;
-               transition: r .2s cubic-bezier(.34,1.56,.64,1), fill .25s ease; }
 .ping { pointer-events: none; }
 .edges, .nodes { pointer-events: auto; }
-.node.cur circle { stroke: #fff; stroke-width: 2.5; }
-.node.best circle { filter: drop-shadow(0 0 7px var(--kept)); }
+
+/* The glyph sits in its own group so the pop animation and the hover/selected
+   emphasis are both transforms about the node centre. */
+.nodeshape { transition: transform .2s cubic-bezier(.34,1.56,.64,1); }
+.glyph { stroke-linejoin: round; }
+/* CSS beats an SVG presentation attribute, so these rules touch ONLY the
+   filled glyphs. A stroked glyph (the x, the hollow ring) carries its colour on
+   the stroke, and a blanket rule here would paint it the background colour and
+   make it vanish. */
+.filled { stroke: var(--bg); stroke-width: 1.6; }
+.node.cur .filled { stroke: #fff; stroke-width: 2; }
+.node.unranked .ring { stroke-dasharray: 2.5 2; }
+
+/* A soft disc behind each glyph. Cheaper than an SVG filter and it scales with
+   the node instead of being a fixed blur radius. */
+.halo { opacity: .13; pointer-events: none;
+        transition: opacity .22s ease, transform .22s ease; }
+.node:hover .halo { opacity: .3; }
+.node.cur .halo { opacity: .36; }
+.node.best .halo { opacity: .32; animation: haloPulse 2.4s ease-in-out infinite; }
+@keyframes haloPulse {
+  0%, 100% { opacity: .22; transform: scale(1); }
+  50%      { opacity: .42; transform: scale(1.18); }
+}
+
+.node:hover .nodeshape { transform: scale(1.22); }
+.node.cur .nodeshape { transform: scale(1.34); }
+
+.node.best .nodeshape { filter: drop-shadow(0 0 6px var(--kept)); }
+
 .node text { font-family: var(--mono); font-size: 9px; fill: var(--fg-faint);
-             pointer-events: none; }
-.node.cur text { fill: var(--fg); }
+             pointer-events: none; transition: fill .2s ease; }
+.node.cur text { fill: var(--fg); font-weight: 600; }
+.node:hover text { fill: var(--fg-dim); }
+
+/* Tracing a lineage: everything not on the line of descent recedes, so the
+   chain reads on its own without needing a second colour. */
+#tree.tracing .node:not(.lineage), #live-tree.tracing .node:not(.lineage),
+#tree.tracing .edge:not(.lineage), #live-tree.tracing .edge:not(.lineage) {
+  opacity: .22;
+}
+.node, .edge { transition: opacity .18s ease; }
+.node.lineage text { fill: var(--fg-dim); }
+.edge.lineage { stroke: var(--accent); stroke-width: 2.4; opacity: 1; }
+.node.lineage .halo { opacity: .28; }
 .gridline { stroke: var(--line-soft); stroke-width: 1; }
 .axis { pointer-events: none; }
 /* Unranked: failed, no-op or dev-screened. It sits level with its parent
@@ -557,3 +595,14 @@ pre.diff, pre.src {
 }
 
 .k-hollow { background: transparent; box-shadow: inset 0 0 0 1.5px var(--fg-faint); }
+/* the legend swatch echoes the node's shape, not only its colour */
+.legend i.tri { border-radius: 0;
+  clip-path: polygon(0 15%, 100% 15%, 50% 100%); }
+.legend i.x { border-radius: 0; background: transparent !important;
+  box-shadow: none; position: relative; }
+.legend i.x::before, .legend i.x::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 10px; height: 1.8px;
+  background: var(--failed); border-radius: 1px;
+}
+.legend i.x::before { transform: translate(-50%,-50%) rotate(45deg); }
+.legend i.x::after  { transform: translate(-50%,-50%) rotate(-45deg); }
