@@ -45,6 +45,46 @@ function esc(s) {
 }
 function clock(ts) { return ts ? String(ts).slice(11, 19) : ''; }
 
+/* ------------------------------------------------- web_search event sources */
+/* The search tool was an API call, not a page, so there is no "result page" to
+ * reopen. What the record does hold is the query the agent typed and whatever
+ * URLs came back inside the result it read. 37% of the 171 searches across our
+ * runs carry at least one URL; the rest carry prose only, and for those the
+ * honest offer is to re-run the query rather than to pretend there was a link.
+ */
+const TRACKING_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign',
+                         'utm_term', 'utm_content', 'ref', 'ref_src'];
+
+function cleanUrl(raw) {
+  // Log text is agent-written, so treat it as untrusted: anything but http(s)
+  // is dropped rather than rendered as a link.
+  let t = String(raw || '').replace(/[.,;:!?)\]]+$/, '');
+  try {
+    const u = new URL(t);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    TRACKING_PARAMS.forEach(k => u.searchParams.delete(k));
+    return u.toString();
+  } catch (e) { return null; }
+}
+
+function searchSources(ev) {
+  const found = String(ev && ev.result || '')
+    .match(/https?:\/\/[^\s<>()\[\]"']+/g) || [];
+  const out = [];
+  const seen = new Set();
+  found.forEach(r => {
+    const u = cleanUrl(r);
+    if (!u || seen.has(u)) return;
+    seen.add(u);
+    out.push(u);
+  });
+  return out;
+}
+
+function hostOf(u) {
+  try { return new URL(u).host.replace(/^www\./, ''); } catch (e) { return u; }
+}
+
 /* ------------------------------------------------------------- run list */
 async function loadRuns() {
   const r = await fetch('/api/runs').then(x => x.json());
@@ -584,27 +624,99 @@ function renderEvents(sel, events, upto, cutoffTs) {
     return !e.ts || e.ts <= cutoffTs;
   });
   const before = box._count || 0;
-  box.innerHTML = shown.map((e, i) =>
-    `<div class="ev ${esc(e.kind)}${i >= before ? ' new' : ''}">
+  box.innerHTML = shown.map((e, i) => {
+    const isSearch = e.kind === 'web_search';
+    const srcs = isSearch ? searchSources(e) : [];
+    const mark = srcs.length
+      ? `<span class="srccount">${srcs.length} source${srcs.length > 1 ? 's' : ''} &#8599;</span>`
+      : (isSearch ? '<span class="srccount none">no link</span>' : '');
+    const row = `<div class="ev ${esc(e.kind)}${i >= before ? ' new' : ''}` +
+      `${isSearch ? ' expandable' : ''}" data-ix="${i}">
       <span class="t">${clock(e.ts)}</span>
       <span class="k">${esc(e.kind)}</span>
-      <span class="d" title="${esc(e.detail)}">${esc(e.detail)}</span></div>`
-  ).join('');
+      <span class="d" title="${esc(e.detail)}"><span class="dtext">${esc(e.detail)}</span>${mark}</span></div>`;
+    if (!isSearch) return row;
+    return row + `<div class="evbody" data-body="${i}" hidden>${searchBody(e, srcs)}</div>`;
+  }).join('');
+  wireSearchRows(box);
   box._count = shown.length;
   box.scrollTop = box.scrollHeight;
-  renderTicks('#event-ticks', shown.map(e => TICK_KIND[e.kind] || null));
+  box._colours = shown.map(e => TICK_KIND[e.kind] || null);
+  refreshEventTicks();
 }
 
-/* Place a mark per notable row at its position down the list. Rows are a fixed
-   height, so index/count is the row's scroll position - no measuring needed. */
-function renderTicks(sel, colours) {
+/* The expanded panel: the sources first, then the query, then the text the
+ * agent actually read - truncated at 2000 chars by the tool, as recorded. */
+function searchBody(ev, srcs) {
+  const q = String(ev.detail || '');
+  let h = '';
+  if (srcs.length) {
+    h += '<div class="srcs">' + srcs.map(u =>
+      `<a class="src" href="${esc(u)}" target="_blank" rel="noopener noreferrer"
+          title="${esc(u)}">${esc(hostOf(u))} &#8599;</a>`).join('') + '</div>';
+  }
+  h += '<div class="srcs">' +
+    `<a class="src rerun" target="_blank" rel="noopener noreferrer"
+        href="https://duckduckgo.com/?q=${encodeURIComponent(q)}"
+        title="Run this query again - the agent's own search was an API call, ` +
+    `not a page">re-run this query &#8599;</a></div>`;
+  const res = String(ev.result || '').trim();
+  h += res
+    ? `<div class="evtext">${esc(res)}</div>`
+    : '<div class="evtext none">(no result text recorded)</div>';
+  return h;
+}
+
+/* Re-measure after a layout change: an expand or collapse moves every row
+ * below it, so the rail has to be rebuilt or its marks point at the wrong
+ * lines. requestAnimationFrame so the [hidden] toggle has actually applied. */
+function refreshEventTicks() {
+  const box = $('#events');
+  if (!box || !box._colours) return;
+  requestAnimationFrame(() => {
+    const rows = $$('.ev', box);
+    renderTicks('#event-ticks', box._colours, rows);
+  });
+}
+
+function wireSearchRows(box) {
+  $$('.ev.expandable', box).forEach(row => {
+    row.addEventListener('click', e => {
+      // let a link inside the panel do its own thing
+      if (e.target.closest('a')) return;
+      const body = box.querySelector(`[data-body="${row.dataset.ix}"]`);
+      if (!body) return;
+      const open = !body.hidden;
+      body.hidden = open;
+      row.classList.toggle('open', !open);
+      refreshEventTicks();
+    });
+  });
+}
+
+/* Place a mark per notable row at its real position down the scroller.
+ *
+ * This used to be index/count, which was only right while every row was the
+ * same height. An expanded web_search panel breaks that badly, so the position
+ * now comes from the row's own offsetTop against the scroll height. Falls back
+ * to index/count when the rows have not been laid out yet (a hidden pane
+ * measures zero). */
+function renderTicks(sel, colours, rows) {
   const box = $(sel);
   if (!box) return;
   const n = colours.length;
-  if (!n) { box.innerHTML = ''; return; }
-  const want = colours
-    .map((c, i) => (c ? { c, top: ((i + 0.5) / n) * 100 } : null))
-    .filter(Boolean);
+  if (!n) { box.innerHTML = ''; box._key = null; return; }
+  const total = rows && rows.length === n ? rows[0].parentElement.scrollHeight : 0;
+  const want = colours.map((c, i) => {
+    if (!c) return null;
+    let top;
+    if (total > 0 && rows[i]) {
+      top = ((rows[i].offsetTop + rows[i].offsetHeight / 2) / total) * 100;
+    } else {
+      top = ((i + 0.5) / n) * 100;
+    }
+    return { c, top: Math.max(0, Math.min(100, top)) };
+  }).filter(Boolean);
   // Rebuild only when the set changed, so the tick-in animation does not
   // replay on every unrelated redraw.
   const key = want.map(t => t.c + '@' + t.top.toFixed(2)).join('|');

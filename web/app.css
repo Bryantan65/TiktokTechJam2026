@@ -409,8 +409,9 @@ pre.diff, pre.src {
       border-left: 2px solid transparent; }
 .ev .t { color: var(--fg-faint); }
 .ev .k { font-weight: 600; }
-.ev .d { color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis;
-         white-space: nowrap; }
+.ev .d { color: var(--fg-dim); min-width: 0; }
+.ev .dtext { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+             min-width: 0; }
 .ev.solution_error { border-left-color: var(--failed); }
 .ev.solution_error .k { color: var(--failed); }
 .ev.solution_recovered { border-left-color: var(--kept); }
@@ -422,6 +423,44 @@ pre.diff, pre.src {
 .ev.web_search .k { color: var(--noop); }
 .ev.run_start .k, .ev.run_end .k { color: var(--fg-dim); }
 .ev.new { animation: flashin .7s ease; }
+
+/* ---- web_search rows open onto what the agent read --------------------- */
+.ev.expandable { cursor: pointer; }
+.ev.expandable:hover { background: rgba(169,123,216,.08); }
+.ev.expandable.open { background: rgba(169,123,216,.1); }
+.ev .d { display: flex; align-items: baseline; gap: 8px; }
+.srccount { flex-shrink: 0; font-size: 10px; color: var(--noop);
+            white-space: nowrap; }
+.srccount.none { color: var(--fg-faint); }
+.evbody {
+  padding: 9px 12px 11px 74px; border-left: 2px solid var(--noop);
+  background: rgba(169,123,216,.05); font-family: var(--mono); font-size: 11px;
+  animation: swapin .28s ease;
+}
+.srcs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.src {
+  display: inline-block; padding: 3px 9px; border-radius: 5px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  color: var(--accent); text-decoration: none; font-size: 11px;
+  transition: border-color .15s ease, background .15s ease;
+}
+.src:hover { border-color: var(--accent); background: #1d2532; }
+.src.rerun { color: var(--fg-dim); }
+.src.rerun:hover { color: var(--fg); }
+.evtext {
+  color: var(--fg-faint); white-space: pre-wrap; word-break: break-word;
+  max-height: 220px; overflow-y: auto; line-height: 1.55;
+  padding-right: 6px;
+  scrollbar-width: thin; scrollbar-color: #3a475c transparent;
+}
+.evtext::-webkit-scrollbar { width: 10px; }
+.evtext::-webkit-scrollbar-track { background: transparent; }
+.evtext::-webkit-scrollbar-thumb {
+  background-color: #33405480; background-clip: content-box;
+  border: 3.5px solid transparent; border-radius: 999px;
+}
+.evtext::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
+.evtext.none { font-style: italic; }
 @keyframes flashin { from { background: rgba(88,176,255,.16); } to { background: transparent; } }
 
 /* ---------------------------------------------------------------- agent */
