@@ -1,0 +1,65 @@
+{
+  "iteration": 20,
+  "solution": "logs-1k/record-run-4/solutions/020_lgbm_seedbag2_userz.py",
+  "hypothesis": "improve 19: seed-bagging helped, and the next cheap test is per-user z-score normalization before fusing the two cached LightGBM raw margins, since both metrics only depend on within-user rank and this removes member scale drift.",
+  "parent": "19",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T19:44:15+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.654655,
+  "GAUC": 0.678903,
+  "nDCG@5": 0.630407,
+  "source_hash": "5f576ccf5068",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "1f08de344499",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.678903,
+      "nDCG@5": 0.630407,
+      "primary": 0.654655
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.678903,
+      "nDCG@5": 0.630407,
+      "primary": 0.654655
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.678903,
+      "nDCG@5": 0.630407,
+      "primary": 0.654655
+    }
+  ],
+  "seconds": 172.9,
+  "verdict": "KEPT",
+  "delta": 0.009555,
+  "tokens_in": 53982,
+  "tokens_out": 4023,
+  "tokens_cached": 40832,
+  "cost_usd": 0.093521,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 216.3,
+  "recovery_events": []
+}

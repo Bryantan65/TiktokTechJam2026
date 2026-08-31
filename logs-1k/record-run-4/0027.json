@@ -1,0 +1,33 @@
+{
+  "iteration": 27,
+  "solution": "logs-1k/record-run-4/solutions/027_lgbm_history_v2.py",
+  "hypothesis": "improve 26: the history member moved nDCG strongly, so enrich the same mechanism with recent-window user counts and online global item/author/tab priors while preserving chronological no-lookahead construction. This should make the sequence signal less sparse than exact cumulative user-video/user-author features.",
+  "parent": "26",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T20:25:55+00:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "02ce0870a357",
+  "seeds_completed": 0,
+  "seconds": 904.7,
+  "verdict": "failed",
+  "tokens_in": 76620,
+  "tokens_out": 6948,
+  "tokens_cached": 45568,
+  "cost_usd": 0.169894,
+  "model": "gpt-5.5",
+  "agent_iteration": 22,
+  "wall_seconds": 966.7,
+  "recovery_events": []
+}

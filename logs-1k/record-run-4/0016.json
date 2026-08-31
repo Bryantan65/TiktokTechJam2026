@@ -1,0 +1,65 @@
+{
+  "iteration": 16,
+  "solution": "logs-1k/record-run-4/solutions/016_lgbm_watch_weight.py",
+  "hypothesis": "draft watch-time modelling: from best node 11, keep the minimal LightGBM but reweight positive training rows by log play_time_ms, following dwell-time reweighting as engagement strength (https://arxiv.org/abs/2209.09000). This tests watch-time as a training signal only, not a prediction feature or label reconstruction.",
+  "parent": "11",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:58:09+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.646105,
+  "GAUC": 0.675509,
+  "nDCG@5": 0.616701,
+  "source_hash": "c709fd86ee68",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nreading play_time_ms from log_standard_4_08_to_4_21_1k.csv\nreading play_time_ms from log_standard_4_22_to_5_08_1k.csv\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "c2c10a936139",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.002823,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.675383,
+      "nDCG@5": 0.616299,
+      "primary": 0.645841
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.675495,
+      "nDCG@5": 0.611353,
+      "primary": 0.643424
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67565,
+      "nDCG@5": 0.622452,
+      "primary": 0.649051
+    }
+  ],
+  "seconds": 762.2,
+  "verdict": "noise",
+  "delta": 0.001005,
+  "tokens_in": 149317,
+  "tokens_out": 4609,
+  "tokens_cached": 129024,
+  "cost_usd": 0.161334,
+  "model": "gpt-5.5",
+  "agent_iteration": 11,
+  "wall_seconds": 817.6,
+  "recovery_events": []
+}

@@ -1,0 +1,65 @@
+{
+  "iteration": 28,
+  "solution": "logs-1k/record-run-4/solutions/028_seq_stat_blend.py",
+  "hypothesis": "debug 27: the richer history implementation timed out, so keep node 26's cached sequence member unchanged and test a cheap fusion diagnostic: include node 25's target-stat member at 15% while reducing the incumbent/sequence weights. If target stats carry GAUC complementary to history, this should recover node 25's GAUC without losing node 26's nDCG.",
+  "parent": "26",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T20:41:51+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.660502,
+  "GAUC": 0.685593,
+  "nDCG@5": 0.63541,
+  "source_hash": "b17f74fe4ed8",
+  "stdout_tail": "{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "a7556d2c8bea",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.685593,
+      "nDCG@5": 0.63541,
+      "primary": 0.660502
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.685593,
+      "nDCG@5": 0.63541,
+      "primary": 0.660502
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.685593,
+      "nDCG@5": 0.63541,
+      "primary": 0.660502
+    }
+  ],
+  "seconds": 173.9,
+  "verdict": "KEPT",
+  "delta": 0.015402,
+  "tokens_in": 174145,
+  "tokens_out": 6002,
+  "tokens_cached": 143744,
+  "cost_usd": 0.207895,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 225.6,
+  "recovery_events": []
+}

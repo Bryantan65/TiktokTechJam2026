@@ -1,0 +1,65 @@
+{
+  "iteration": 36,
+  "solution": "logs-1k/record-run-4/solutions/036_candidate_near_solo.py",
+  "hypothesis": "improve 35: node 35 improved when candidate-context became dominant, so test the next point on that curve: a near-solo candidate-context fusion with only a small legacy anchor.",
+  "parent": "35",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T21:35:00+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.680929,
+  "GAUC": 0.700858,
+  "nDCG@5": 0.660999,
+  "source_hash": "b6d445ee36b4",
+  "stdout_tail": "{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "41c111d5a7da",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.001492,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.700726,
+      "nDCG@5": 0.657901,
+      "primary": 0.679314
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.701001,
+      "nDCG@5": 0.661429,
+      "primary": 0.681215
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.700847,
+      "nDCG@5": 0.663668,
+      "primary": 0.682257
+    }
+  ],
+  "seconds": 178.5,
+  "verdict": "KEPT",
+  "delta": 0.035829,
+  "tokens_in": 62185,
+  "tokens_out": 4390,
+  "tokens_cached": 44928,
+  "cost_usd": 0.109507,
+  "model": "gpt-5.5",
+  "agent_iteration": 31,
+  "wall_seconds": 209.7,
+  "recovery_events": []
+}

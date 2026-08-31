@@ -1,0 +1,65 @@
+{
+  "iteration": 35,
+  "solution": "logs-1k/record-run-4/solutions/035_candidate_dominant_fusion.py",
+  "hypothesis": "improve 34: increasing candidate-context weight gave a clear gain, so push it to a majority vote while retaining older members only as diversification; if this improves, candidate context is the main ranker rather than a correction.",
+  "parent": "34",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T21:31:15+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.6819,
+  "GAUC": 0.702646,
+  "nDCG@5": 0.661154,
+  "source_hash": "140e3bfab8c8",
+  "stdout_tail": "{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "9af398e4a6be",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.000134,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.702687,
+      "nDCG@5": 0.660855,
+      "primary": 0.681771
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.702747,
+      "nDCG@5": 0.661329,
+      "primary": 0.682038
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.702503,
+      "nDCG@5": 0.661277,
+      "primary": 0.68189
+    }
+  ],
+  "seconds": 194.1,
+  "verdict": "KEPT",
+  "delta": 0.0368,
+  "tokens_in": 61938,
+  "tokens_out": 4385,
+  "tokens_cached": 44928,
+  "cost_usd": 0.108839,
+  "model": "gpt-5.5",
+  "agent_iteration": 30,
+  "wall_seconds": 224.5,
+  "recovery_events": []
+}

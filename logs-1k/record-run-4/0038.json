@@ -1,0 +1,65 @@
+{
+  "iteration": 38,
+  "solution": "logs-1k/record-run-4/solutions/038_candidate_75pct.py",
+  "hypothesis": "improve 37: inspired by recommender feature-engineering practice around context/repeated-impression signals (e.g. Kaggle docs https://www.kaggle.com/docs), node 37's 80% candidate blend gained nDCG but lost GAUC, so test a 75% rollback toward node 35 with the same cached members.",
+  "parent": "37",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T21:42:15+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.682599,
+  "GAUC": 0.702362,
+  "nDCG@5": 0.662837,
+  "source_hash": "7f092e5654df",
+  "stdout_tail": "{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "e70af26eb2c6",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.000691,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.702361,
+      "nDCG@5": 0.661331,
+      "primary": 0.681846
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.70248,
+      "nDCG@5": 0.663018,
+      "primary": 0.682749
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.702244,
+      "nDCG@5": 0.664161,
+      "primary": 0.683203
+    }
+  ],
+  "seconds": 183.8,
+  "verdict": "KEPT",
+  "delta": 0.037499,
+  "tokens_in": 83170,
+  "tokens_out": 5582,
+  "tokens_cached": 65024,
+  "cost_usd": 0.133697,
+  "model": "gpt-5.5",
+  "agent_iteration": 33,
+  "wall_seconds": 233.1,
+  "recovery_events": []
+}

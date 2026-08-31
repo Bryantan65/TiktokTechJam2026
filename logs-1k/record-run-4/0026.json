@@ -1,0 +1,65 @@
+{
+  "iteration": 26,
+  "solution": "logs-1k/record-run-4/solutions/026_lgbm_user_history_seq.py",
+  "hypothesis": "draft user behaviour sequences: change mechanism from static LightGBM blending to a DIN-inspired target-conditioned same-user history member, using prior interactions with the candidate video/author/tab as attention-like relevance signals (DIN paper: https://arxiv.org/abs/1904.03433). Blend it readably at 30% with node 24/25 incumbent because another tiny weight tweak is unmeasurable.",
+  "parent": "25",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T20:15:21+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.660412,
+  "GAUC": 0.682894,
+  "nDCG@5": 0.63793,
+  "source_hash": "4dff0a9d87c2",
+  "stdout_tail": "{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "f7ff1461c003",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.682894,
+      "nDCG@5": 0.63793,
+      "primary": 0.660412
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.682894,
+      "nDCG@5": 0.63793,
+      "primary": 0.660412
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.682894,
+      "nDCG@5": 0.63793,
+      "primary": 0.660412
+    }
+  ],
+  "seconds": 570.6,
+  "verdict": "KEPT",
+  "delta": 0.015312,
+  "tokens_in": 92318,
+  "tokens_out": 6187,
+  "tokens_cached": 72192,
+  "cost_usd": 0.148281,
+  "model": "gpt-5.5",
+  "agent_iteration": 21,
+  "wall_seconds": 641.8,
+  "recovery_events": []
+}

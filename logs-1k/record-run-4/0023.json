@@ -1,0 +1,65 @@
+{
+  "iteration": 23,
+  "solution": "logs-1k/record-run-4/solutions/023_lgbm_fast_weight45.py",
+  "hypothesis": "improve 22: the fast member added complementary signal at 30%, so keep all cached member predictions unchanged and raise its per-user z-scored blend weight to 45% to test whether it deserves a larger vote.",
+  "parent": "22",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T19:59:38+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.654927,
+  "GAUC": 0.679272,
+  "nDCG@5": 0.630582,
+  "source_hash": "1a5be22b94b9",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "66b17b09726f",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.679272,
+      "nDCG@5": 0.630582,
+      "primary": 0.654927
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.679272,
+      "nDCG@5": 0.630582,
+      "primary": 0.654927
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.679272,
+      "nDCG@5": 0.630582,
+      "primary": 0.654927
+    }
+  ],
+  "seconds": 175.6,
+  "verdict": "KEPT",
+  "delta": 0.009827,
+  "tokens_in": 100585,
+  "tokens_out": 3564,
+  "tokens_cached": 77312,
+  "cost_usd": 0.132478,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 204.9,
+  "recovery_events": []
+}

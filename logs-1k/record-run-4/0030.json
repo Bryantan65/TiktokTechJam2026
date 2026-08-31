@@ -1,0 +1,65 @@
+{
+  "iteration": 30,
+  "solution": "logs-1k/record-run-4/solutions/030_rrf_aux_fusion.py",
+  "hypothesis": "improve 29: the auxiliary member lifted GAUC but hurt nDCG, so keep the same cached members and change only fusion to a per-user reciprocal-rank hybrid to emphasize top-5 ordering. This tests whether the multitask signal is complementary in ranks rather than calibrated scores; repeat/recency ranking heuristics are common in RecSys (ACM RecSys/arXiv overview: https://dl.acm.org/ and https://arxiv.org/search/advanced?query=&searchtype=all&author=&title=recommender+systems&abstract=&classification=&date=).",
+  "parent": "29",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T21:00:16+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.66104,
+  "GAUC": 0.685903,
+  "nDCG@5": 0.636177,
+  "source_hash": "8032e4febf10",
+  "stdout_tail": "{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "c42d6f5b40c0",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.685903,
+      "nDCG@5": 0.636177,
+      "primary": 0.66104
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.685903,
+      "nDCG@5": 0.636177,
+      "primary": 0.66104
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.685903,
+      "nDCG@5": 0.636177,
+      "primary": 0.66104
+    }
+  ],
+  "seconds": 175.9,
+  "verdict": "KEPT",
+  "delta": 0.01594,
+  "tokens_in": 107046,
+  "tokens_out": 5080,
+  "tokens_cached": 88192,
+  "cost_usd": 0.142031,
+  "model": "gpt-5.5",
+  "agent_iteration": 25,
+  "wall_seconds": 233.9,
+  "recovery_events": []
+}

@@ -1,0 +1,65 @@
+{
+  "iteration": 19,
+  "solution": "logs-1k/record-run-4/solutions/019_lgbm_seedbag2_node11.py",
+  "hypothesis": "debug 18: the 3-member bag exceeded the 900s limit, so average only two exact node-11 LightGBM members (seeds 0 and 2) and reuse any completed node-18 cache. This keeps the seed-bagging mechanism readable while fitting the runtime budget.",
+  "parent": "18",
+  "uct_rank": null,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T19:33:03+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.654579,
+  "GAUC": 0.678901,
+  "nDCG@5": 0.630256,
+  "source_hash": "ebf904e478d4",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "e68d50e062c7",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.678901,
+      "nDCG@5": 0.630256,
+      "primary": 0.654579
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.678901,
+      "nDCG@5": 0.630256,
+      "primary": 0.654579
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.678901,
+      "nDCG@5": 0.630256,
+      "primary": 0.654579
+    }
+  ],
+  "seconds": 628.5,
+  "verdict": "KEPT",
+  "delta": 0.009479,
+  "tokens_in": 87121,
+  "tokens_out": 3314,
+  "tokens_cached": 51712,
+  "cost_usd": 0.147518,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 660.3,
+  "recovery_events": []
+}

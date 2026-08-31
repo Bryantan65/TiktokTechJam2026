@@ -1,0 +1,65 @@
+{
+  "iteration": 34,
+  "solution": "logs-1k/record-run-4/solutions/034_candidate_heavier_fusion.py",
+  "hypothesis": "improve 33: candidate-context caused a large, stable gain but node 33 diluted it with the old node-30 base, so reuse the unchanged cached member and raise its effective fusion weight to test whether the new mechanism should dominate.",
+  "parent": "33",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T21:27:52+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.67864,
+  "GAUC": 0.701776,
+  "nDCG@5": 0.655503,
+  "source_hash": "d93014451376",
+  "stdout_tail": "{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "c0bb28da369b",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.001155,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.701954,
+      "nDCG@5": 0.657989,
+      "primary": 0.679971
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.701817,
+      "nDCG@5": 0.65401,
+      "primary": 0.677913
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.701558,
+      "nDCG@5": 0.654511,
+      "primary": 0.678035
+    }
+  ],
+  "seconds": 172.7,
+  "verdict": "KEPT",
+  "delta": 0.03354,
+  "tokens_in": 71073,
+  "tokens_out": 5073,
+  "tokens_cached": 51072,
+  "cost_usd": 0.126269,
+  "model": "gpt-5.5",
+  "agent_iteration": 29,
+  "wall_seconds": 210.5,
+  "recovery_events": []
+}
