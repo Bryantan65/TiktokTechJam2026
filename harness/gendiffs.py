@@ -4,7 +4,7 @@ Deliverable 3 wants each iteration to record "the code diff applied". We store
 the full solution file and a `parent` pointer, so the diff is reconstructable -
 but reconstructable is not recorded, and a judge should not have to do it.
 
-This writes logs/<run>/diffs/NNNN.diff: unified diff from the parent iteration's
+This writes <run>/diffs/NNNN.diff: unified diff from the parent iteration's
 solution to this one's. Iteration 1 has no parent and gets the full file as an
 addition against the kit baseline it replaces.
 
@@ -28,7 +28,19 @@ def read(p):
 
 
 total = skipped = 0
-for run_dir in sorted(glob.glob('logs/record-run-*')):
+# Roots to scan. Bare invocation covers every benchmark, because a bonus run
+# needs the same per-iteration diff the required one does - this used to be
+# hardcoded to logs/ and silently produced nothing for 1k or 27k. Pass explicit
+# run directories or globs as arguments to narrow it.
+import sys                                              # noqa: E402
+_args = sys.argv[1:]
+_roots = _args or ['logs/record-run-*', 'logs-1k/record-run-*',
+                   'logs-27k/record-run-*']
+_runs = []
+for _pat in _roots:
+    _runs.extend(sorted(glob.glob(_pat)))
+
+for run_dir in _runs:
     run = os.path.basename(run_dir)
     recs = {}
     for f in sorted(glob.glob(os.path.join(run_dir, '[0-9]*.json'))):

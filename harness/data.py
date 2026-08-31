@@ -196,7 +196,7 @@ def _log_files(data_dir, v):
     return out
 
 
-def _load_uncached(data_dir):
+def _load_uncached(data_dir, only=None):
     """Splits dict for whichever variant `data_dir` holds.
 
     Pure goes through the kit's own loader untouched. The bonus variants use the
@@ -233,6 +233,16 @@ def _load_uncached(data_dir):
         except (TypeError, ValueError):
             return default
 
+    # Rows outside `only` are skipped as they are read, never materialised.
+    # Every row becomes a Python tuple of seven objects - roughly 340 bytes
+    # against ~150 on disk - so on 27k the full 322M rows need ~110 GB and a
+    # container capped at 116 GB dies mid-load with no traceback. train+valid
+    # is 208M rows, which fits. Deliverable 4 asks for validation-best scores,
+    # so the test split is not needed to measure a baseline.
+    keep = None
+    if only:
+        keep = [SPLITS[n] for n in only if n in SPLITS]
+
     rows = []
     bad = 0
     for path in _log_files(data_dir, v):
@@ -242,7 +252,10 @@ def _load_uncached(data_dir):
                 date = r.get('date')
                 if dur == 0.0 and not r.get('duration_ms'):
                     bad += 1
-                rows.append((int(_num(date)), r.get('user_id') or '',
+                d = int(_num(date))
+                if keep is not None and not any(lo <= d <= hi for lo, hi in keep):
+                    continue
+                rows.append((d, r.get('user_id') or '',
                              r.get('video_id') or '',
                              vid2author.get(r.get('video_id'), 'UNK'),
                              r.get('tab') or '', dur,
@@ -255,16 +268,24 @@ def _load_uncached(data_dir):
             for name, (lo, hi) in SPLITS.items()}
 
 
-def load(data_dir):
+def load(data_dir, only=None):
     """Splits dict for `data_dir`, reusing a cached parse when one is current.
+
+    `only` is an optional iterable of split names. When given, rows outside
+    those splits are skipped as the CSVs are read rather than built and
+    discarded - the difference between 110 GB and 71 GB on 27k. Omit it and
+    behaviour is exactly as before.
 
     Cache-invalidating on source mtime rather than on a content hash: reading
     every CSV to hash it would cost what the parse costs and save nothing.
     """
-    path = _cache_path('load_%s' % _dir_tag(data_dir))
+    tag = _dir_tag(data_dir)
+    if only:
+        tag += '_' + '-'.join(sorted(only))
+    path = _cache_path('load_%s' % tag)
     hit = _cache_get(path, newer_than=_sources(data_dir))
     if hit is not None:
         return hit
-    out = _load_uncached(data_dir)
+    out = _load_uncached(data_dir, only=only)
     _cache_put(path, out)
     return out

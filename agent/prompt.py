@@ -266,6 +266,13 @@ scratch. And cache only members whose code has not changed: if you alter a
 member's loss, features or hyperparameters, its cached predictions are stale,
 so use a new name or delete the file.
 
+The way this rule gets broken is worth naming, because it does not look like a
+bug. On a cache miss, do NOT substitute a different or cheaper model as a
+fallback - retrain the same member. A solution that quietly swaps in a stand-in
+still runs, still prints a score, and is no longer the model that was measured;
+its recorded number becomes unreproducible and nothing in the log says so. If a
+member cannot be rebuilt, raise instead of substituting.
+
 With this, "try five blend weights" costs seconds instead of retraining twenty
 models, which changes what is worth testing at all.
 
