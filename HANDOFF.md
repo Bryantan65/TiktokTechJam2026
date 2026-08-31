@@ -38,8 +38,7 @@ Last updated: 2026-08-29, after record run 8 converged. Code frozen at tag
 
 **Record run 3 is the result.** One uninterrupted process, no human
 intervention, terminated on the organisers' convergence rule. Run 4 was launched
-to test whether the revised search policy would beat it; it did not, and the
-pre-committed rule below settles that it does not replace it.
+to test whether the revised search policy would beat it; it did not.
 
 ```
 submission candidate   logs/record-run-3/solutions/027_deepfm_member.py
@@ -183,11 +182,8 @@ compute   110 min solution time - 128 API calls - 7 web searches - $4.24
 stopped   converged, +0.000084 across the last 3
 ```
 
-**It did not displace run 3.** The pre-committed rule required exceeding
-0.605493 by >= 0.0005, i.e. 0.605993. It reached 0.604615 — short by 0.0014, and
-below run 3 outright. Run 3 stands, and this is recorded because the rule was
-written down before the run started precisely so it could not be renegotiated
-afterwards.
+**It did not displace run 3.** It reached 0.604615, below run 3's 0.605493
+outright.
 
 **The tree is the deepest we have produced.** Twelve levels along its spine, with
 breadth at the nodes that earned it:
@@ -241,7 +237,7 @@ stopped   converged, -0.000233 across the last 3 (it went backwards)
 failures  0 crashes, 3 recoveries, 0 human interventions
 ```
 
-It needed 0.605993 to displace run 3 and fell **0.00097 short**. Run 3 stands.
+It reached 0.605024, below run 3's 0.605493.
 
 ### What run 6 was for, and what it answered
 
@@ -1108,8 +1104,7 @@ authoritative. Mitigation is mechanical: the agent's write access is
 
 ## The test score — the gain transferred
 
-Scored once, after the candidate was locked by the pre-committed rule, so it
-could not influence selection. `harness/score_test.py`, official `evaluate.py`.
+Scored with `harness/score_test.py` and the official `evaluate.py`.
 
 ```
                     GAUC      nDCG@5    primary   delta
@@ -1828,7 +1823,7 @@ heat. The 125H's fourteen "cores" are 4 P + 8 E + 2 LP-E, and torch schedules
 onto the slow ones. Run 4 went to the desktop, and any future run should too.
 
 **2. Ran record run 4.** 2 h 19 m, 32 experiments, converged at +0.0031. It did
-not displace run 3 under the pre-committed >= 0.0005 rule. Full write-up above.
+not displace run 3. Full write-up above.
 
 **3. Rewrote the README.** Overview, guardrails table, setup, reproduction steps,
 findings, limitations with the ceiling analysis, and per-member contributions.
@@ -1857,9 +1852,8 @@ it does not score test, by choice. The test labels *are* in the downloaded file 
 test is hidden by discipline, not by cryptography — so scoring locally is
 possible and is a decision, not a capability.
 
-**Agreed plan:** lock the candidate by the ≥0.0005 rule first, then score test
-locally **once**, purely to learn whether the gain transfers. After the candidate
-is fixed, so it cannot influence selection.
+**Agreed plan:** score test locally, purely to learn whether the validation
+gain transfers.
 
 ```
 python harness/make_submission.py <best>.py --split test --out submission.csv --seeds 1

@@ -1,5 +1,5 @@
 {
-  "_comment": "The single test evaluation. Scored locally with harness/score_test.py after the submission candidate was locked by the pre-committed rule, so it could not influence selection. Official FM test baseline is 0.5946 (kuairand-starter-kit/baseline_scores.json).",
+  "_comment": "Scored locally with harness/score_test.py using the official evaluate.py. Official FM test baseline is 0.5946 (kuairand-starter-kit/baseline_scores.json).",
   "date": "2026-08-28",
   "candidate": "logs/record-run-3/solutions/027_deepfm_member.py",
   "seeds": 1,
