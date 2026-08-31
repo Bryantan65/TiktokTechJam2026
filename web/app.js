@@ -15,7 +15,7 @@ const VERDICT_COLOR = {
 };
 
 const state = {
-  runs: [], run: null, runId: null, cursor: 0, timer: null,
+  runs: [], run: null, runId: null, cursor: 0, timer: null, animate: false,
   live: { records: [], events: [], runId: null, dataset: 'pure', done: false }
 };
 
@@ -91,106 +91,292 @@ async function selectRun(id) {
   draw();
 }
 
-function nodesUpTo(recs, cursor) {
-  return recs.filter(r => r.iteration <= cursor);
-}
-
 /* Lay the run out as the tree it actually is: every record carries a parent,
  * so a run is a search tree and not a list. Depth left to right, children
  * stacked vertically, parents centred on their children. */
-function layout(recs) {
+/* Lay the run out as a search trajectory.
+ *
+ * X is the iteration, so time runs left to right. Y is the node's RANK among
+ * every scored node in the run, best at the top - a branch that climbs found
+ * something and a branch that drops did not.
+ *
+ * Rank rather than the score itself, because the scores do not spread: in
+ * record-run-13, 26 of 32 nodes sit between 0.603 and 0.605 while one collapse
+ * sits at 0.5735. On a linear axis that outlier stretches the scale and jams
+ * the rest into a hairline band. Rank spends the canvas evenly and keeps the
+ * ordering, which is what the tree is for; the chart underneath still shows
+ * true magnitudes, so nothing is lost between the two.
+ *
+ * Ranks are computed over the WHOLE run, never over what is currently visible,
+ * so a node's position never changes as the replay plays.
+ */
+function layout(recs, dataset) {
   const byIter = new Map(recs.map(r => [r.iteration, r]));
   const kids = new Map();
-  const roots = [];
   recs.forEach(r => {
     const p = parseInt(r.parent, 10);
     if (Number.isFinite(p) && byIter.has(p) && p !== r.iteration) {
       if (!kids.has(p)) kids.set(p, []);
       kids.get(p).push(r.iteration);
-    } else roots.push(r.iteration);
-  });
-  const pos = new Map();
-  let slot = 0;
-  const seen = new Set();
-  function walk(it, depth) {
-    if (seen.has(it)) return 0;
-    seen.add(it);
-    const ch = (kids.get(it) || []).sort((a, b) => a - b);
-    let y;
-    if (!ch.length) { y = slot++; }
-    else {
-      const ys = ch.map(c => walk(c, depth + 1)).filter(v => v != null);
-      y = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : slot++;
     }
-    pos.set(it, { depth, y });
-    return y;
+  });
+
+  // A dev screen or a duplicate carries a number that is not comparable with a
+  // valid-split score, so it is not ranked - same rule bestSoFar() applies.
+  const rankable = r => r.valid_primary != null
+    && r.verdict !== 'screen' && r.verdict !== 'duplicate';
+  const scored = recs.filter(rankable).sort((a, b) =>
+    a.valid_primary - b.valid_primary || a.iteration - b.iteration);
+  const rank = new Map();
+  scored.forEach((r, i) => rank.set(r.iteration, i));   // 0 = worst
+  const nRanked = scored.length;
+
+  const iters = recs.map(r => r.iteration).sort((a, b) => a - b);
+  const ix = new Map(iters.map((it, i) => [it, i]));
+
+  const pos = new Map();
+  recs.forEach(r => {
+    let y;
+    if (rank.has(r.iteration)) {
+      y = nRanked > 1 ? rank.get(r.iteration) / (nRanked - 1) : 0.5;
+    } else {
+      // Failed, no-op, screened: nothing moved, so sit level with the parent.
+      // That is the honest position - the experiment produced no ranking
+      // information - and it makes a dead end read as a flat stub.
+      const p = parseInt(r.parent, 10);
+      const pr = rank.get(p);
+      y = pr != null && nRanked > 1 ? pr / (nRanked - 1) : 0.5;
+      pos.set(r.iteration, { ix: ix.get(r.iteration), y, unranked: true });
+      return;
+    }
+    pos.set(r.iteration, { ix: ix.get(r.iteration), y, unranked: false });
+  });
+
+  // Where the official FM baseline would sit on this same rank axis, so the
+  // vertical position means something absolute and not just "better than the
+  // other things this run happened to try".
+  let baselineY = null;
+  const base = BASELINE[dataset];
+  if (base != null && nRanked > 1) {
+    let below = 0;
+    scored.forEach(r => { if (r.valid_primary < base) below++; });
+    baselineY = (below - 0.5) / (nRanked - 1);
+    if (baselineY > 1 || baselineY < 0) baselineY = null;
   }
-  roots.sort((a, b) => a - b).forEach(r => walk(r, 0));
-  recs.forEach(r => { if (!pos.has(r.iteration)) walk(r.iteration, 0); });
-  return { pos, byIter, kids };
+
+  const best = scored.length ? scored[scored.length - 1] : null;
+  const worst = scored.length ? scored[0] : null;
+  return { pos, byIter, kids, nRanked, baselineY, best, worst,
+           nIters: iters.length };
 }
 
 function el(tag, attrs, parent) {
   const n = document.createElementNS(SVGNS, tag);
-  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  // Skip null/undefined: setAttribute would write the string "null" and quietly
+  // override the stylesheet with an invalid value.
+  for (const k in attrs) {
+    if (attrs[k] != null) n.setAttribute(k, attrs[k]);
+  }
   if (parent) parent.appendChild(n);
   return n;
 }
 
+/* Incremental, animated tree rendering.
+ *
+ * The first version cleared the SVG and redrew everything on every tick, which
+ * made animation impossible: an element that is destroyed 400ms later cannot
+ * draw itself in. So the SVG keeps a registry of the elements it has already
+ * built, and a step forward only ADDS the new edge and node. Scrubbing
+ * backwards removes what is now in the future; switching runs rebuilds.
+ *
+ * Layout is still computed over the whole run, so a node's position never
+ * depends on how much has been revealed and nothing shifts as it plays.
+ */
+// COLW is per ITERATION now, not per depth level, so the canvas is as wide as
+// the run is long and scrolls. PLOTH is the rank axis's height in px.
+const TREE_GEOM = { COLW: 34, PADX: 46, PADY: 22, PLOTH: 300 };
+
+function treeState(svg, key) {
+  if (!svg._reg || svg._key !== key) {
+    svg.innerHTML = '';
+    svg._edgeLayer = el('g', { class: 'edges' }, svg);
+    svg._nodeLayer = el('g', { class: 'nodes' }, svg);
+    svg._reg = { nodes: new Map(), edges: new Map() };
+    svg._key = key;
+    svg._fresh = true;
+  } else {
+    svg._fresh = false;
+  }
+  return svg._reg;
+}
+
+/* Draw the branch from parent to child, then let the node arrive at its end. */
+function animateEdge(path, dur) {
+  let len;
+  try { len = path.getTotalLength(); } catch (e) { return; }
+  if (!len) return;
+  const prevDash = path.style.strokeDasharray;
+  path.style.strokeDasharray = len + ' ' + len;
+  const a = path.animate(
+    [{ strokeDashoffset: len }, { strokeDashoffset: 0 }],
+    { duration: dur, easing: 'cubic-bezier(.45,.05,.25,1)', fill: 'forwards' });
+  a.onfinish = () => {
+    // Hand the dash pattern back to CSS - a recovery edge is dashed there.
+    path.style.strokeDasharray = prevDash || '';
+    path.style.strokeDashoffset = '';
+  };
+}
+
+function animateNode(g, circle, radius, dur, delay) {
+  g.animate([{ opacity: 0 }, { opacity: 0 }, { opacity: 1 }],
+    { duration: delay + dur, easing: 'linear', fill: 'backwards' });
+  circle.animate(
+    [{ r: 0 }, { r: radius * 1.45 }, { r: radius }],
+    { duration: dur, delay: delay, easing: 'cubic-bezier(.34,1.56,.64,1)',
+      fill: 'backwards' });
+}
+
+/* A ring that expands and fades where a node lands - reads as arrival without
+ * moving anything that has to stay put. */
+function ping(svg, x, y, colour, dur) {
+  const c = el('circle', {
+    cx: x, cy: y, r: 5, fill: 'none', stroke: colour,
+    'stroke-width': 2, class: 'ping'
+  }, svg);
+  const a = c.animate(
+    [{ r: 4, opacity: .85, strokeWidth: 2 },
+     { r: 16, opacity: 0, strokeWidth: .5 }],
+    { duration: dur, easing: 'ease-out' });
+  a.onfinish = () => c.remove();
+}
+
 function drawTree(svgSel, recs, cursor, opts) {
+  opts = opts || {};
   const svg = $(svgSel);
-  svg.innerHTML = '';
-  if (!recs.length) return;
-  const { pos, byIter } = layout(recs);
-  const COLW = 58, ROWH = 25, PADX = 26, PADY = 18;
-  let maxD = 0, maxY = 0;
-  pos.forEach(p => { maxD = Math.max(maxD, p.depth); maxY = Math.max(maxY, p.y); });
-  const W = PADX * 2 + maxD * COLW + 30;
-  const H = PADY * 2 + maxY * ROWH + 20;
+  if (!recs.length) { svg.innerHTML = ''; svg._key = null; return; }
+  const L = layout(recs, opts.dataset || 'pure');
+  const { pos, byIter } = L;
+  const { COLW, PADX, PADY, PLOTH } = TREE_GEOM;
+  // Enough vertical room that unique ranks do not collide at r=5, but capped so
+  // a long run does not turn the pane into a scroll shaft.
+  const plotH = Math.max(150, Math.min(PLOTH, L.nRanked * 14));
+  const W = PADX * 2 + Math.max(1, L.nIters - 1) * COLW + 20;
+  const H = PADY * 2 + plotH;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('height', H);
   svg.style.minWidth = W + 'px';
-  const X = it => PADX + pos.get(it).depth * COLW;
-  const Y = it => PADY + pos.get(it).y * ROWH;
+  const X = it => PADX + pos.get(it).ix * COLW;
+  const Y = it => PADY + (1 - pos.get(it).y) * plotH;
 
-  const visible = recs.filter(r => r.iteration <= cursor);
+  const key = (opts.key || '') + '|' + recs.length;
+  const reg = treeState(svg, key);
+  if (svg._fresh) {
+    const g = el('g', { class: 'axis' }, svg);
+    svg.insertBefore(g, svg._edgeLayer);
+    // Rank is ordinal, so label the two ends with real scores - without them
+    // "higher is better" has no scale a reader can calibrate against.
+    if (L.best) {
+      el('text', { x: 4, y: PADY + 4, class: 'axlabel' }, g)
+        .textContent = 'best ' + fmt(L.best.valid_primary, 4);
+    }
+    if (L.worst && L.worst !== L.best) {
+      el('text', { x: 4, y: PADY + plotH + 4, class: 'axlabel' }, g)
+        .textContent = fmt(L.worst.valid_primary, 4);
+    }
+    if (L.baselineY != null) {
+      const by = PADY + (1 - L.baselineY) * plotH;
+      el('line', { x1: PADX - 14, x2: W - 8, y1: by, y2: by, class: 'baseline' }, g);
+      el('text', { x: W - 8, y: by - 4, class: 'axlabel', 'text-anchor': 'end' }, g)
+        .textContent = 'FM baseline';
+    }
+  }
+  const animate = !!opts.animate && !svg._fresh;
+  const dur = opts.dur || 380;
+  const edgeMs = Math.round(dur * 0.62);
+  const nodeMs = Math.round(dur * 0.45);
+
+  // 1. scrubbed backwards: drop everything now in the future
+  reg.nodes.forEach((g, it) => {
+    if (it > cursor) { g.remove(); reg.nodes.delete(it); }
+  });
+  reg.edges.forEach((pth, it) => {
+    if (it > cursor) { pth.remove(); reg.edges.delete(it); }
+  });
+
   const best = bestSoFar(recs, cursor);
+  const arriving = [];
 
-  // edges first so nodes sit on top
-  visible.forEach(r => {
+  // 2. add what is newly visible
+  recs.forEach(r => {
+    const it = r.iteration;
+    if (it > cursor || reg.nodes.has(it)) return;
+    const isNew = animate;
+    if (isNew) arriving.push(r);
+
     const p = parseInt(r.parent, 10);
-    if (!Number.isFinite(p) || !pos.has(p) || p > cursor) return;
-    const x1 = X(p), y1 = Y(p), x2 = X(r.iteration), y2 = Y(r.iteration);
-    const mx = (x1 + x2) / 2;
-    const par = byIter.get(p);
-    const recovered = par && (par.status === 'error' || par.status === 'no-op');
-    el('path', {
-      d: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`,
-      class: 'edge' + (r.iteration === cursor ? ' hot' : '')
-        + (recovered ? ' recover' : '')
-    }, svg);
+    if (Number.isFinite(p) && pos.has(p) && p <= cursor) {
+      const x1 = X(p), y1 = Y(p), x2 = X(it), y2 = Y(it);
+      const mx = (x1 + x2) / 2;
+      const par = byIter.get(p);
+      const recovered = par && (par.status === 'error' || par.status === 'no-op');
+      const path = el('path', {
+        d: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`,
+        class: 'edge' + (recovered ? ' recover' : '')
+      }, svg._edgeLayer);
+      reg.edges.set(it, path);
+      if (isNew) animateEdge(path, edgeMs);
+    }
+
+    const unranked = pos.get(it).unranked;
+    const g = el('g', { class: 'node' + (unranked ? ' unranked' : '') },
+      svg._nodeLayer);
+    const failed = r.status === 'error';
+    const radius = failed ? 5.5 : 5;
+    const colour = VERDICT_COLOR[r.verdict] || 'var(--noise)';
+    const circle = el('circle', {
+      cx: X(it), cy: Y(it), r: radius,
+      fill: unranked ? 'var(--bg)' : colour,
+      stroke: unranked ? colour : null
+    }, g);
+    el('text', { x: X(it), y: Y(it) - 9, 'text-anchor': 'middle' }, g)
+      .textContent = it;
+    el('title', {}, g).textContent =
+      `#${it}  ${r.verdict || ''}  ${fmt(r.valid_primary, 5)}`;
+    g.addEventListener('click', () => {
+      if (opts.onclick) opts.onclick(it);
+    });
+    g._radius = radius;
+    reg.nodes.set(it, g);
+
+    if (isNew) {
+      const delay = reg.edges.has(it) ? edgeMs : 0;
+      animateNode(g, circle, radius, nodeMs, delay);
+      setTimeout(() => {
+        if (g.isConnected) ping(svg._nodeLayer, X(it), Y(it), colour, dur);
+      }, delay);
+    }
   });
 
-  visible.forEach(r => {
-    const g = el('g', {
-      class: 'node' + (r.iteration === cursor ? ' cur' : '')
-        + (best && r.iteration === best.iteration ? ' best' : '')
-    }, svg);
-    const failed = r.status === 'error';
-    el('circle', {
-      cx: X(r.iteration), cy: Y(r.iteration),
-      r: r.iteration === cursor ? 7 : (failed ? 5.5 : 5),
-      fill: VERDICT_COLOR[r.verdict] || 'var(--noise)'
-    }, g);
-    el('text', {
-      x: X(r.iteration), y: Y(r.iteration) - 9, 'text-anchor': 'middle'
-    }, g).textContent = r.iteration;
-    g.addEventListener('click', () => {
-      if (opts && opts.onclick) opts.onclick(r.iteration);
-    });
-    const t = el('title', {}, g);
-    t.textContent = `#${r.iteration}  ${r.verdict || ''}  ${fmt(r.valid_primary, 5)}`;
+  // 3. classes that depend on where the cursor is, not on what exists
+  reg.nodes.forEach((g, it) => {
+    g.classList.toggle('cur', it === cursor);
+    g.classList.toggle('best', !!best && it === best.iteration);
+    const c = g.firstChild;
+    if (c && c.tagName === 'circle') {
+      c.setAttribute('r', it === cursor ? g._radius + 2 : g._radius);
+    }
   });
+  reg.edges.forEach((pth, it) => pth.classList.toggle('hot', it === cursor));
+
+  // 4. keep the newest node in view as the tree grows past the fold
+  if (animate && arriving.length && opts.follow !== false) {
+    const wrap = svg.parentElement;
+    const last = arriving[arriving.length - 1].iteration;
+    if (wrap && wrap.scrollWidth > wrap.clientWidth) {
+      const target = (X(last) / W) * wrap.scrollWidth - wrap.clientWidth * 0.6;
+      wrap.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+    }
+  }
 }
 
 function bestSoFar(recs, cursor) {
@@ -204,7 +390,7 @@ function bestSoFar(recs, cursor) {
   return best;
 }
 
-function drawChart(svgSel, recs, cursor, dataset) {
+function drawChart(svgSel, recs, cursor, dataset, animate) {
   const svg = $(svgSel);
   svg.innerHTML = '';
   const box = svg.parentElement.getBoundingClientRect();
@@ -236,8 +422,22 @@ function drawChart(svgSel, recs, cursor, dataset) {
 
   const shown = scored.filter(r => r.iteration <= cursor);
   if (shown.length) {
-    const d = shown.map((r, i) => `${i ? 'L' : 'M'}${px(r.iteration)},${py(r.valid_primary)}`).join(' ');
-    el('path', { d, class: 'spark', stroke: 'var(--accent)' }, svg);
+    // On a forward step the last segment is drawn rather than snapped in, so
+    // the line advances instead of the whole series flickering to a new shape.
+    const growing = animate && shown.length >= 2;
+    const solid = growing ? shown.slice(0, -1) : shown;
+    const d = solid.map((r, i) =>
+      `${i ? 'L' : 'M'}${px(r.iteration)},${py(r.valid_primary)}`).join(' ');
+    if (solid.length) el('path', { d, class: 'spark', stroke: 'var(--accent)' }, svg);
+    if (growing) {
+      const a = shown[shown.length - 2], b2 = shown[shown.length - 1];
+      const seg = el('path', {
+        d: `M${px(a.iteration)},${py(a.valid_primary)}` +
+           `L${px(b2.iteration)},${py(b2.valid_primary)}`,
+        class: 'spark', stroke: 'var(--accent)'
+      }, svg);
+      animateEdge(seg, Math.round((+$('#speed').value || 450) * 0.5));
+    }
     // best-so-far as a step line: the number the convergence rule watches
     let b = -Infinity; const pts = [];
     shown.forEach(r => { b = Math.max(b, r.valid_primary); pts.push([r.iteration, b]); });
@@ -247,11 +447,19 @@ function drawChart(svgSel, recs, cursor, dataset) {
         : `M${px(p[0])},${py(p[1])}`;
     });
     el('path', { d: dd, class: 'spark', stroke: 'var(--kept)', 'stroke-dasharray': '3 2', 'stroke-width': 1.2 }, svg);
-    shown.forEach(r => el('circle', {
-      cx: px(r.iteration), cy: py(r.valid_primary),
-      r: r.iteration === cursor ? 3.6 : 2,
-      fill: VERDICT_COLOR[r.verdict] || 'var(--noise)'
-    }, svg));
+    shown.forEach(r => {
+      const rad = r.iteration === cursor ? 3.6 : 2;
+      const dot = el('circle', {
+        cx: px(r.iteration), cy: py(r.valid_primary), r: rad,
+        fill: VERDICT_COLOR[r.verdict] || 'var(--noise)'
+      }, svg);
+      if (animate && r.iteration === cursor) {
+        dot.animate([{ r: 0 }, { r: rad * 1.8 }, { r: rad }], {
+          duration: 420, delay: 120,
+          easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'backwards'
+        });
+      }
+    });
   }
   recs.filter(r => r.status === 'error' && r.iteration <= cursor).forEach(r => {
     el('line', {
@@ -346,7 +554,14 @@ function renderDetail(sel, verdictSel, rec, run) {
     h += '<div class="subhead">stdout tail</div><pre class="src">'
       + esc(rec.stdout_tail) + '</pre>';
   }
+  const changed = box._shown !== rec.iteration;
+  box._shown = rec.iteration;
   box.innerHTML = h;
+  if (changed) {
+    box.classList.remove('swap');
+    void box.offsetWidth;          // restart the animation
+    box.classList.add('swap');
+  }
 }
 
 function renderEvents(sel, events, upto, cutoffTs) {
@@ -359,11 +574,14 @@ function renderEvents(sel, events, upto, cutoffTs) {
     if (!cutoffTs) return false;
     return !e.ts || e.ts <= cutoffTs;
   });
-  box.innerHTML = shown.map(e =>
-    `<div class="ev ${esc(e.kind)}"><span class="t">${clock(e.ts)}</span>
+  const before = box._count || 0;
+  box.innerHTML = shown.map((e, i) =>
+    `<div class="ev ${esc(e.kind)}${i >= before ? ' new' : ''}">
+      <span class="t">${clock(e.ts)}</span>
       <span class="k">${esc(e.kind)}</span>
       <span class="d" title="${esc(e.detail)}">${esc(e.detail)}</span></div>`
   ).join('');
+  box._count = shown.length;
   box.scrollTop = box.scrollHeight;
 }
 
@@ -372,8 +590,17 @@ function draw() {
   if (!run) return;
   const recs = run.iterations;
   const ds = (state.run.summary && state.run.summary.dataset) || 'pure';
-  drawTree('#tree', recs, state.cursor, { onclick: i => { stopPlay(); setCursor(i); } });
-  drawChart('#chart', recs, state.cursor, ds);
+  // Animate only a forward step. Scrubbing, resetting and switching runs
+  // should land instantly - an animation you can outrun is just lag.
+  const tick = +$('#speed').value;
+  drawTree('#tree', recs, state.cursor, {
+    key: state.runId,
+    dataset: ds,
+    animate: state.animate,
+    dur: Math.max(160, Math.min(430, tick * 0.62)),
+    onclick: i => { stopPlay(); setCursor(i, false); }
+  });
+  drawChart('#chart', recs, state.cursor, ds, state.animate);
   const cur = recs.find(r => r.iteration === state.cursor);
   renderDetail('#detail', '#detail-verdict', cur, run);
   const curTs = cur && cur.timestamp;
@@ -385,20 +612,24 @@ function draw() {
   $('#scrubber').value = state.cursor;
 }
 
-function setCursor(i) {
-  state.cursor = Math.max(0, Math.min(i, state.run.iterations.length));
+function setCursor(i, animate) {
+  const next = Math.max(0, Math.min(i, state.run.iterations.length));
+  // A single step forward is the only move worth animating.
+  state.animate = animate === undefined ? (next === state.cursor + 1) : animate;
+  state.cursor = next;
   draw();
+  state.animate = false;
 }
-$('#scrubber').addEventListener('input', e => { stopPlay(); setCursor(+e.target.value); });
-$('#btn-step').addEventListener('click', () => { stopPlay(); setCursor(state.cursor + 1); });
-$('#btn-reset').addEventListener('click', () => { stopPlay(); setCursor(0); });
+$('#scrubber').addEventListener('input', e => { stopPlay(); setCursor(+e.target.value, false); });
+$('#btn-step').addEventListener('click', () => { stopPlay(); setCursor(state.cursor + 1, true); });
+$('#btn-reset').addEventListener('click', () => { stopPlay(); setCursor(0, false); });
 $('#btn-play').addEventListener('click', () => {
   if (state.timer) return stopPlay();
-  if (state.cursor >= state.run.iterations.length) setCursor(0);
+  if (state.cursor >= state.run.iterations.length) setCursor(0, false);
   $('#btn-play').textContent = 'Pause';
   const tick = () => {
     if (state.cursor >= state.run.iterations.length) return stopPlay();
-    setCursor(state.cursor + 1);
+    setCursor(state.cursor + 1, true);
     state.timer = setTimeout(tick, +$('#speed').value);
   };
   state.timer = setTimeout(tick, 120);
@@ -563,9 +794,12 @@ $('#btn-newrun').addEventListener('click', () => { showStep('step-settings'); lo
 
 function drawLive() {
   const recs = state.live.records;
-  drawTree('#live-tree', recs, Math.max(...recs.map(r => r.iteration), 0), {});
-  drawChart('#live-chart', recs, Math.max(...recs.map(r => r.iteration), 0),
-    state.live.dataset);
+  const head = Math.max(...recs.map(r => r.iteration), 0);
+  drawTree('#live-tree', recs, head, {
+    key: state.live.runId, dataset: state.live.dataset,
+    animate: true, dur: 420
+  });
+  drawChart('#live-chart', recs, head, state.live.dataset, true);
   const last = recs[recs.length - 1];
   renderDetail('#live-detail', '#live-verdict', last,
     { iterations: recs, events: state.live.events, diffs: {} });

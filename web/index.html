@@ -49,8 +49,8 @@
         <button id="btn-step" disabled>Step</button>
         <button id="btn-reset" disabled>Reset</button>
         <select id="speed">
-          <option value="900">1&times;</option>
-          <option value="450" selected>2&times;</option>
+          <option value="900" selected>1&times;</option>
+          <option value="450">2&times;</option>
           <option value="180">5&times;</option>
           <option value="60">15&times;</option>
         </select>
@@ -65,7 +65,7 @@
     <div class="panes">
       <div class="pane treepane">
         <div class="pane-head">
-          <span>Search tree</span>
+          <span>Search tree &mdash; x: iteration, y: rank by score</span>
           <span class="legend">
             <i class="k-KEPT"></i>kept
             <i class="k-noise"></i>noise
@@ -73,6 +73,7 @@
             <i class="k-failed"></i>failed
             <i class="k-noop"></i>no-op
             <i class="k-screen"></i>screen
+            <i class="k-hollow"></i>unranked
           </span>
         </div>
         <div class="treewrap"><svg id="tree"></svg></div>
