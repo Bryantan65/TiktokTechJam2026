@@ -1,24 +1,38 @@
 {
-  "_comment": "Scored locally with harness/score_test.py using the official evaluate.py. Official FM test baseline is 0.5946 (kuairand-starter-kit/baseline_scores.json).",
-  "date": "2026-08-28",
-  "candidate": "logs/record-run-3/solutions/027_deepfm_member.py",
-  "seeds": 1,
-  "valid": {
-    "GAUC": 0.672469,
-    "nDCG@5": 0.538518,
-    "primary": 0.605493,
-    "delta_vs_baseline": 0.0040
+  "_comment": "Test scores for both Pure candidates, measured locally with harness/score_test.py and the official evaluate.py. The submitted candidate is record-run-9. Note the organisers' FAQ 2.9.3: the test rows ship with the Starter Kit and judging scores the submitted predictions on exactly those rows, so 'hidden' is a discipline, not a withheld file. Official FM test baseline is 0.5946 (kuairand-starter-kit/baseline_scores.json).",
+  "date": "2026-09-01",
+  "submitted_candidate": {
+    "run": "logs/record-run-9",
+    "solution": "logs/record-run-9/solutions/031_global_ctr_tiebreak.py",
+    "predictions": "submission.csv",
+    "why_this_one": "Configured inside the organisers' hard caps (50 experiments, 6 h) and converged at 2 h 34 m, with its convergence floor declared in the run_start event before the run. Its winning lineage also never reads a test label: label-derived state is guarded by `if sp == 'train'`. Higher on both splits as well, though by less than the seed spread.",
+    "valid": {
+      "GAUC": 0.67308,
+      "nDCG@5": 0.538397,
+      "primary": 0.605738,
+      "delta_equal_weighted": 0.004189
+    },
+    "test": {
+      "GAUC": 0.66615,
+      "nDCG@5": 0.531544,
+      "primary": 0.598847,
+      "delta_equal_weighted": 0.004247
+    }
   },
-  "test": {
-    "GAUC": 0.665391,
-    "nDCG@5": 0.531626,
-    "primary": 0.598508,
-    "delta_vs_baseline": 0.0039
-  },
-  "reproduction_check": {
-    "_comment": "submission.csv, generated earlier the same day, rescored to confirm it came from the same candidate. The 0.0001 difference is process-level float nondeterminism, not a different model.",
-    "file": "submission.csv",
-    "test_primary": 0.598411,
-    "delta_vs_baseline": 0.0038
+  "not_submitted": {
+    "run": "logs/record-run-3",
+    "solution": "logs/record-run-3/solutions/027_deepfm_member.py",
+    "predictions": "submission_run3_ARCHIVED.csv",
+    "valid": {
+      "GAUC": 0.672469,
+      "nDCG@5": 0.538518,
+      "primary": 0.605493
+    },
+    "test": {
+      "GAUC": 0.665391,
+      "nDCG@5": 0.531626,
+      "primary": 0.598508
+    },
+    "why_not": "Two reasons. Its run_start records max_experiments=80 and no wall-clock ceiling, and it ran 6 h 29 m - outside the hard caps restated in FAQ 2.9.1. And its aligned_raw_features() uses the label as part of a lookup key for every split including test, with no `if sp == 'train'` guard, which FAQ 2.9.3 prohibits. Kept in the repository as part of the run record."
   }
 }

@@ -3,15 +3,15 @@
 Deliverable 4. Final model output, the results table, and the resource usage
 required to reach the converged result.
 
-Every number here is read back from `logs/record-run-3/NNNN.json`,
-`logs/record-run-3/events.jsonl` and `test_scores.json` — not from memory.
+Every number here is read back from `logs/record-run-9/NNNN.json`,
+`logs/record-run-9/events.jsonl` and `test_scores.json` — not from memory.
 
 ---
 
 ## Final model output
 
 ```
-submission candidate   logs/record-run-3/solutions/027_deepfm_member.py
+submission candidate   logs/record-run-9/solutions/031_global_ctr_tiebreak.py
 predictions            submission.csv   (170,588 rows, test split)
 schema                 row_id,user_id,video_id,score   per the Starter Kit
 validated              python kuairand-starter-kit/submit.py --check
@@ -19,7 +19,7 @@ validated              python kuairand-starter-kit/submit.py --check
 
 The run stopped on the organisers' convergence rule — not on the 50-iteration
 cap and not on the wall-clock ceiling. The scored checkpoint is the
-validation-best at that point, which is iteration 27.
+validation-best at that point, which is iteration 31.
 
 ---
 
@@ -33,10 +33,10 @@ metric, then equal-weighted. Baseline is the official FM from
 
 | metric | ours | official FM baseline | delta |
 | --- | --- | --- | --- |
-| GAUC | 0.672469 | 0.6674 | **+0.005069** |
-| nDCG@5 | 0.538518 | 0.5357 | **+0.002818** |
-| primary — mean of the two | 0.605493 | 0.6016 | +0.003893 |
-| **equal-weighted delta** | | | **+0.003944** |
+| GAUC | 0.673080 | 0.6674 | **+0.005680** |
+| nDCG@5 | 0.538397 | 0.5357 | **+0.002697** |
+| primary — mean of the two | 0.605738 | 0.6016 | +0.004238 |
+| **equal-weighted delta** | | | **+0.004189** |
 
 ### Hidden-test equivalent, scored once locally
 
@@ -45,12 +45,12 @@ than withheld by the harness. `harness/score_test.py`, official `evaluate.py`.
 
 | metric | ours | official FM baseline | delta |
 | --- | --- | --- | --- |
-| GAUC | 0.665391 | 0.6610 | **+0.004391** |
-| nDCG@5 | 0.531626 | 0.5282 | **+0.003426** |
-| primary — mean of the two | 0.598508 | 0.5946 | +0.003908 |
-| **equal-weighted delta** | | | **+0.003908** |
+| GAUC | 0.666150 | 0.6610 | **+0.005150** |
+| nDCG@5 | 0.531544 | 0.5282 | **+0.003344** |
+| primary — mean of the two | 0.598847 | 0.5946 | +0.004247 |
+| **equal-weighted delta** | | | **+0.004247** |
 
-The validation gain transferred: +0.003944 on valid, +0.003908 on test.
+The validation gain transferred: +0.004189 on valid, +0.004247 on test.
 
 Seed spread on this data is 0.0008 (organiser-measured, 5 seeds), and the
 target margin was 0.002. The submitted result clears the target on both splits
@@ -58,12 +58,12 @@ and on both metrics independently.
 
 ### How close to the ceiling is this?
 
-`+0.0039` is uninterpretable without knowing what was available to win.
+`+0.0042` is uninterpretable without knowing what was available to win.
 
 ```
 oracle ceiling (valid), requires the labels                   0.8484
 perfect knowledge of every video, nothing about the user      0.6197
-ours                                                          0.6055
+ours                                                          0.6057
 official FM baseline                                          0.6016
 ```
 
@@ -122,7 +122,7 @@ python harness/make_submission.py \
     --data_dir rec_datasets/KuaiRand-1K/data
 ```
 
-**The 1k delta is ten times the Pure delta** (+0.0394 against +0.0039), which is
+**The 1k delta is ten times the Pure delta** (+0.0394 against +0.0042), which is
 what the structural analysis predicts: 33.70% of 1k validation rows involve a
 (user, creator) pair seen in training, against 3.38% on Pure. Personalisation is
 available on 1k and very nearly unavailable on Pure.
@@ -163,50 +163,45 @@ one mechanism it could uniquely supply — deep per-user history — was tested 
 
 ---
 
-## Resource usage — `record-run-3`
+## Resource usage — `record-run-9`
 
 ```
-iterations used            30  of the 50 allowed
-stopped                    converged on the organisers' rule (eps=0.002, N=3)
-                           not the iteration cap, not the wall-clock ceiling
+iterations used            32 scored of the 50 allowed  (33 records)
+stopped                    converged on the rule, not the iteration cap and
+                           not the wall-clock ceiling
 
-agent wall-clock           6 h 29 m        see note
-solution compute           5 h 56 m
-GPU-hours                  0               the submitted run was CPU-only
+agent wall-clock           2 h 34 m
+solution compute           3 h 01 m     (exceeds wall clock: seeds run concurrently)
+GPU-hours                  0            CPU-only
 
-LLM calls                  136
-tokens in                  2,293,488       of which 1,676,544 served from cache
-tokens out                 169,094
-tokens total               2,462,582
-cost                       $3.65
+LLM calls                  93
+tokens in                  2,789,194
+tokens out                 182,752
+tokens total               2,971,946
+cost                       $4.52
 
 human interventions        0
-solution crashes           0
-self-directed web searches 10
 ```
 
-**On the 6 h 29 m.** The organisers' 6-hour ceiling was published on 2026-08-27,
-after this run started, and the run predates the wall-clock guard that now
-enforces it. It is disclosed rather than omitted — but it did not affect the
-submitted artifact. The validation-best checkpoint, iteration 27, was reached at
-**5 h 28 m elapsed**, and it was still the best at the 6-hour mark:
+**Declared before the run, per FAQ 2.9.1.** The `run_start` event records
+`min_scored_before_convergence: 30`, `max_experiments: 50` and
+`max_wall_seconds: 21600` — the convergence floor fixed in advance and written
+to the run log, and both hard caps configured correctly. The organisers permit a
+team to declare its own epsilon, N and floor on exactly that condition.
 
-```
-it27   5.46 h   0.605493   <- the submitted candidate
-it28   5.71 h   0.605408
-it29   5.98 h   0.605380
-       ---- 6 h ceiling ----
-it30   6.23 h   0.605438   worse than it27
-```
+**Why this run rather than `record-run-3`.** Run 3 scored 0.605493 on validation
+against run 9's 0.605738 — a gap of 0.000245, well inside the 0.0008 seed
+spread, so score is not the reason. Two other things are:
 
-Truncating the run at exactly 6 hours yields an identical submission. Every run
-since respects the ceiling; runs 8, 9 and 10 finished in 1 h 38 m, 1 h 48 m and
-1 h 58 m.
+  - Its `run_start` records `max_experiments: 80` and no wall-clock ceiling, and
+    it ran 6 h 29 m. That is outside the hard caps FAQ 2.9.1 restates.
+  - Its `aligned_raw_features()` uses the row label as part of a lookup key for
+    every split including test, with no `if sp == 'train'` guard. Run 9's
+    lineage guards the equivalent state (`row_feats(row, update_label=(sp=='train'))`
+    and `if sp == 'train'` around the label counters), so it never reads a test
+    label. FAQ 2.9.3 prohibits using test labels in any way.
 
-**On the zero interventions.** The process was launched with one command and not
-touched until it stopped itself. That is the figure the autonomy criterion asks
-for. Project-wide development figures across all 15 runs are reported separately
-in `docs/resource-usage.md`.
+Run 3 remains in the repository as part of the run record.
 
 ---
 
@@ -214,17 +209,19 @@ in `docs/resource-usage.md`.
 
 ```
 # 1. confirm the harness reproduces the published baseline
-PYTHONPATH=harness;kuairand-starter-kit \
-  python kuairand-starter-kit/baseline.py --model fm --seed 0
+python harness/run_kit_baseline.py   --data_dir rec_datasets/KuaiRand-Pure/data --model fm --seed 0
 
 # 2. rebuild the submitted predictions from the winning solution
-python logs/record-run-3/solutions/027_deepfm_member.py \
-  --data_dir rec_datasets/KuaiRand-Pure/data --split test \
-  --seed 0 --out preds.npy
+PYTHONPATH=harness python logs/record-run-9/solutions/031_global_ctr_tiebreak.py   --data_dir rec_datasets/KuaiRand-Pure/data --split test   --seed 0 --out preds.npy
 
 # 3. validate the submission file
-python kuairand-starter-kit/submit.py --check submission.csv
+python kuairand-starter-kit/submit.py --check submission.csv   --data_dir rec_datasets/KuaiRand-Pure/data
 ```
 
+`submit.py` and `baseline.py` both live inside `kuairand-starter-kit/`, so
+running them directly puts that directory on `sys.path` ahead of everything else
+and the kit's Pure-hardcoded loader wins. That is fine for Pure and fails for any
+other variant; `harness/run_kit_baseline.py` exists for exactly that reason.
+
 Full per-iteration logs — hypothesis, code diff, GAUC and nDCG@5 separately,
-errors and recovery events — are in `logs/record-run-3/`.
+errors and recovery events — are in `logs/record-run-9/`.

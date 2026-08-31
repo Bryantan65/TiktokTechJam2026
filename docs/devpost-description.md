@@ -27,9 +27,9 @@ Validation-best against the organisers' own model. Delta is per metric, equal-we
 
 | | official FM | **ours** | delta |
 | --- | --- | --- | --- |
-| GAUC | 0.6674 | **0.672469** | +0.005069 |
-| nDCG@5 | 0.5357 | **0.538518** | +0.002818 |
-| primary | 0.6016 | **0.605493** | **+0.003944** |
+| GAUC | 0.6674 | **0.673080** | +0.005680 |
+| nDCG@5 | 0.5357 | **0.538397** | +0.002697 |
+| primary | 0.6016 | **0.605738** | **+0.004189** |
 
 **KuaiRand-1k — bonus**
 
@@ -40,11 +40,11 @@ Validation-best against the organisers' own model. Delta is per metric, equal-we
 | primary | 0.6451 | **0.682994** | **+0.037894** |
 
 - The organisers published a baseline for Pure only; the 1k reference is *their own* `baseline.py` run unmodified on 1k.
-- **Gain transferred:** on the local test split Pure holds at **+0.003908**, 1k improves to **+0.039355**. The hidden test is theirs to score.
+- **Gain transferred:** on the local test split Pure holds at **+0.004247**, 1k improves to **+0.039355**. The hidden test is theirs to score.
 - Seed noise is 0.0008 against a 0.002 target, so Pure clears the bar on each metric independently, not just the mean.
-- **Cost:** 30 of 50 iterations, converged rather than truncated. 2.46M tokens, **$3.65**, 0 GPU-hours, **zero human interventions**.
+- **Cost:** 32 of 50 iterations, converged rather than truncated, in 2 h 34 m. 2.97M tokens, **$4.52**, 0 GPU-hours, **zero human interventions**.
 
-**The 1k delta is ten times the Pure delta, and that's the whole story of this task.** Only **3.38%** of Pure's validation rows involve a (user, creator) pair seen in training. On 1k it's **33.70%**. Same agent, same harness — ten times the overlap, ten times the delta.
+**The 1k delta is nine times the Pure delta, and that's the whole story of this task.** Only **3.38%** of Pure's validation rows involve a (user, creator) pair seen in training. On 1k it's **33.70%**. Same agent, same harness — ten times the overlap, ten times the delta.
 
 ## How we built it
 

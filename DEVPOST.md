@@ -33,9 +33,9 @@ Validation-best, head to head against the organisers' official FM baseline. Delt
 
 |               | official FM | ours     | delta     |
 | ------------- | ----------- | -------- | --------- |
-| GAUC          | 0.6674      | 0.672469 | +0.005069 |
-| nDCG@5        | 0.5357      | 0.538518 | +0.002818 |
-| **primary**   | **0.6016**  | **0.605493** | **+0.003944** |
+| GAUC          | 0.6674      | 0.673080 | +0.005680 |
+| nDCG@5        | 0.5357      | 0.538397 | +0.002697 |
+| **primary**   | **0.6016**  | **0.605738** | **+0.004189** |
 
 ### KuaiRand-1k (bonus benchmark)
 
@@ -47,10 +47,10 @@ Validation-best, head to head against the organisers' official FM baseline. Delt
 
 The organisers published a baseline for Pure only. The 1k reference is their own `baseline.py`, run unmodified on 1k data.
 
-- **Gain transferred:** scored once on the local test split, Pure holds at +0.003908 and 1k improves slightly to +0.039355
+- **Gain transferred:** scored once on the local test split, Pure holds at +0.004247 and 1k improves slightly to +0.039355
 - **Seed noise** is 0.0008 and the target margin was 0.002, so Pure clears the bar on each metric independently, not just on the mean
-- The 1k delta is ten times the Pure delta, and that is the whole story of this task. Only 3.38% of Pure's validation rows involve a (user, creator) pair seen in training. On 1k it is 33.70%. Same agent, same harness, ten times the overlap, ten times the delta.
-- **Cost to get there:** 30 of 50 iterations, converged rather than truncated. 2.46M tokens, $3.65, 0 GPU-hours, zero human interventions.
+- The 1k delta is nine times the Pure delta, and that is the whole story of this task. Only 3.38% of Pure's validation rows involve a (user, creator) pair seen in training. On 1k it is 33.70%. Same agent, same harness, ten times the overlap, ten times the delta.
+- **Cost to get there:** 32 of 50 iterations, converged rather than truncated, in 2 h 34 m. 2.97M tokens, $4.52, 0 GPU-hours, zero human interventions.
 
 ## How We Built It
 
@@ -126,9 +126,9 @@ This was the clearest example of why the harness matters more than the prompt. A
 
 ## Accomplishments We're Proud Of
 
-- **Beat the baseline on both benchmarks.** Pure by +0.0039, 1k by +0.0394. The target was +0.002 against 0.0008 of seed noise, and the gain held all the way through to test rather than evaporating there.
+- **Beat the baseline on both benchmarks.** Pure by +0.0042, 1k by +0.0394. The target was +0.002 against 0.0008 of seed noise, and the gain held all the way through to test rather than evaporating there.
 - **Zero human interventions.** One command, untouched until convergence. We started runs overnight and came back to a finished result with a complete audit trail every time.
-- **Runtime cut from 6h29m to under two hours** without weakening the measurement.
+- **Runs finish in about two and a half hours** without weakening the measurement.
 - **The agent found things we didn't hand it.** It discovered seed-ensembling to cut variance on its own, and abandoned LambdaRank after finding it unstable, without being told either were options.
 
 ## What We Learned
