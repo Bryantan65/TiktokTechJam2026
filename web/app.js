@@ -14,6 +14,45 @@ const VERDICT_COLOR = {
   duplicate: 'var(--screen)'
 };
 
+/* Display names only. The verdict strings themselves are data - they sit in 595
+ * iteration records and ledger.py branches on the exact text - so the jargon is
+ * translated at the edge rather than renamed at the source. */
+const VERDICT_LABEL = {
+  'no-op': 'same model',
+  noise: 'within noise',
+  screen: 'dev screen',
+  failed: 'crashed'
+};
+const verdictLabel = v => VERDICT_LABEL[v] || v || '';
+
+/* Plain-English versions of the harness's own diagnostics. The harness text is
+ * written for the AGENT - "check that your change reaches the model that gets
+ * saved" is steering, not description - so it stays as it is and this explains
+ * the same thing to a person reading the log. */
+function plainStatus(rec) {
+  if (rec.status === 'no-op') {
+    const twin = rec.no_op_twin;
+    return 'Different code, same model. This ran, but produced exactly the '
+      + 'same predictions as iteration ' + (twin != null ? twin : 'an earlier one')
+      + ' - so the change never reached the model that got saved and nothing '
+      + 'new was tested. It is not evidence that the idea does not work.';
+  }
+  if (rec.verdict === 'screen') {
+    return 'Scored on the train-only holdout, not on validation. Useful for '
+      + 'screening an idea cheaply, but not comparable with the other rows.';
+  }
+  if (rec.verdict === 'duplicate') {
+    return 'The same solution as an earlier iteration, so it was not re-run.';
+  }
+  if (rec.status === 'cheating') {
+    return 'Scored above the oracle ceiling, which means the solution read the '
+      + 'label instead of predicting it. Not a result.';
+  }
+  return null;
+}
+
+
+
 /* Only events worth interrupting a scroll for. web_search is deliberately out:
    one run logs 171 of them and the rail would be a solid purple line. */
 const TICK_KIND = {
@@ -110,7 +149,8 @@ function renderRuns() {
         <span class="badge ${r.dataset === '1k' ? 'ds1k' : ''}">${r.dataset}</span>
         <span>${r.iterations} iter</span>
         ${r.failed ? `<span>${r.failed} failed</span>` : ''}
-        ${r.noop ? `<span>${r.noop} no-op</span>` : ''}
+        ${r.noop ? `<span title="different code, same model - nothing tested"
+          >${r.noop} same-model</span>` : ''}
         <span>$${r.cost_usd.toFixed(2)}</span>
         ${leak ? '<span class="badge warn">label leak</span>' : ''}
       </div></div>`;
@@ -390,7 +430,7 @@ function drawTree(svgSel, recs, cursor, opts) {
     el('text', { x: X(it), y: Y(it) - 9, 'text-anchor': 'middle' }, g)
       .textContent = it;
     el('title', {}, g).textContent =
-      `#${it}  ${r.verdict || ''}  ${fmt(r.valid_primary, 5)}`;
+      `#${it}  ${verdictLabel(r.verdict)}  ${fmt(r.valid_primary, 5)}`;
     g.addEventListener('click', () => {
       if (opts.onclick) opts.onclick(it);
     });
@@ -533,7 +573,7 @@ function renderDetail(sel, verdictSel, rec, run) {
   if (!rec) { box.innerHTML = '<p class="empty">No iteration selected.</p>'; return; }
   const vEl = $(verdictSel);
   if (vEl) {
-    vEl.textContent = rec.verdict || rec.status || '';
+    vEl.textContent = verdictLabel(rec.verdict || rec.status);
     vEl.style.color = VERDICT_COLOR[rec.verdict] || 'var(--fg-dim)';
   }
   const titleEl = $('#detail-title');
@@ -547,7 +587,18 @@ function renderDetail(sel, verdictSel, rec, run) {
   let h = '';
   h += `<p class="hyp">${esc(rec.hypothesis || '(no hypothesis recorded)')}</p>`;
 
-  if (rec.error) h += `<div class="errbox">${esc(rec.error)}</div>`;
+  const plain = plainStatus(rec);
+  if (plain) {
+    h += `<div class="whybox">${esc(plain)}</div>`;
+  }
+  if (rec.error) {
+    // The harness's own wording is kept verbatim - it is what the agent was
+    // told, and that is part of the record.
+    h += plain
+      ? `<details class="rawerr"><summary>what the harness told the agent</summary>
+         <div class="errbox">${esc(rec.error)}</div></details>`
+      : `<div class="errbox">${esc(rec.error)}</div>`;
+  }
 
   // Recovery is a property of the run log, not of this record, so read it
   // from events rather than inferring it.
@@ -562,7 +613,7 @@ function renderDetail(sel, verdictSel, rec, run) {
   h += `<dt>nDCG@5</dt><dd>${deltaSpan(rec['nDCG@5'], parent && parent['nDCG@5'], 6)}</dd>`;
   if (rec.primary_std != null) h += `<dt>seed &plusmn;</dt><dd>${fmt(rec.primary_std, 6)}</dd>`;
   if (rec.delta != null) h += `<dt>vs baseline</dt><dd>${rec.delta > 0 ? '+' : ''}${fmt(rec.delta, 5)}</dd>`;
-  h += `<dt>status</dt><dd>${esc(rec.status || '')}</dd>`;
+  h += `<dt>status</dt><dd>${esc(verdictLabel(rec.status))}</dd>`;
   if (rec.seconds != null) h += `<dt>run time</dt><dd>${Math.round(rec.seconds)}s</dd>`;
   if (rec.cost_usd != null) h += `<dt>cost</dt><dd>$${Number(rec.cost_usd).toFixed(3)}</dd>`;
   if (rec.tokens_in != null) h += `<dt>tokens</dt><dd>${rec.tokens_in} in / ${rec.tokens_out} out</dd>`;
@@ -733,7 +784,7 @@ function renderVerdicts(recs) {
   if (!box) return;
   box.innerHTML = recs.map(r =>
     `<i style="background:${VERDICT_COLOR[r.verdict] || 'var(--noise)'}"
-        title="#${r.iteration} ${esc(r.verdict || '')}"></i>`
+        title="#${r.iteration} ${esc(verdictLabel(r.verdict))}"></i>`
   ).join('');
 }
 
