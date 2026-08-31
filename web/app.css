@@ -155,11 +155,15 @@ select, input[type=text], input[type=number], input:not([type]) {
 .k-noop { background: var(--noop); } .k-screen { background: var(--screen); }
 
 /* tree svg */
-.edge { stroke: var(--line); fill: none; stroke-width: 1.5; }
+.edge { stroke: var(--line); fill: none; stroke-width: 1.5;
+        transition: stroke .3s ease, stroke-width .3s ease; }
 .edge.hot { stroke: var(--accent); stroke-width: 2.2; }
 .edge.recover { stroke: var(--kept); stroke-dasharray: 3 3; stroke-width: 2; }
 .node { cursor: pointer; }
-.node circle { stroke: var(--bg); stroke-width: 2; transition: r .18s ease; }
+.node circle { stroke: var(--bg); stroke-width: 2;
+               transition: r .2s cubic-bezier(.34,1.56,.64,1), fill .25s ease; }
+.ping { pointer-events: none; }
+.edges, .nodes { pointer-events: auto; }
 .node.cur circle { stroke: #fff; stroke-width: 2.5; }
 .node.best circle { filter: drop-shadow(0 0 7px var(--kept)); }
 .node text { font-family: var(--mono); font-size: 9px; fill: var(--fg-faint);
@@ -172,6 +176,11 @@ select, input[type=text], input[type=number], input:not([type]) {
 
 /* detail */
 .detail { padding: 13px 14px; overflow-y: auto; flex: 1; font-size: 13px; }
+.detail.swap { animation: swapin .34s ease; }
+@keyframes swapin {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: none; }
+}
 .detail .empty { color: var(--fg-faint); font-style: italic; }
 .hyp { color: var(--fg); margin: 0 0 12px; line-height: 1.55; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px;
