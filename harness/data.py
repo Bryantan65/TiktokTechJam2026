@@ -72,6 +72,40 @@ _CACHE_DIR = os.environ.get('HARNESS_CACHE_DIR') or os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.cache')
 
 
+# Fraction of the TRAINING split to keep, 1.0 for all of it. Never touches valid
+# or test: those are what the run is scored on and must stay whole.
+#
+# For 27k only. A full-data experiment there costs ~115 min - 26 min to load, 12
+# to encode, 77 to train - against a 6 h ceiling, so a run fits three
+# experiments and every result we have came from experiment 23 or later. The
+# training split is 139M rows against a model with ~2M parameters, roughly 70
+# rows per parameter, so most of it is redundant capacity rather than signal.
+#
+# Sampling is deterministic in the row index, not random per process, so every
+# seed and every solution in a run sees exactly the same subset - otherwise
+# experiments stop being comparable to each other, which is the one thing the
+# ledger depends on.
+#
+# It is a disclosed resource decision, not a free win: the baseline is measured
+# on full data, so an agent trained on a fraction starts behind it. Measure the
+# cost before trusting a run that uses this.
+TRAIN_FRACTION = float(os.environ.get('HARNESS_TRAIN_FRACTION', 1.0))
+
+
+def _subsample_train(splits):
+    """Keep every Nth training row. Deterministic, and valid/test untouched."""
+    f = TRAIN_FRACTION
+    if not (0.0 < f < 1.0):
+        return splits
+    step = max(2, int(round(1.0 / f)))
+    tr = splits.get('train') or []
+    splits['train'] = tr[::step]
+    print('data.py: HARNESS_TRAIN_FRACTION=%.4f - training split %d -> %d rows '
+          '(every %dth); valid and test untouched'
+          % (f, len(tr), len(splits['train']), step))
+    return splits
+
+
 def _cache_path(name):
     return os.path.join(_CACHE_DIR, '%s_v%d.pkl' % (name, _SCHEMA))
 
@@ -285,7 +319,7 @@ def load(data_dir, only=None):
     path = _cache_path('load_%s' % tag)
     hit = _cache_get(path, newer_than=_sources(data_dir))
     if hit is not None:
-        return hit
+        return _subsample_train(hit)
     out = _load_uncached(data_dir, only=only)
     _cache_put(path, out)
-    return out
+    return _subsample_train(out)

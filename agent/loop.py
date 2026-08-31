@@ -21,7 +21,8 @@ sys.path.insert(0, os.path.join(ROOT, 'harness'))
 import ledger  # noqa: E402
 
 from agent.tools import TOOL_SCHEMAS, TOOL_DISPATCH, do_web_search  # noqa: E402
-from agent.prompt import system_prompt, build_user_message  # noqa: E402
+from agent.prompt import (system_prompt, build_user_message,  # noqa: E402
+                          prompt_identity)
 
 MAX_TOOL_ROUNDS = 20
 
@@ -507,7 +508,8 @@ def run_loop(supervised: bool = False, max_iter: int = 100,
                      max_wall_seconds=MAX_WALL_SECONDS,
                      max_cost_usd=MAX_COST_USD, supervised=supervised,
                      min_scored_before_convergence=ledger.MIN_SCORED_BEFORE_CONVERGENCE,
-                     ledger_rows_at_start=ledger.totals()['iterations'])
+                     ledger_rows_at_start=ledger.totals()['iterations'],
+                     dataset=dataset, **prompt_identity(dataset))
 
     stop_reason = 'max_iter reached'
     try:

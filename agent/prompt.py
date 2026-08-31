@@ -1,4 +1,6 @@
 """System prompt and per-iteration user message for the agent loop."""
+import hashlib
+import io
 import os
 import sys
 
@@ -463,15 +465,59 @@ for a bugfix or parameter tweak.
 """
 
 
+OVERRIDE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'prompt_override.txt')
+
+
+def raw_system_prompt():
+    """The shipped SYSTEM_PROMPT, or an operator override if one is on disk.
+
+    Returns (text, source). The web console writes prompt_override.txt instead
+    of editing this file, so a bad edit is a bad string and never a Python
+    syntax error. No file means the shipped prompt, which is the normal case
+    and the state every recorded run so far was made in.
+    """
+    if os.path.isfile(OVERRIDE_PATH):
+        with io.open(OVERRIDE_PATH, encoding='utf-8') as f:
+            return f.read(), 'override'
+    return SYSTEM_PROMPT, 'shipped'
+
+
 def system_prompt(dataset: str = 'pure') -> str:
     cfg = _DATASET_CONFIG.get(dataset, _DATASET_CONFIG['pure'])
-    return SYSTEM_PROMPT.format(
-        ds_name=cfg['name'],
-        baseline=cfg['baseline'],
-        target=cfg['target'],
-        suffix=cfg['suffix'],
-        data_rel=cfg['data_rel'],
-    )
+    text, source = raw_system_prompt()
+    try:
+        return text.format(
+            ds_name=cfg['name'],
+            baseline=cfg['baseline'],
+            target=cfg['target'],
+            suffix=cfg['suffix'],
+            data_rel=cfg['data_rel'],
+        )
+    except (KeyError, IndexError, ValueError) as e:
+        if source == 'override':
+            raise RuntimeError(
+                'agent/prompt_override.txt is not a usable prompt template: '
+                '%s. Literal { and } must be doubled ({{ and }}); the only '
+                'single-brace names allowed are ds_name, baseline, target, '
+                'suffix and data_rel. Fix it or delete the file to fall back '
+                'to the shipped prompt.' % e) from e
+        raise
+
+
+def prompt_identity(dataset: str = 'pure') -> dict:
+    """What prompt this run is actually using, for the run record.
+
+    A run made with an edited prompt has to be self-identifying, or the log is
+    no longer evidence about the agent we shipped.
+    """
+    text, source = raw_system_prompt()
+    return {
+        'prompt_source': source,
+        'prompt_hash': hashlib.sha256(
+            text.encode('utf-8')).hexdigest()[:12],
+        'prompt_chars': len(text),
+    }
 
 
 def _ledger_table() -> str:
