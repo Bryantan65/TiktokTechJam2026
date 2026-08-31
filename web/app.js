@@ -137,7 +137,11 @@ function substantive(r) {
 
 function renderRuns() {
   const only = $('#filter-real').checked;
-  const list = state.runs.filter(r => !only || substantive(r));
+  const ds = ($$('.dspill.active')[0] || {}).dataset || {};
+  const dsFilter = ds.ds || 'all';
+  const list = state.runs.filter(r =>
+    (!only || substantive(r)) && (dsFilter === 'all' || r.dataset === dsFilter)
+    && !r.name.startsWith('shakedown'));
   $('#runs').innerHTML = list.map(r => {
     // A run that scored above 0.9 did not out-model anyone: it recovered the
     // label. Flagging it in the list is the honest way to keep it visible.
@@ -159,6 +163,10 @@ function renderRuns() {
     el.addEventListener('click', () => selectRun(el.dataset.id)));
 }
 $('#filter-real').addEventListener('change', renderRuns);
+$$('.dspill').forEach(b => b.addEventListener('click', () => {
+  $$('.dspill').forEach(x => x.classList.toggle('active', x === b));
+  renderRuns();
+}));
 
 /* --------------------------------------------------------------- replay */
 async function selectRun(id) {
@@ -406,11 +414,18 @@ function drawTree(svgSel, recs, cursor, opts) {
   if (!recs.length) { svg.innerHTML = ''; svg._key = null; return; }
   const L = layout(recs, opts.dataset || 'pure');
   const { pos, byIter } = L;
-  const { COLW, PADX, PADY, PLOTH } = TREE_GEOM;
+  const { COLW: COLW_MIN, PADX, PADY, PLOTH } = TREE_GEOM;
   // Enough vertical room that unique ranks do not collide at r=5, but capped so
   // a long run does not turn the pane into a scroll shaft.
   const plotH = Math.max(150, Math.min(PLOTH, L.nRanked * 14));
-  const W = PADX * 2 + Math.max(1, L.nIters - 1) * COLW + 20;
+  // Fill the container for short runs; scroll for long ones.
+  const containerW = svg.parentElement.clientWidth || 480;
+  const nSpans = Math.max(1, L.nIters - 1);
+  const naturalW = PADX * 2 + nSpans * COLW_MIN + 20;
+  const COLW = naturalW < containerW
+    ? (containerW - PADX * 2 - 20) / nSpans
+    : COLW_MIN;
+  const W = PADX * 2 + nSpans * COLW + 20;
   const H = PADY * 2 + plotH;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('height', H);
@@ -418,7 +433,33 @@ function drawTree(svgSel, recs, cursor, opts) {
   const X = it => PADX + pos.get(it).ix * COLW;
   const Y = it => PADY + (1 - pos.get(it).y) * plotH;
 
-  const key = (opts.key || '') + '|' + recs.length;
+  // Tooltip for the tree pane — anchored to .treepane (non-scrolling) so it
+  // stays visible when .treewrap scrolls.
+  const treePane = svg.closest('.treepane') || svg.parentElement;
+  if (!treePane._tip) {
+    const t = document.createElement('div');
+    t.className = 'chart-tip';
+    treePane.style.position = 'relative';
+    treePane.appendChild(t);
+    treePane._tip = t;
+    treePane._showTip = function(evt, text) {
+      t.textContent = text;
+      t.classList.add('show');
+      const wr = treePane.getBoundingClientRect();
+      let tx = evt.clientX - wr.left + 10;
+      let ty = evt.clientY - wr.top - 28;
+      if (tx + t.offsetWidth > wr.width - 4) tx = evt.clientX - wr.left - t.offsetWidth - 10;
+      if (ty < 0) ty = evt.clientY - wr.top + 12;
+      t.style.left = tx + 'px';
+      t.style.top = ty + 'px';
+    };
+    treePane._hideTip = function() { t.classList.remove('show'); };
+  }
+  treePane._tip.classList.remove('show');
+  const treeShowTip = treePane._showTip;
+  const treeHideTip = treePane._hideTip;
+
+  const key = (opts.key || '') + '|' + recs.length + '|' + Math.round(COLW);
   const reg = treeState(svg, key);
   if (svg._fresh) {
     const g = el('g', { class: 'axis' }, svg);
@@ -435,9 +476,15 @@ function drawTree(svgSel, recs, cursor, opts) {
     }
     if (L.baselineY != null) {
       const by = PADY + (1 - L.baselineY) * plotH;
+      const baseVal = BASELINE[opts.dataset || 'pure'];
       el('line', { x1: PADX - 14, x2: W - 8, y1: by, y2: by, class: 'baseline' }, g);
+      const bHit = el('line', { x1: PADX - 14, x2: W - 8, y1: by, y2: by, class: 'baseline-hit' }, g);
+      const bLabel = 'FM baseline: ' + (baseVal != null ? baseVal.toFixed(4) : '?');
+      bHit.addEventListener('mouseenter', e => treeShowTip(e, bLabel));
+      bHit.addEventListener('mousemove', e => treeShowTip(e, bLabel));
+      bHit.addEventListener('mouseleave', treeHideTip);
       el('text', { x: W - 8, y: by - 4, class: 'axlabel', 'text-anchor': 'end' }, g)
-        .textContent = 'FM baseline';
+        .textContent = 'FM baseline' + (baseVal != null ? ' ' + baseVal.toFixed(4) : '');
     }
   }
   const animate = !!opts.animate && !svg._fresh;
@@ -499,8 +546,10 @@ function drawTree(svgSel, recs, cursor, opts) {
     g.addEventListener('click', () => { if (opts.onclick) opts.onclick(it); });
     // Hovering a node lights the whole line of descent behind it, which is the
     // question the tree exists to answer: where did this come from?
-    g.addEventListener('mouseenter', () => markLineage(svg, reg, byIter, it));
-    g.addEventListener('mouseleave', () => clearLineage(svg));
+    const nodeLabel = `#${it}  ${verdictLabel(r.verdict)}  ${fmt(r.valid_primary, 5)}`;
+    g.addEventListener('mouseenter', e => { markLineage(svg, reg, byIter, it); treeShowTip(e, nodeLabel); });
+    g.addEventListener('mousemove', e => treeShowTip(e, nodeLabel));
+    g.addEventListener('mouseleave', () => { clearLineage(svg); treeHideTip(); });
     g._shape = shape;
     g._colour = colour;
     reg.nodes.set(it, g);
@@ -591,8 +640,36 @@ function drawChart(svgSel, recs, cursor, dataset, animate) {
     el('line', { x1: L, x2: W - R, y1: py(v), y2: py(v), class: 'gridline' }, svg);
     el('text', { x: 4, y: py(v) + 3, class: 'axlabel' }, svg).textContent = v.toFixed(4);
   });
+  // Tooltip element: one per chartwrap, reused across redraws
+  const wrap = svg.parentElement;
+  let tip = wrap.querySelector('.chart-tip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.className = 'chart-tip';
+    wrap.appendChild(tip);
+  }
+  tip.classList.remove('show');
+
+  function showTip(evt, text) {
+    tip.textContent = text;
+    tip.classList.add('show');
+    const wr = wrap.getBoundingClientRect();
+    let tx = evt.clientX - wr.left + 10;
+    let ty = evt.clientY - wr.top - 28;
+    if (tx + tip.offsetWidth > wr.width - 4) tx = evt.clientX - wr.left - tip.offsetWidth - 10;
+    if (ty < 0) ty = evt.clientY - wr.top + 12;
+    tip.style.left = tx + 'px';
+    tip.style.top = ty + 'px';
+  }
+  function hideTip() { tip.classList.remove('show'); }
+
   if (base) {
     el('line', { x1: L, x2: W - R, y1: py(base), y2: py(base), class: 'baseline' }, svg);
+    // invisible wide hit area for hover
+    const hit = el('line', { x1: L, x2: W - R, y1: py(base), y2: py(base), class: 'baseline-hit' }, svg);
+    hit.addEventListener('mouseenter', e => showTip(e, 'FM baseline: ' + base.toFixed(4)));
+    hit.addEventListener('mousemove', e => showTip(e, 'FM baseline: ' + base.toFixed(4)));
+    hit.addEventListener('mouseleave', hideTip);
     el('text', { x: W - R - 2, y: py(base) - 4, class: 'axlabel', 'text-anchor': 'end' },
       svg).textContent = 'FM baseline';
   }
@@ -626,10 +703,20 @@ function drawChart(svgSel, recs, cursor, dataset, animate) {
     el('path', { d: dd, class: 'spark', stroke: 'var(--kept)', 'stroke-dasharray': '3 2', 'stroke-width': 1.2 }, svg);
     shown.forEach(r => {
       const rad = r.iteration === cursor ? 3.6 : 2;
+      const colour = VERDICT_COLOR[r.verdict] || 'var(--noise)';
       const dot = el('circle', {
         cx: px(r.iteration), cy: py(r.valid_primary), r: rad,
-        fill: VERDICT_COLOR[r.verdict] || 'var(--noise)'
+        fill: colour, class: 'chart-dot'
       }, svg);
+      // invisible wider hit area so small dots are easy to hover
+      const hitDot = el('circle', {
+        cx: px(r.iteration), cy: py(r.valid_primary), r: 8,
+        fill: 'transparent', class: 'chart-dot'
+      }, svg);
+      const label = `#${r.iteration}  ${verdictLabel(r.verdict)}  ${fmt(r.valid_primary, 6)}`;
+      hitDot.addEventListener('mouseenter', e => showTip(e, label));
+      hitDot.addEventListener('mousemove', e => showTip(e, label));
+      hitDot.addEventListener('mouseleave', hideTip);
       if (animate && r.iteration === cursor) {
         dot.animate([{ r: 0 }, { r: rad * 1.8 }, { r: rad }], {
           duration: 420, delay: 120,
@@ -1064,7 +1151,7 @@ $('#btn-reset').addEventListener('click', () => { stopPlay(); setCursor(0, false
 $('#btn-play').addEventListener('click', () => {
   if (state.timer) return stopPlay();
   if (state.cursor >= state.run.iterations.length) setCursor(0, false);
-  $('#btn-play').textContent = 'Pause';
+  $('#btn-play').classList.add('playing');
   const tick = () => {
     if (state.cursor >= state.run.iterations.length) return stopPlay();
     setCursor(state.cursor + 1, true);
@@ -1075,7 +1162,7 @@ $('#btn-play').addEventListener('click', () => {
 function stopPlay() {
   if (state.timer) clearTimeout(state.timer);
   state.timer = null;
-  $('#btn-play').textContent = 'Play';
+  $('#btn-play').classList.remove('playing');
 }
 
 /* --------------------------------------------------------- prompt editor */
