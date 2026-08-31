@@ -97,9 +97,18 @@ supply — deep per-user history — was tested at 27k's own depth using 1k
 ## Reproducing
 
 ```
-PYTHONPATH=harness;kuairand-starter-kit \
-  python kuairand-starter-kit/baseline.py \
-    --data_dir rec_datasets/KuaiRand-1K/data --model fm --seed 0
+python harness/run_kit_baseline.py \
+  --data_dir rec_datasets/KuaiRand-1K/data --model fm --seed 0
 ```
+
+**Why not just set PYTHONPATH.** The obvious command -
+`PYTHONPATH=harness;kuairand-starter-kit python kuairand-starter-kit/baseline.py`
+- cannot work on a non-Pure variant, and this file used to recommend it.
+Python puts the *script's own directory* at `sys.path[0]`, ahead of everything
+on PYTHONPATH, so running a script that lives inside `kuairand-starter-kit/`
+guarantees the kit's Pure-hardcoded `data.py` wins. `run_kit_baseline.py`
+imports `harness/data.py` as `data` first, so the kit's `from data import
+load` finds it already in `sys.modules` and never searches the path. The kit
+itself is not modified.
 
 Roughly 10 minutes per epoch on this machine (5,055,984 training rows, CPU).
