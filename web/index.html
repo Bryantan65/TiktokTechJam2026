@@ -31,6 +31,11 @@
   <aside class="runlist">
     <div class="runlist-head">
       <h2>Recorded runs</h2>
+      <div class="ds-pills" id="ds-pills">
+        <button class="dspill active" data-ds="all">All</button>
+        <button class="dspill" data-ds="pure">Pure</button>
+        <button class="dspill" data-ds="1k">1k</button>
+      </div>
       <div class="filters">
         <label><input type="checkbox" id="filter-real" checked> substantive only</label>
       </div>
@@ -48,9 +53,16 @@
         <div class="meta" id="run-meta"></div>
       </div>
       <div class="transport">
-        <button id="btn-play" class="primary" disabled>Play</button>
-        <button id="btn-step" disabled>Step</button>
-        <button id="btn-reset" disabled>Reset</button>
+        <button id="btn-play" class="primary icon" disabled title="Play / Pause">
+          <svg class="ico ico-play" viewBox="0 0 16 16"><polygon points="3,1 13,8 3,15"/></svg>
+          <svg class="ico ico-pause" viewBox="0 0 16 16"><rect x="2" y="1" width="4" height="14"/><rect x="10" y="1" width="4" height="14"/></svg>
+        </button>
+        <button id="btn-step" class="icon" disabled title="Step forward">
+          <svg class="ico" viewBox="0 0 16 16"><polygon points="1,1 10,8 1,15"/><rect x="12" y="1" width="3" height="14"/></svg>
+        </button>
+        <button id="btn-reset" class="icon" disabled title="Reset to start">
+          <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 6.5A5.5 5.5 0 0 0 3 5.5"/><polyline points="3 2 3 6 7 6"/><path d="M2.5 9.5A5.5 5.5 0 0 0 13 10.5"/><polyline points="13 14 13 10 9 10"/></svg>
+        </button>
         <select id="speed">
           <option value="900" selected>1&times;</option>
           <option value="450">2&times;</option>

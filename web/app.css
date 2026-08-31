@@ -88,6 +88,15 @@ code { font-family: var(--mono); font-size: 0.9em; color: var(--accent);
 }
 .runlist-head { padding: 14px 14px 8px; position: sticky; top: 0;
                 background: var(--panel); border-bottom: 1px solid var(--line-soft); }
+.ds-pills { display: flex; gap: 2px; margin-top: 10px; }
+.dspill {
+  flex: 1; padding: 4px 0; border-radius: 5px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer;
+  background: none; border: 1px solid var(--line); color: var(--fg-faint);
+}
+.dspill:hover { color: var(--fg); border-color: var(--fg-faint); }
+.dspill.active { color: var(--accent); border-color: var(--accent);
+                 background: rgba(88,176,255,.08); }
 .filters { margin-top: 8px; font-size: 12px; color: var(--fg-faint); }
 .filters label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .runitem {
@@ -128,6 +137,11 @@ button.primary:hover:not(:disabled) { background: #74bcff; border-color: #74bcff
 button.danger { background: rgba(239,95,107,.12); border-color: rgba(239,95,107,.45);
                 color: var(--failed); }
 button.ghost { background: none; }
+button.icon { padding: 6px 10px; line-height: 0; }
+button.icon .ico { width: 14px; height: 14px; fill: currentColor; vertical-align: middle; }
+button.icon .ico-pause { display: none; }
+button.icon.playing .ico-play { display: none; }
+button.icon.playing .ico-pause { display: inline; }
 button.big { padding: 10px 22px; font-size: 14px; }
 select, input[type=text], input[type=number], input:not([type]) {
   background: var(--bg); border: 1px solid var(--line); color: var(--fg);
@@ -323,8 +337,8 @@ body::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
 @keyframes tickin { from { opacity: 0; transform: scaleX(.2); }
                     to { opacity: 1; transform: none; } }
 
-.treewrap { flex: 1; min-height: 150px; overflow: auto; }
-.chartwrap { height: 118px; flex-shrink: 0; }
+.treewrap { flex: 1; min-height: 150px; overflow: auto; position: relative; }
+.chartwrap { height: 118px; flex-shrink: 0; position: relative; }
 #tree, #live-tree, #chart, #live-chart { display: block; width: 100%; }
 .legend { display: flex; gap: 9px; align-items: center; text-transform: none;
           letter-spacing: 0; font-size: 11px; }
@@ -394,6 +408,18 @@ body::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
    cannot be misread as a result. */
 .node.unranked circle { stroke-width: 1.6; stroke-dasharray: 2.5 2; }
 .baseline { stroke: var(--worse); stroke-dasharray: 4 3; stroke-width: 1.2; }
+.baseline-hit { stroke: transparent; stroke-width: 14; cursor: default; pointer-events: stroke; }
+.chart-tip {
+  position: absolute; pointer-events: none; z-index: 10;
+  background: var(--panel-2); border: 1px solid var(--line);
+  color: var(--fg); font-size: 11px; font-family: var(--mono);
+  padding: 3px 7px; border-radius: 4px; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  opacity: 0; transition: opacity .12s;
+}
+.chart-tip.show { opacity: 1; }
+.chart-dot { cursor: default; }
+.chart-dot:hover { r: 5; }
 .axlabel { font-family: var(--mono); font-size: 9px; fill: var(--fg-faint); }
 .spark { fill: none; stroke-width: 1.8; }
 
