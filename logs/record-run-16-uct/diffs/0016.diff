@@ -1,0 +1,295 @@
+# iteration 16  (parent: 14)
+# hypothesis: improve 14: node 014's stacker may overfit because it trained on in-sample TRAIN member predictions; train LambdaRank on a chronological TRAIN-only holdout predicted by early-window members, then apply it at 25% to node-12 target predictions.
+# result: GAUC 0.671148 | nDCG@5 0.53788 | primary 0.604514 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/014_lgbm_stacked_ranker.py
++++ logs/record-run-16-uct/solutions/016_oof_lgbm_stack.py
+@@ -1,9 +1,10 @@
+-"""Stacked LambdaMART fusion over cached BPR/soft-hard FM member predictions.
+-
+-Parent 012 hand-blended six cached member predictions with per-user score and
+-rank normalisation.  This variant keeps those unchanged members, trains a small
+-LightGBM LambdaRank combiner on TRAIN labels using only member-derived score/rank
+-features, and blends that learned combiner 30% with the parent 012 score.
++"""OOF-ish LambdaMART stacking over the cached node-012 ensemble.
++
++Node 014 trained the LightGBM combiner on in-sample TRAIN predictions from the
++same FM members, which can teach the stacker artefacts of memorisation.  This
++variant trains the combiner on a chronological holdout from TRAIN: base FM
++members are fit on earlier train rows and predict the last train dates, then the
++learned combiner is applied to the full-train members used by node 012.
+ """
+ import argparse
+ import os
+@@ -56,10 +57,10 @@
+     for u, pos in by_user_pos.items():
+         neg = by_user_neg.get(u)
+         if neg:
+-            neg_arr = np.asarray(neg, dtype=np.int64)
++            arr = np.asarray(neg, dtype=np.int64)
+             for p in pos:
+                 pos_all.append(p)
+-                neg_pools.append(neg_arr)
++                neg_pools.append(arr)
+     return np.asarray(pos_all, dtype=np.int64), neg_pools
+ 
+ 
+@@ -82,8 +83,7 @@
+     Xva, yva, uva = enc['valid']
+     pos_idx, neg_pools = make_user_pairs(ytr, utr)
+     if len(pos_idx) == 0:
+-        raise RuntimeError('no within-user positive/negative pairs in train split')
+-
++        raise RuntimeError('no same-user pos/neg pairs')
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}],
+@@ -92,13 +92,10 @@
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+     name = 'soft_hard' if soft_hard else 'bpr1'
+-
+     for ep in range(1, epochs + 1):
+         neg_idx = sample_negatives(neg_pools, rng, n_neg)
+         order = rng.permutation(len(pos_idx))
+-        t0 = time.time()
+-        model.train()
+-        losses = []
++        model.train(); losses = []; t0 = time.time()
+         for i in range(0, len(order), bs):
+             sel = order[i:i + bs]
+             xp = Xtr_t[torch.from_numpy(pos_idx[sel])].to(device)
+@@ -114,14 +111,10 @@
+                 xn = Xtr_t[torch.from_numpy(neg_idx[sel])].to(device)
+                 sn = model(xn)
+                 loss = torch.nn.functional.softplus(-(sp - sn)).mean()
+-            loss.backward()
+-            opt.step()
+-            losses.append(loss.item())
+-
++            loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {name} seed {seed} epoch {ep:2d} | loss {np.mean(losses):.4f} | "
+-                  f"valid primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
++            print(f'{name} seed {seed} ep {ep} loss {np.mean(losses):.4f} valid {va["primary"]:.4f} {time.time()-t0:.1f}s')
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {kk: vv.detach().clone() for kk, vv in model.state_dict().items()}
+@@ -134,16 +127,16 @@
+     return model.predict(Xtar, device=device).astype(np.float64)
+ 
+ 
+-def get_member_preds(member_name, enc, dim, target, cache_split_name, seed, device, verbose):
++def get_member_preds(member_name, enc, dim, target, cache_split_name, seed, device, verbose, prefix='010'):
+     os.makedirs('pred_cache', exist_ok=True)
+-    cache_path = os.path.join('pred_cache', f'010_{member_name}_seed{seed}_{cache_split_name}.npy')
++    cache_path = os.path.join('pred_cache', f'{prefix}_{member_name}_seed{seed}_{cache_split_name}.npy')
+     want_len = len(enc[target][0])
+     if os.path.isfile(cache_path):
+         try:
+             p = np.load(cache_path)
+             if len(p) == want_len:
+                 if verbose:
+-                    print(f'loaded {member_name} seed {seed} from {cache_path}')
++                    print('loaded', cache_path)
+                 return p.astype(np.float64)
+         except Exception:
+             pass
+@@ -152,8 +145,7 @@
+                              soft_hard=False, device=device, verbose=verbose)
+     elif member_name == 'soft5_tau1':
+         p = train_bpr_member(enc, dim, target, seed=seed, n_neg=5,
+-                             soft_hard=True, tau=1.0, device=device,
+-                             verbose=verbose)
++                             soft_hard=True, tau=1.0, device=device, verbose=verbose)
+     else:
+         raise ValueError(member_name)
+     np.save(cache_path, p)
+@@ -170,26 +162,19 @@
+ def per_user_z(pred, groups):
+     out = np.empty_like(pred, dtype=np.float64)
+     for idx in groups:
+-        vals = pred[idx]
+-        sd = vals.std()
+-        if sd > 1e-12:
+-            out[idx] = (vals - vals.mean()) / sd
+-        else:
+-            out[idx] = 0.0
++        vals = pred[idx]; sd = vals.std()
++        out[idx] = (vals - vals.mean()) / sd if sd > 1e-12 else 0.0
+     return out
+ 
+ 
+ def per_user_rank_percentile(pred, groups):
+     out = np.empty_like(pred, dtype=np.float64)
+     for idx in groups:
+-        vals = pred[idx]
+-        n = len(idx)
++        vals = pred[idx]; n = len(idx)
+         if n <= 1:
+-            out[idx] = 0.0
+-            continue
++            out[idx] = 0.0; continue
+         order = np.argsort(vals, kind='mergesort')
+-        ranks = np.empty(n, dtype=np.float64)
+-        ranks[order] = np.arange(n, dtype=np.float64)
++        ranks = np.empty(n, dtype=np.float64); ranks[order] = np.arange(n, dtype=np.float64)
+         out[idx] = ranks / (n - 1.0)
+     return out
+ 
+@@ -207,29 +192,35 @@
+     score_rank_raw = 0.60 * mean_r_bpr + 0.40 * mean_r_soft
+     score_rank = per_user_z(score_rank_raw, groups)
+     parent_score = 0.70 * score_z + 0.30 * score_rank
+-
++    disagreement = np.abs(mean_z_bpr - mean_z_soft)
++    rank_disagreement = np.abs(mean_r_bpr - mean_r_soft)
+     cols = []
+-    cols.extend(z_bpr)
+-    cols.extend(z_soft)
+-    cols.extend(r_bpr)
+-    cols.extend(r_soft)
++    cols.extend(z_bpr); cols.extend(z_soft); cols.extend(r_bpr); cols.extend(r_soft)
+     cols.extend([mean_z_bpr, mean_z_soft, mean_r_bpr, mean_r_soft,
+-                 score_z, score_rank, parent_score])
+-    X = np.vstack(cols).T.astype(np.float32)
+-    return X, parent_score
++                 score_z, score_rank, parent_score, disagreement, rank_disagreement])
++    return np.vstack(cols).T.astype(np.float32), parent_score
+ 
+ 
+ def sorted_group_info(users):
+     users_arr = np.asarray(users).astype(str)
+     order = np.argsort(users_arr, kind='mergesort')
+-    sorted_users = users_arr[order]
+-    if len(sorted_users) == 0:
++    su = users_arr[order]
++    if len(su) == 0:
+         return order, []
+-    cuts = np.flatnonzero(sorted_users[1:] != sorted_users[:-1]) + 1
+-    starts = np.r_[0, cuts]
+-    ends = np.r_[cuts, len(sorted_users)]
+-    group = (ends - starts).astype(int).tolist()
+-    return order, group
++    cuts = np.flatnonzero(su[1:] != su[:-1]) + 1
++    starts = np.r_[0, cuts]; ends = np.r_[cuts, len(su)]
++    return order, (ends - starts).astype(int).tolist()
++
++
++def chronological_train_holdout(train_rows, holdout_days=3):
++    dates = sorted(set(int(r[0]) for r in train_rows))
++    if len(dates) <= holdout_days:
++        cut_dates = set(dates[-1:])
++    else:
++        cut_dates = set(dates[-holdout_days:])
++    early = [r for r in train_rows if int(r[0]) not in cut_dates]
++    hold = [r for r in train_rows if int(r[0]) in cut_dates]
++    return early, hold
+ 
+ 
+ if __name__ == '__main__':
+@@ -245,62 +236,66 @@
+     if a.split == 'dev':
+         from devdata import load as load_dev
+         splits = load_dev(a.data_dir)
+-        target = 'valid'
+-        target_cache = 'dev'
+-        train_cache = 'dev_train'
++        target = 'valid'; target_cache = 'dev'
+     else:
+         splits = load(a.data_dir)
+-        target = a.split
+-        target_cache = a.split
+-        train_cache = 'train'
++        target = a.split; target_cache = a.split
+     if a.out is None:
+         print({k: len(v) for k, v in splits.items()}, f'fields={FIELDS}')
+ 
+-    enc, dim = encode(splits)
+-    Xtr_enc, ytr, utr = enc['train']
+-    _, _, utar = enc[target]
+-    groups_tr = user_groups(utr)
++    # Full-train member predictions for the requested target: identical members to node 012.
++    enc_full, dim_full = encode(splits)
++    _, _, utar = enc_full[target]
+     groups_tar = user_groups(utar)
+-
+     bag_seeds = [0, 1, 2]
+-    tr_bpr, tr_soft, tar_bpr, tar_soft = [], [], [], []
++    tar_bpr, tar_soft = [], []
+     for s in bag_seeds:
+-        tr_bpr.append(get_member_preds('bpr1', enc, dim, 'train', train_cache, s,
+-                                       a.device, verbose=(a.out is None)))
+-        tr_soft.append(get_member_preds('soft5_tau1', enc, dim, 'train', train_cache, s,
+-                                        a.device, verbose=(a.out is None)))
+-        tar_bpr.append(get_member_preds('bpr1', enc, dim, target, target_cache, s,
+-                                        a.device, verbose=(a.out is None)))
+-        tar_soft.append(get_member_preds('soft5_tau1', enc, dim, target, target_cache, s,
+-                                         a.device, verbose=(a.out is None)))
+-
+-    X_meta_tr, parent_tr = build_features(tr_bpr, tr_soft, groups_tr)
++        tar_bpr.append(get_member_preds('bpr1', enc_full, dim_full, target, target_cache, s,
++                                        a.device, verbose=(a.out is None), prefix='010'))
++        tar_soft.append(get_member_preds('soft5_tau1', enc_full, dim_full, target, target_cache, s,
++                                         a.device, verbose=(a.out is None), prefix='010'))
+     X_meta_tar, parent_tar = build_features(tar_bpr, tar_soft, groups_tar)
+ 
+-    order, group = sorted_group_info(utr)
++    # Chronological OOF-ish meta training from TRAIN only.
++    early_rows, hold_rows = chronological_train_holdout(splits['train'], holdout_days=3)
++    meta_splits = {'train': early_rows, 'valid': hold_rows}
++    enc_meta, dim_meta = encode(meta_splits)
++    _, y_hold, u_hold = enc_meta['valid']
++    groups_hold = user_groups(u_hold)
++    hold_bpr, hold_soft = [], []
++    # Include split sizes in cache key to avoid stale reuse across dev/valid loaders.
++    meta_tag = f'oof{len(early_rows)}_{len(hold_rows)}'
++    for s in bag_seeds:
++        hold_bpr.append(get_member_preds('bpr1', enc_meta, dim_meta, 'valid', meta_tag, s,
++                                         a.device, verbose=(a.out is None), prefix='016'))
++        hold_soft.append(get_member_preds('soft5_tau1', enc_meta, dim_meta, 'valid', meta_tag, s,
++                                          a.device, verbose=(a.out is None), prefix='016'))
++    X_meta_hold, _ = build_features(hold_bpr, hold_soft, groups_hold)
++
++    order, group = sorted_group_info(u_hold)
+     ranker = lgb.LGBMRanker(
+         objective='lambdarank',
+         metric='ndcg',
+-        n_estimators=80,
+-        learning_rate=0.035,
+-        num_leaves=15,
+-        max_depth=4,
+-        min_child_samples=80,
+-        subsample=0.85,
+-        colsample_bytree=0.85,
+-        reg_alpha=0.1,
+-        reg_lambda=2.0,
+-        random_state=2027,
++        n_estimators=60,
++        learning_rate=0.04,
++        num_leaves=7,
++        max_depth=3,
++        min_child_samples=40,
++        subsample=0.90,
++        colsample_bytree=0.90,
++        reg_alpha=0.2,
++        reg_lambda=5.0,
++        random_state=2028,
+         n_jobs=2,
+         verbosity=-1,
+     )
+-    ranker.fit(X_meta_tr[order], ytr[order].astype(int), group=group)
++    ranker.fit(X_meta_hold[order], y_hold[order].astype(int), group=group)
+     meta_tar = ranker.predict(X_meta_tar).astype(np.float64)
+     meta_tar = per_user_z(meta_tar, groups_tar)
+ 
+-    # Keep most of the proven parent score, but make the learned combiner's
+-    # contribution large enough to test whether stacking adds a real signal.
+-    scores = 0.70 * parent_tar + 0.30 * meta_tar
++    # Still a readable stacker test (>=20%), but less than node 014 because the
++    # OOF holdout is smaller and noisier than the full TRAIN set.
++    scores = 0.75 * parent_tar + 0.25 * meta_tar
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

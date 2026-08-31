@@ -1,0 +1,195 @@
+# iteration 6  (parent: 5)
+# hypothesis: debug 5: robustly factorize every base and crossed categorical feature into dense non-negative codes instead of arithmetic-shifting IDs, eliminating negative-code crashes and overflow risk. This is still the LambdaMART/statistics mechanism, screened on dev after fixing preprocessing.
+# result: GAUC None | nDCG@5 None | primary None | verdict failed
+
+--- logs-1k/record-run-4/solutions/005_lgbm_lambdarank_nonneg.py
++++ logs-1k/record-run-4/solutions/006_lgbm_lambdarank_factorized.py
+@@ -1,9 +1,9 @@
+ """LightGBM LambdaMART ranker with train-only historical statistics.
+ 
+-Debug of node 4: encode() can emit -1 for missing/unseen categorical values, but
+-np.bincount and LightGBM categorical features require non-negative integer codes.
+-Shift all encoded fields by +1 before computing counts/crosses so missing becomes
+-category 0.
++Debug of node 5: shifting by +1 was not enough because some derived categorical
++codes could still become negative after dtype conversion.  Factorize every base
++field and cross field to dense non-negative int32 codes before bincount or
++LightGBM categorical handling.
+ """
+ import argparse
+ import os
+@@ -22,17 +22,83 @@
+     return np.asarray([float(r[5]) for r in rows], dtype=np.float32)
+ 
+ 
+-def shift_nonneg(X):
+-    X = X.astype(np.int64, copy=False)
+-    return X + 1  # encode() may use -1 for missing/unseen; make it category 0
+-
+-
+-def add_crosses(X, n_tab):
+-    X = shift_nonneg(X)
+-    vt = X[:, 1] * n_tab + X[:, 3]
+-    at = X[:, 2] * n_tab + X[:, 3]
+-    ut = X[:, 0] * n_tab + X[:, 3]
+-    return np.column_stack([X, vt, at, ut]).astype(np.int32, copy=False)
++def factorize_pair(a, b):
++    """Dense non-negative codes for a pair of integer arrays with same shape."""
++    a = a.astype(np.int64, copy=False)
++    b = b.astype(np.int64, copy=False)
++    # unique rows on an (N,2) array is robust and avoids overflow-prone products
++    pairs = np.empty((len(a), 2), dtype=np.int64)
++    pairs[:, 0] = a
++    pairs[:, 1] = b
++    _, inv = np.unique(pairs, axis=0, return_inverse=True)
++    return inv.astype(np.int32, copy=False)
++
++
++def factorize_three(train_col, valid_col, target_col=None):
++    if target_col is None:
++        allv = np.concatenate([train_col, valid_col]).astype(np.int64, copy=False)
++        ntr = len(train_col)
++        nva = len(valid_col)
++        _, inv = np.unique(allv, return_inverse=True)
++        return (inv[:ntr].astype(np.int32, copy=False),
++                inv[ntr:ntr + nva].astype(np.int32, copy=False),
++                None)
++    allv = np.concatenate([train_col, valid_col, target_col]).astype(np.int64, copy=False)
++    ntr = len(train_col)
++    nva = len(valid_col)
++    _, inv = np.unique(allv, return_inverse=True)
++    return (inv[:ntr].astype(np.int32, copy=False),
++            inv[ntr:ntr + nva].astype(np.int32, copy=False),
++            inv[ntr + nva:].astype(np.int32, copy=False))
++
++
++def make_cats(Xtr, Xva, Xt, target_is_valid):
++    Xtr = Xtr.astype(np.int64, copy=False)
++    Xva = Xva.astype(np.int64, copy=False)
++    Xt = Xt.astype(np.int64, copy=False)
++    tr_cols, va_cols, t_cols = [], [], []
++    for j in range(Xtr.shape[1]):
++        if target_is_valid:
++            a, b, _ = factorize_three(Xtr[:, j], Xva[:, j], None)
++            c = b
++        else:
++            a, b, c = factorize_three(Xtr[:, j], Xva[:, j], Xt[:, j])
++        tr_cols.append(a); va_cols.append(b); t_cols.append(c)
++
++    # Crosses are factorized as actual pairs, then factorized across splits again
++    # so codes are dense and aligned between train/valid/target.
++    for left, right in [(1, 3), (2, 3), (0, 3)]:  # video_tab, author_tab, user_tab
++        raw_tr = factorize_pair(Xtr[:, left], Xtr[:, right])
++        raw_va = factorize_pair(Xva[:, left], Xva[:, right])
++        raw_t = raw_va if target_is_valid else factorize_pair(Xt[:, left], Xt[:, right])
++        # factorize_pair was split-local; refactor raw encoded pair values globally by
++        # using the original columns to preserve alignment across splits.
++        if target_is_valid:
++            all_pairs = np.vstack([
++                np.column_stack([Xtr[:, left], Xtr[:, right]]),
++                np.column_stack([Xva[:, left], Xva[:, right]])
++            ])
++            ntr = len(Xtr); nva = len(Xva)
++            _, inv = np.unique(all_pairs, axis=0, return_inverse=True)
++            a = inv[:ntr].astype(np.int32, copy=False)
++            b = inv[ntr:ntr + nva].astype(np.int32, copy=False)
++            c = b
++        else:
++            all_pairs = np.vstack([
++                np.column_stack([Xtr[:, left], Xtr[:, right]]),
++                np.column_stack([Xva[:, left], Xva[:, right]]),
++                np.column_stack([Xt[:, left], Xt[:, right]])
++            ])
++            ntr = len(Xtr); nva = len(Xva)
++            _, inv = np.unique(all_pairs, axis=0, return_inverse=True)
++            a = inv[:ntr].astype(np.int32, copy=False)
++            b = inv[ntr:ntr + nva].astype(np.int32, copy=False)
++            c = inv[ntr + nva:].astype(np.int32, copy=False)
++        tr_cols.append(a); va_cols.append(b); t_cols.append(c)
++
++    return (np.column_stack(tr_cols).astype(np.int32, copy=False),
++            np.column_stack(va_cols).astype(np.int32, copy=False),
++            np.column_stack(t_cols).astype(np.int32, copy=False))
+ 
+ 
+ def stat_features(train_codes, train_y, codes, is_train, prior, m=50.0):
+@@ -61,30 +127,25 @@
+     Xva_base, yva, _ = enc['valid']
+     Xt_base, _, _ = enc[target]
+ 
+-    tabs = np.concatenate([shift_nonneg(Xtr_base)[:, 3], shift_nonneg(Xva_base)[:, 3], shift_nonneg(Xt_base)[:, 3]])
+-    n_tab = int(tabs.max(initial=0) + 1)
+-    Xtr_cat = add_crosses(Xtr_base, n_tab)
+-    Xva_cat = add_crosses(Xva_base, n_tab)
+-    Xt_cat = Xva_cat if target == 'valid' else add_crosses(Xt_base, n_tab)
++    target_is_valid = (target == 'valid')
++    Xtr_cat, Xva_cat, Xt_cat = make_cats(Xtr_base, Xva_base, Xt_base, target_is_valid)
+ 
+     prior = float(np.mean(ytr))
+-    stat_cols_tr = []
+-    stat_cols_va = []
+-    stat_cols_t = []
++    stat_cols_tr, stat_cols_va, stat_cols_t = [], [], []
+     for j in range(Xtr_cat.shape[1]):
+         mn, ct = stat_features(Xtr_cat[:, j], ytr, Xtr_cat[:, j], True, prior)
+         stat_cols_tr.extend([mn, ct])
+         mn, ct = stat_features(Xtr_cat[:, j], ytr, Xva_cat[:, j], False, prior)
+         stat_cols_va.extend([mn, ct])
+-        if target != 'valid':
++        if target_is_valid:
++            stat_cols_t = stat_cols_va
++        else:
+             mn, ct = stat_features(Xtr_cat[:, j], ytr, Xt_cat[:, j], False, prior)
+             stat_cols_t.extend([mn, ct])
+-    if target == 'valid':
+-        stat_cols_t = stat_cols_va
+ 
+     dtr = duration_array(splits['train'])
+     dva = duration_array(splits['valid'])
+-    dt = dva if target == 'valid' else duration_array(splits[target])
++    dt = dva if target_is_valid else duration_array(splits[target])
+ 
+     def finish(Xcat, stat_cols, dur):
+         dur = dur.astype(np.float32)
+@@ -94,7 +155,7 @@
+ 
+     Ftr = finish(Xtr_cat, stat_cols_tr, dtr)
+     Fva = finish(Xva_cat, stat_cols_va, dva)
+-    Ft = Fva if target == 'valid' else finish(Xt_cat, stat_cols_t, dt)
++    Ft = Fva if target_is_valid else finish(Xt_cat, stat_cols_t, dt)
+     return enc, Ftr, ytr.astype(np.int32), Fva, yva.astype(np.int32), Ft
+ 
+ 
+@@ -116,15 +177,14 @@
+     if verbose:
+         print(f"features train={Ftr_s.shape} valid={Fva_s.shape} target={Ft.shape} build {time.time()-t0:.1f}s")
+ 
+-    cat_idx = list(range(8))
+     ranker = lgb.LGBMRanker(
+         objective='lambdarank',
+         metric='ndcg',
+         eval_at=[5],
+         label_gain=[0, 1],
+         boosting_type='gbdt',
+-        n_estimators=350,
+-        learning_rate=0.05,
++        n_estimators=220,
++        learning_rate=0.06,
+         num_leaves=63,
+         max_depth=-1,
+         min_child_samples=200,
+@@ -138,11 +198,11 @@
+         verbose=-1,
+         force_col_wise=True,
+     )
+-    callbacks = [lgb.early_stopping(30, first_metric_only=True, verbose=verbose)]
+-    callbacks.append(lgb.log_evaluation(20 if verbose else 0))
++    callbacks = [lgb.early_stopping(25, first_metric_only=True, verbose=verbose),
++                 lgb.log_evaluation(20 if verbose else 0)]
+     ranker.fit(Ftr_s, ytr_s, group=gtr,
+                eval_set=[(Fva_s, yva_s)], eval_group=[gva], eval_at=[5],
+-               categorical_feature=cat_idx, callbacks=callbacks)
++               categorical_feature=list(range(8)), callbacks=callbacks)
+     if verbose:
+         print(f"best_iteration={ranker.best_iteration_} total {time.time()-t0:.1f}s")
+     return ranker.predict(Ft, num_iteration=ranker.best_iteration_)

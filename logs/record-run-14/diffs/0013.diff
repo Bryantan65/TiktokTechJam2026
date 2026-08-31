@@ -1,0 +1,144 @@
+# iteration 13  (parent: 10)
+# hypothesis: improve 10: node 10 stdout shows the BPR member alone peaked at 0.603036 before the BCE member blended it down; test the unchanged BPR member standalone with per-user z-normalisation, reusing the cached node-10 member when available.
+# result: GAUC 0.669261 | nDCG@5 0.536646 | primary 0.602954 | verdict noise
+
+--- logs/record-run-14/solutions/010_time_fm.py
++++ logs/record-run-14/solutions/013_time_bpr_only.py
+@@ -20,7 +20,6 @@
+         return ''
+     if isinstance(x, bytes):
+         x = x.decode('utf8')
+-    # normalise numpy scalars / floats that are really ints
+     try:
+         if isinstance(x, (float, np.floating)) and np.isfinite(x) and abs(x - int(x)) < 1e-6:
+             return str(int(x))
+@@ -30,7 +29,6 @@
+ 
+ 
+ def row_key(r):
+-    # (date, user_id, video_id, author_id, tab, duration_ms, label)
+     return (_s(r[0]), _s(r[1]), _s(r[2]), _s(r[3]), _s(r[4]), _s(r[5]))
+ 
+ 
+@@ -82,7 +80,6 @@
+ 
+ 
+ def read_time_aux(data_dir):
+-    """Return queues keyed by tuple identity.  Only non-label time/order columns are used."""
+     q = defaultdict(deque)
+     files = find_log_files(data_dir)
+     global_idx = 0
+@@ -107,7 +104,6 @@
+     total = max(1, global_idx)
+     for k, hour, gi, local in raw:
+         d = k[0]
+-        # coarse order buckets are time proxies, not feedback labels
+         gbin = min(19, int(20 * gi / total))
+         dbin = min(9, int(10 * local / max(1, totals_by_date.get(d, 1))))
+         q[k].append((hour, gbin, dbin))
+@@ -205,7 +201,7 @@
+     return np.asarray(pidx, dtype=np.int64), pools
+ 
+ 
+-def train_model(enc, dim, seed, mode='bpr', k=16, lr=0.001, l2=3e-6, epochs=40, bs=8192, patience=4, device='cpu'):
++def train_model(enc, dim, seed, k=16, lr=0.001, l2=3e-6, epochs=40, bs=8192, patience=4, device='cpu'):
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+@@ -215,44 +211,33 @@
+     ], lr=lr)
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     ytr_t = torch.from_numpy(ytr.astype(np.float32))
+-    rng = np.random.default_rng(seed + (17 if mode == 'bpr' else 0))
++    rng = np.random.default_rng(seed + 17)
++    bce_loss = torch.nn.BCEWithLogitsLoss()
++    pos_idx, neg_pools = build_pairs(ytr, utr)
++    n_steps = max(len(ytr), len(pos_idx))
+     best = -1.0; best_state = None; bad = 0
+-    bce_loss = torch.nn.BCEWithLogitsLoss()
+-    if mode == 'bpr':
+-        pos_idx, neg_pools = build_pairs(ytr, utr)
+-        n_steps = max(len(ytr), len(pos_idx))
+     for ep in range(1, epochs + 1):
+         model.train()
+-        if mode == 'bce':
+-            order = rng.permutation(len(ytr))
+-            for st in range(0, len(order), bs):
+-                sel = torch.from_numpy(order[st:st+bs])
+-                xb = Xtr_t[sel].to(device); yb = ytr_t[sel].to(device)
+-                opt.zero_grad(set_to_none=True)
+-                loss = bce_loss(model(xb), yb)
+-                loss.backward(); opt.step()
+-        else:
+-            order = rng.integers(0, len(pos_idx), size=n_steps, dtype=np.int64)
+-            for st in range(0, len(order), bs):
+-                which = order[st:st+bs]
+-                pp = pos_idx[which]
+-                nn = np.empty(len(which), dtype=np.int64)
+-                for j, w in enumerate(which):
+-                    pool = neg_pools[int(w)]
+-                    nn[j] = pool[rng.integers(0, len(pool))]
+-                both = np.concatenate([pp, nn])
+-                xb = Xtr_t[torch.from_numpy(both)].to(device)
+-                logits = model(xb)
+-                lp, ln = logits[:len(pp)], logits[len(pp):]
+-                loss = torch.nn.functional.softplus(-(lp - ln)).mean()
+-                # small pointwise term anchors first-order calibration while pairwise term drives ranking
+-                yb = ytr_t[torch.from_numpy(both)].to(device)
+-                loss = loss + 0.02 * bce_loss(logits, yb)
+-                opt.zero_grad(set_to_none=True)
+-                loss.backward(); opt.step()
++        order = rng.integers(0, len(pos_idx), size=n_steps, dtype=np.int64)
++        for st in range(0, len(order), bs):
++            which = order[st:st+bs]
++            pp = pos_idx[which]
++            nn = np.empty(len(which), dtype=np.int64)
++            for j, w in enumerate(which):
++                pool = neg_pools[int(w)]
++                nn[j] = pool[rng.integers(0, len(pool))]
++            both = np.concatenate([pp, nn])
++            xb = Xtr_t[torch.from_numpy(both)].to(device)
++            logits = model(xb)
++            lp, ln = logits[:len(pp)], logits[len(pp):]
++            loss = torch.nn.functional.softplus(-(lp - ln)).mean()
++            yb = ytr_t[torch.from_numpy(both)].to(device)
++            loss = loss + 0.02 * bce_loss(logits, yb)
++            opt.zero_grad(set_to_none=True)
++            loss.backward(); opt.step()
+         pred = model.predict(Xva, device=device)
+         m = evaluate(uva, yva, pred)['primary']
+-        print(f'{mode} epoch={ep} valid_primary={m:.6f}', flush=True)
++        print(f'bpr epoch={ep} valid_primary={m:.6f}', flush=True)
+         if m > best + 1e-5:
+             best = m; bad = 0
+             best_state = {kk: vv.detach().cpu().clone() for kk, vv in model.state_dict().items()}
+@@ -278,12 +263,13 @@
+     return out
+ 
+ 
+-def member_pred(name, enc, dim, target, seed, mode, split_name, device):
++def member_pred(enc, dim, target, seed, split_name, device):
+     os.makedirs('pred_cache', exist_ok=True)
+-    path = os.path.join('pred_cache', f'010_{name}_{split_name}_seed{seed}.npy')
++    # Reuse the unchanged node-10 BPR member exactly; if absent, train it from scratch.
++    path = os.path.join('pred_cache', f'010_time_bpr_v1_{split_name}_seed{seed}.npy')
+     if os.path.isfile(path):
+         return np.load(path)
+-    model = train_model(enc, dim, seed=seed, mode=mode, device=device)
++    model = train_model(enc, dim, seed=seed, device=device)
+     X, _, _ = enc[target]
+     p = model.predict(X, device=device).astype(np.float64)
+     np.save(path, p)
+@@ -309,10 +295,8 @@
+     t0 = time.time()
+     enc, dim = build_augmented(splits, a.data_dir)
+     _, _, users = enc[target]
+-    pbpr = member_pred('time_bpr_v1', enc, dim, target, a.seed, 'bpr', split_name, a.device)
+-    pbce = member_pred('time_bce_v1', enc, dim, target, a.seed, 'bce', split_name, a.device)
+-    # Use the pointwise model mainly for the top-of-list/tie calibration that nDCG@5 likes.
+-    scores = 0.70 * z_by_user(pbpr, users) + 0.30 * z_by_user(pbce, users)
++    pbpr = member_pred(enc, dim, target, a.seed, split_name, a.device)
++    scores = z_by_user(pbpr, users)
+     print(f'done in {time.time()-t0:.1f}s')
+     np.save(a.out, scores.astype(np.float64))
+ 

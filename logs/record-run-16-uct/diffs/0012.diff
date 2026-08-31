@@ -1,0 +1,121 @@
+# iteration 12  (parent: 11)
+# hypothesis: improve 11: the seed-bagged score average improved both metrics; add a 30% per-user rank-percentile fusion signal using the same cached members to emphasize top-of-list ordering for nDCG@5 without retraining.
+# result: GAUC 0.671269 | nDCG@5 0.537951 | primary 0.60461 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/011_seedbag_bpr_soft_ensemble.py
++++ logs/record-run-16-uct/solutions/012_seedbag_rankblend.py
+@@ -1,10 +1,10 @@
+-"""Seed-bagged version of the strongest BPR/soft-hard ensemble.
+-
+-This keeps the two member mechanisms from 010 unchanged, uses the same cache
+-namespace for their predictions, but at prediction time averages member
+-predictions from seeds 0, 1, and 2.  Each member prediction is normalized within
+-user before blending, and the final 2-member blend remains the readable 60/40
+-weight from node 10.
++"""Rank-aware fusion of the cached seed-bagged BPR/soft-hard FM members.
++
++Parent 011 averaged per-user z-scored logits from six unchanged member models
++(2 mechanisms x seeds 0/1/2).  This variant keeps member training identical and
++adds a per-user rank-percentile fusion signal, blended at 30%, to focus the
++ensemble on the top of each user's list for nDCG@5 while retaining most GAUC
++from score averaging.
+ """
+ import argparse
+ import os
+@@ -136,8 +136,6 @@
+ 
+ def get_member_preds(member_name, enc, dim, target, split_name, seed, device, verbose):
+     os.makedirs('pred_cache', exist_ok=True)
+-    # Reuse node-10 cache because the member training code and hyperparameters
+-    # are intentionally unchanged.
+     cache_path = os.path.join('pred_cache', f'010_{member_name}_seed{seed}_{split_name}.npy')
+     want_len = len(enc[target][0])
+     if os.path.isfile(cache_path):
+@@ -162,19 +160,38 @@
+     return p
+ 
+ 
+-def per_user_z(pred, users):
+-    out = np.empty_like(pred, dtype=np.float64)
++def user_groups(users):
+     groups = {}
+     for i, u in enumerate(users):
+         groups.setdefault(u, []).append(i)
+-    for idxs in groups.values():
+-        idx = np.asarray(idxs, dtype=np.int64)
++    return [np.asarray(v, dtype=np.int64) for v in groups.values()]
++
++
++def per_user_z(pred, groups):
++    out = np.empty_like(pred, dtype=np.float64)
++    for idx in groups:
+         vals = pred[idx]
+         sd = vals.std()
+         if sd > 1e-12:
+             out[idx] = (vals - vals.mean()) / sd
+         else:
+             out[idx] = 0.0
++    return out
++
++
++def per_user_rank_percentile(pred, groups):
++    """Within-user rank score in [0,1], higher is better."""
++    out = np.empty_like(pred, dtype=np.float64)
++    for idx in groups:
++        vals = pred[idx]
++        n = len(idx)
++        if n <= 1:
++            out[idx] = 0.0
++            continue
++        order = np.argsort(vals, kind='mergesort')  # ascending
++        ranks = np.empty(n, dtype=np.float64)
++        ranks[order] = np.arange(n, dtype=np.float64)
++        out[idx] = ranks / (n - 1.0)
+     return out
+ 
+ 
+@@ -187,8 +204,6 @@
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+ 
+-    # This solution intentionally bags fixed member seeds.  The harness seed is
+-    # accepted for contract compatibility but does not change the final bag.
+     torch.manual_seed(a.seed)
+     if a.split == 'dev':
+         from devdata import load as load_dev
+@@ -204,20 +219,24 @@
+ 
+     enc, dim = encode(splits)
+     _, _, users = enc[target]
++    groups = user_groups(users)
+ 
+     bag_seeds = [0, 1, 2]
+-    bpr_parts = []
+-    soft_parts = []
++    z_bpr, z_soft, r_bpr, r_soft = [], [], [], []
+     for s in bag_seeds:
+-        bpr_parts.append(per_user_z(get_member_preds('bpr1', enc, dim, target,
+-                                                     split_name, s, a.device,
+-                                                     verbose=(a.out is None)), users))
+-        soft_parts.append(per_user_z(get_member_preds('soft5_tau1', enc, dim, target,
+-                                                       split_name, s, a.device,
+-                                                       verbose=(a.out is None)), users))
+-    p_bpr = np.mean(bpr_parts, axis=0)
+-    p_soft = np.mean(soft_parts, axis=0)
+-    scores = 0.60 * p_bpr + 0.40 * p_soft
++        pb = get_member_preds('bpr1', enc, dim, target, split_name, s, a.device,
++                              verbose=(a.out is None))
++        ps = get_member_preds('soft5_tau1', enc, dim, target, split_name, s, a.device,
++                              verbose=(a.out is None))
++        z_bpr.append(per_user_z(pb, groups))
++        z_soft.append(per_user_z(ps, groups))
++        r_bpr.append(per_user_rank_percentile(pb, groups))
++        r_soft.append(per_user_rank_percentile(ps, groups))
++
++    score_z = 0.60 * np.mean(z_bpr, axis=0) + 0.40 * np.mean(z_soft, axis=0)
++    score_rank = 0.60 * np.mean(r_bpr, axis=0) + 0.40 * np.mean(r_soft, axis=0)
++    score_rank = per_user_z(score_rank, groups)
++    scores = 0.70 * score_z + 0.30 * score_rank
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

@@ -1,0 +1,186 @@
+# iteration 14  (parent: 13)
+# hypothesis: improve 13: RRF showed hand-crafted rank fusion is sensitive; train a small LightGBM LambdaRank stacker on cached member score/rank features and blend it at 30% with node-12's proven rank-percentile score, so the new combiner has readable weight without retraining members.
+# result: GAUC 0.670704 | nDCG@5 0.537504 | primary 0.604104 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/013_rrf_fusion.py
++++ logs/record-run-16-uct/solutions/014_lgbm_stacked_ranker.py
+@@ -1,9 +1,9 @@
+-"""RRF-style fusion of cached seed-bagged BPR/soft-hard FM members.
+-
+-Parent 012 added 30% linear rank-percentile fusion to the six unchanged member
+-predictions. This variant keeps the same members and score-z component, but
+-replaces the linear rank signal with per-user reciprocal-rank fusion, which
+-puts more contrast into the very top positions that matter for nDCG@5.
++"""Stacked LambdaMART fusion over cached BPR/soft-hard FM member predictions.
++
++Parent 012 hand-blended six cached member predictions with per-user score and
++rank normalisation.  This variant keeps those unchanged members, trains a small
++LightGBM LambdaRank combiner on TRAIN labels using only member-derived score/rank
++features, and blends that learned combiner 30% with the parent 012 score.
+ """
+ import argparse
+ import os
+@@ -12,6 +12,7 @@
+ 
+ import numpy as np
+ import torch
++import lightgbm as lgb
+ 
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 '..', 'kuairand-starter-kit'))
+@@ -133,9 +134,9 @@
+     return model.predict(Xtar, device=device).astype(np.float64)
+ 
+ 
+-def get_member_preds(member_name, enc, dim, target, split_name, seed, device, verbose):
++def get_member_preds(member_name, enc, dim, target, cache_split_name, seed, device, verbose):
+     os.makedirs('pred_cache', exist_ok=True)
+-    cache_path = os.path.join('pred_cache', f'010_{member_name}_seed{seed}_{split_name}.npy')
++    cache_path = os.path.join('pred_cache', f'010_{member_name}_seed{seed}_{cache_split_name}.npy')
+     want_len = len(enc[target][0])
+     if os.path.isfile(cache_path):
+         try:
+@@ -178,8 +179,7 @@
+     return out
+ 
+ 
+-def per_user_rrf(pred, groups, c=10.0):
+-    """Reciprocal rank score per user; higher model score gets rank 1."""
++def per_user_rank_percentile(pred, groups):
+     out = np.empty_like(pred, dtype=np.float64)
+     for idx in groups:
+         vals = pred[idx]
+@@ -187,12 +187,49 @@
+         if n <= 1:
+             out[idx] = 0.0
+             continue
+-        # descending ranks: best item has rank 1
+-        order = np.argsort(-vals, kind='mergesort')
++        order = np.argsort(vals, kind='mergesort')
+         ranks = np.empty(n, dtype=np.float64)
+-        ranks[order] = np.arange(1, n + 1, dtype=np.float64)
+-        out[idx] = 1.0 / (c + ranks)
++        ranks[order] = np.arange(n, dtype=np.float64)
++        out[idx] = ranks / (n - 1.0)
+     return out
++
++
++def build_features(preds_bpr, preds_soft, groups):
++    z_bpr = [per_user_z(p, groups) for p in preds_bpr]
++    z_soft = [per_user_z(p, groups) for p in preds_soft]
++    r_bpr = [per_user_rank_percentile(p, groups) for p in preds_bpr]
++    r_soft = [per_user_rank_percentile(p, groups) for p in preds_soft]
++    mean_z_bpr = np.mean(z_bpr, axis=0)
++    mean_z_soft = np.mean(z_soft, axis=0)
++    mean_r_bpr = np.mean(r_bpr, axis=0)
++    mean_r_soft = np.mean(r_soft, axis=0)
++    score_z = 0.60 * mean_z_bpr + 0.40 * mean_z_soft
++    score_rank_raw = 0.60 * mean_r_bpr + 0.40 * mean_r_soft
++    score_rank = per_user_z(score_rank_raw, groups)
++    parent_score = 0.70 * score_z + 0.30 * score_rank
++
++    cols = []
++    cols.extend(z_bpr)
++    cols.extend(z_soft)
++    cols.extend(r_bpr)
++    cols.extend(r_soft)
++    cols.extend([mean_z_bpr, mean_z_soft, mean_r_bpr, mean_r_soft,
++                 score_z, score_rank, parent_score])
++    X = np.vstack(cols).T.astype(np.float32)
++    return X, parent_score
++
++
++def sorted_group_info(users):
++    users_arr = np.asarray(users).astype(str)
++    order = np.argsort(users_arr, kind='mergesort')
++    sorted_users = users_arr[order]
++    if len(sorted_users) == 0:
++        return order, []
++    cuts = np.flatnonzero(sorted_users[1:] != sorted_users[:-1]) + 1
++    starts = np.r_[0, cuts]
++    ends = np.r_[cuts, len(sorted_users)]
++    group = (ends - starts).astype(int).tolist()
++    return order, group
+ 
+ 
+ if __name__ == '__main__':
+@@ -209,34 +246,61 @@
+         from devdata import load as load_dev
+         splits = load_dev(a.data_dir)
+         target = 'valid'
+-        split_name = 'dev'
++        target_cache = 'dev'
++        train_cache = 'dev_train'
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-        split_name = a.split
++        target_cache = a.split
++        train_cache = 'train'
+     if a.out is None:
+         print({k: len(v) for k, v in splits.items()}, f'fields={FIELDS}')
+ 
+     enc, dim = encode(splits)
+-    _, _, users = enc[target]
+-    groups = user_groups(users)
++    Xtr_enc, ytr, utr = enc['train']
++    _, _, utar = enc[target]
++    groups_tr = user_groups(utr)
++    groups_tar = user_groups(utar)
+ 
+     bag_seeds = [0, 1, 2]
+-    z_bpr, z_soft, rr_bpr, rr_soft = [], [], [], []
++    tr_bpr, tr_soft, tar_bpr, tar_soft = [], [], [], []
+     for s in bag_seeds:
+-        pb = get_member_preds('bpr1', enc, dim, target, split_name, s, a.device,
+-                              verbose=(a.out is None))
+-        ps = get_member_preds('soft5_tau1', enc, dim, target, split_name, s, a.device,
+-                              verbose=(a.out is None))
+-        z_bpr.append(per_user_z(pb, groups))
+-        z_soft.append(per_user_z(ps, groups))
+-        rr_bpr.append(per_user_rrf(pb, groups, c=10.0))
+-        rr_soft.append(per_user_rrf(ps, groups, c=10.0))
+-
+-    score_z = 0.60 * np.mean(z_bpr, axis=0) + 0.40 * np.mean(z_soft, axis=0)
+-    score_rrf = 0.60 * np.mean(rr_bpr, axis=0) + 0.40 * np.mean(rr_soft, axis=0)
+-    score_rrf = per_user_z(score_rrf, groups)
+-    scores = 0.70 * score_z + 0.30 * score_rrf
++        tr_bpr.append(get_member_preds('bpr1', enc, dim, 'train', train_cache, s,
++                                       a.device, verbose=(a.out is None)))
++        tr_soft.append(get_member_preds('soft5_tau1', enc, dim, 'train', train_cache, s,
++                                        a.device, verbose=(a.out is None)))
++        tar_bpr.append(get_member_preds('bpr1', enc, dim, target, target_cache, s,
++                                        a.device, verbose=(a.out is None)))
++        tar_soft.append(get_member_preds('soft5_tau1', enc, dim, target, target_cache, s,
++                                         a.device, verbose=(a.out is None)))
++
++    X_meta_tr, parent_tr = build_features(tr_bpr, tr_soft, groups_tr)
++    X_meta_tar, parent_tar = build_features(tar_bpr, tar_soft, groups_tar)
++
++    order, group = sorted_group_info(utr)
++    ranker = lgb.LGBMRanker(
++        objective='lambdarank',
++        metric='ndcg',
++        n_estimators=80,
++        learning_rate=0.035,
++        num_leaves=15,
++        max_depth=4,
++        min_child_samples=80,
++        subsample=0.85,
++        colsample_bytree=0.85,
++        reg_alpha=0.1,
++        reg_lambda=2.0,
++        random_state=2027,
++        n_jobs=2,
++        verbosity=-1,
++    )
++    ranker.fit(X_meta_tr[order], ytr[order].astype(int), group=group)
++    meta_tar = ranker.predict(X_meta_tar).astype(np.float64)
++    meta_tar = per_user_z(meta_tar, groups_tar)
++
++    # Keep most of the proven parent score, but make the learned combiner's
++    # contribution large enough to test whether stacking adds a real signal.
++    scores = 0.70 * parent_tar + 0.30 * meta_tar
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

@@ -1,0 +1,102 @@
+# iteration 23  (parent: 22)
+# hypothesis: improve 22: the fast member added complementary signal at 30%, so keep all cached member predictions unchanged and raise its per-user z-scored blend weight to 45% to test whether it deserves a larger vote.
+# result: GAUC 0.679272 | nDCG@5 0.630582 | primary 0.654927 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/022_lgbm_seedbag_fast3.py
++++ logs-1k/record-run-4/solutions/023_lgbm_fast_weight45.py
+@@ -1,11 +1,9 @@
+-"""Two exact LightGBM node-11 members plus one faster diverse member.
+-
+-Node 20's two exact members with per-user z-score fusion are the current best.
+-This keeps those cached members unchanged and adds a cheaper LightGBM member
+-with smaller trees / higher learning rate, blended at 30% after per-user
+-z-normalisation.  If caches are absent it still trains standalone: two exact
+-members plus the fast member, which is intended to stay below the timeout unlike
+-three exact members.
++"""Node 22 with a larger fast-member weight.
++
++The third, cheaper LightGBM member improved node 20 at 30% weight.  This script
++keeps all member training/cache definitions unchanged and only increases the
++per-user z-scored fast-member blend to 45%, so cached predictions make this a
++cheap test of whether the new member should have more vote.
+ """
+ import argparse
+ import os
+@@ -108,9 +106,6 @@
+ 
+ 
+ def fit_fast(Ftr, ytr, Fva, yva, Ft, member_seed, verbose=False):
+-    # A deliberately cheaper, slightly different tree ensemble.  It should be
+-    # weaker than an exact member but supplies another view without making the
+-    # script non-standalone under the 900s timeout.
+     clf = lgb.LGBMClassifier(
+         objective='binary',
+         metric='binary_logloss',
+@@ -140,7 +135,7 @@
+     return clf.predict(Ft, num_iteration=clf.best_iteration_, raw_score=True).astype(np.float32)
+ 
+ 
+-def per_user_weighted_z_fuse(exact_preds, fast_pred, users, fast_weight=0.30):
++def per_user_weighted_z_fuse(exact_preds, fast_pred, users, fast_weight=0.45):
+     exact = np.vstack([p.astype(np.float32, copy=False) for p in exact_preds])
+     fast = fast_pred.astype(np.float32, copy=False)
+     users = np.asarray(users)
+@@ -174,6 +169,7 @@
+             os.path.join('pred_cache', f'020_node11_raw_split{split_name}_mseed{ms}.npy'),
+             os.path.join('pred_cache', f'021_node11_raw_split{split_name}_mseed{ms}.npy'),
+             os.path.join('pred_cache', f'022_node11_raw_split{split_name}_mseed{ms}.npy'),
++            os.path.join('pred_cache', f'023_node11_raw_split{split_name}_mseed{ms}.npy'),
+         ]
+         loaded = False
+         for path in paths:
+@@ -189,16 +185,21 @@
+             need_exact.append((i, ms, paths[-1]))
+ 
+     fast_seed = 4
+-    fast_path = os.path.join('pred_cache', f'022_fast_lgbm_split{split_name}_mseed{fast_seed}.npy')
++    fast_paths = [
++        os.path.join('pred_cache', f'022_fast_lgbm_split{split_name}_mseed{fast_seed}.npy'),
++        os.path.join('pred_cache', f'023_fast_lgbm_split{split_name}_mseed{fast_seed}.npy'),
++    ]
+     fast_pred = None
+     need_fast = True
+-    if os.path.isfile(fast_path):
+-        arr = np.load(fast_path)
+-        if arr.shape[0] == n_target:
+-            fast_pred = arr.astype(np.float32, copy=False)
+-            need_fast = False
+-            if verbose:
+-                print(f"loaded fast member {fast_seed}: {fast_path}")
++    for path in fast_paths:
++        if os.path.isfile(path):
++            arr = np.load(path)
++            if arr.shape[0] == n_target:
++                fast_pred = arr.astype(np.float32, copy=False)
++                need_fast = False
++                if verbose:
++                    print(f"loaded fast member {fast_seed}: {path}")
++                break
+ 
+     if need_exact or need_fast:
+         t0 = time.time()
+@@ -216,9 +217,9 @@
+         if need_fast:
+             m0 = time.time()
+             fast_pred = fit_fast(Ftr, ytr, Fva, yva, Ft, fast_seed, verbose=verbose)
+-            np.save(fast_path, fast_pred)
++            np.save(fast_paths[-1], fast_pred)
+             if verbose:
+-                print(f"trained fast member {fast_seed} in {time.time() - m0:.1f}s -> {fast_path}")
++                print(f"trained fast member {fast_seed} in {time.time() - m0:.1f}s -> {fast_paths[-1]}")
+     return exact_preds, fast_pred
+ 
+ 
+@@ -249,7 +250,7 @@
+ 
+     exact_preds, fast_pred = train_members(splits, target=target, split_name=a.split, verbose=a.out is None)
+     users = get_target_users(splits, target)
+-    scores = per_user_weighted_z_fuse(exact_preds, fast_pred, users, fast_weight=0.30)
++    scores = per_user_weighted_z_fuse(exact_preds, fast_pred, users, fast_weight=0.45)
+     if a.out:
+         np.save(a.out, scores)
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")

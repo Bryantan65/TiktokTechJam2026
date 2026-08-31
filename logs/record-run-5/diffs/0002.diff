@@ -30,15 +30,29 @@
  """
  import argparse
  import os
-@@ -22,6 +15,7 @@
+@@ -22,18 +15,10 @@
  
  import numpy as np
  import torch
 +import torch.nn.functional as F
  
- sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 '..', 'kuairand-starter-kit'))
-@@ -37,15 +31,15 @@
+-# APPEND, not insert(0). The harness puts harness/ first on PYTHONPATH so that a
+-# non-Pure variant resolves `data` to harness/data.py, which knows how to find
+-# 1k and 27k filenames. Prepending the kit here overrode that, and the kit's
+-# loader hardcodes video_features_basic_pure.csv - so this file could not run on
+-# any dataset except Pure, which is why 1k never had a baseline control row.
+-# Appending keeps a standalone run working (the kit is still found, just later)
+-# while letting the harness's choice win. Pure is unaffected either way:
+-# harness/data.py delegates to the kit's own load() and returns row-identical
+-# splits on all three.
+-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+-                             '..', 'kuairand-starter-kit'))
++sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
++                                '..', 'kuairand-starter-kit'))
+ from data import load, encode, FIELDS          # noqa: E402  official, unmodified
+ from evaluate import evaluate                  # noqa: E402  official, unmodified
+ 
+@@ -46,15 +31,15 @@
  
      def __init__(self, dim, k=16, seed=0):
          super().__init__()
@@ -57,7 +71,7 @@
          inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
          return self.b + self.W[X].sum(1) + inter
  
-@@ -59,45 +53,75 @@
+@@ -68,45 +53,75 @@
          return np.concatenate(out)
  
  
@@ -150,7 +164,7 @@
                    f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
                    f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
  
-@@ -118,10 +142,8 @@
+@@ -127,10 +142,8 @@
  if __name__ == '__main__':
      ap = argparse.ArgumentParser()
      ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
@@ -163,7 +177,7 @@
      ap.add_argument('--out', default=None,
                      help='write predictions here as .npy, one score per row')
      ap.add_argument('--k', type=int, default=16)
-@@ -133,38 +155,23 @@
+@@ -142,38 +155,23 @@
  
      torch.manual_seed(a.seed)
      print(f"loading {a.data_dir} ...")

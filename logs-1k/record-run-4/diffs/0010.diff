@@ -1,0 +1,233 @@
+# iteration 10  (parent: 9)
+# hypothesis: debug 9: the pointwise LightGBM with historical stats is even below random, so remove all target/count stats and crosses and train only on the official FM fields plus duration transforms. This diagnoses whether the failure is LightGBM itself/categorical handling or the stat-feature pipeline.
+# result: GAUC 0.675169 | nDCG@5 0.617292 | primary 0.64623 | verdict screen
+
+--- logs-1k/record-run-4/solutions/009_lgbm_binary_stats_debug.py
++++ logs-1k/record-run-4/solutions/010_lgbm_binary_base_debug.py
+@@ -1,11 +1,12 @@
+-"""Debug node 8 with a pointwise LightGBM classifier using the same features.
++"""Debug node 9: minimal LightGBM classifier on only the official FM fields.
+ 
+-The LambdaMART draft finally ran but produced a below-random primary on dev.
+-Before blaming the tree/stat feature idea, isolate the suspicious part: remove
+-query grouping and the lambdarank objective, train ordinary binary logloss on
+-the exact same categorical + train-only smoothed statistics features, and write
+-its raw probabilities.  If this is also disastrous, the feature pipeline is bad;
+-if it is sane, the bug is LambdaMART grouping/objective.
++The same-feature binary classifier scored far below random on dev, so the bug is
++likely in the tree feature/stat pipeline rather than LambdaMART grouping.  This
++version removes all target/count statistics and manual cross features, uses only
++the encoded official fields plus duration transforms, and negates probabilities
++optionally only by a command-line flag (default no negation).  If this remains
++bad, LightGBM categorical handling or dev drift is the issue; if it recovers,
++the historical-stat construction was harmful/buggy.
+ """
+ import argparse
+ import os
+@@ -24,84 +25,30 @@
+     return np.asarray([float(r[5]) for r in rows], dtype=np.float32)
+ 
+ 
+-def factorize_three(train_col, valid_col, target_col=None):
+-    if target_col is None:
+-        allv = np.concatenate([train_col, valid_col]).astype(np.int64, copy=False)
+-        ntr = len(train_col)
+-        nva = len(valid_col)
+-        _, inv = np.unique(allv, return_inverse=True)
+-        return (inv[:ntr].astype(np.int32, copy=False),
+-                inv[ntr:ntr + nva].astype(np.int32, copy=False),
+-                None)
+-    allv = np.concatenate([train_col, valid_col, target_col]).astype(np.int64, copy=False)
+-    ntr = len(train_col)
+-    nva = len(valid_col)
+-    _, inv = np.unique(allv, return_inverse=True)
+-    return (inv[:ntr].astype(np.int32, copy=False),
+-            inv[ntr:ntr + nva].astype(np.int32, copy=False),
+-            inv[ntr + nva:].astype(np.int32, copy=False))
+-
+-
+-def make_cats(Xtr, Xva, Xt, target_is_valid):
++def factorize_cols(Xtr, Xva, Xt, target_is_valid):
+     Xtr = Xtr.astype(np.int64, copy=False)
+     Xva = Xva.astype(np.int64, copy=False)
+     Xt = Xt.astype(np.int64, copy=False)
+     tr_cols, va_cols, t_cols = [], [], []
+     for j in range(Xtr.shape[1]):
+         if target_is_valid:
+-            a, b, _ = factorize_three(Xtr[:, j], Xva[:, j], None)
++            allv = np.concatenate([Xtr[:, j], Xva[:, j]])
++            ntr = len(Xtr); nva = len(Xva)
++            _, inv = np.unique(allv, return_inverse=True)
++            a = inv[:ntr]
++            b = inv[ntr:ntr+nva]
+             c = b
+         else:
+-            a, b, c = factorize_three(Xtr[:, j], Xva[:, j], Xt[:, j])
+-        tr_cols.append(a); va_cols.append(b); t_cols.append(c)
+-
+-    for left, right in [(1, 3), (2, 3), (0, 3)]:  # video_tab, author_tab, user_tab
+-        if target_is_valid:
+-            all_pairs = np.vstack([
+-                np.column_stack([Xtr[:, left], Xtr[:, right]]),
+-                np.column_stack([Xva[:, left], Xva[:, right]])
+-            ])
++            allv = np.concatenate([Xtr[:, j], Xva[:, j], Xt[:, j]])
+             ntr = len(Xtr); nva = len(Xva)
+-            _, inv = np.unique(all_pairs, axis=0, return_inverse=True)
+-            a = inv[:ntr].astype(np.int32, copy=False)
+-            b = inv[ntr:ntr + nva].astype(np.int32, copy=False)
+-            c = b
+-        else:
+-            all_pairs = np.vstack([
+-                np.column_stack([Xtr[:, left], Xtr[:, right]]),
+-                np.column_stack([Xva[:, left], Xva[:, right]]),
+-                np.column_stack([Xt[:, left], Xt[:, right]])
+-            ])
+-            ntr = len(Xtr); nva = len(Xva)
+-            _, inv = np.unique(all_pairs, axis=0, return_inverse=True)
+-            a = inv[:ntr].astype(np.int32, copy=False)
+-            b = inv[ntr:ntr + nva].astype(np.int32, copy=False)
+-            c = inv[ntr + nva:].astype(np.int32, copy=False)
+-        tr_cols.append(a); va_cols.append(b); t_cols.append(c)
+-
+-    return (np.column_stack(tr_cols).astype(np.int32, copy=False),
+-            np.column_stack(va_cols).astype(np.int32, copy=False),
+-            np.column_stack(t_cols).astype(np.int32, copy=False))
+-
+-
+-def stat_features(train_codes, train_y, codes, is_train, prior, m=50.0):
+-    train_codes = train_codes.astype(np.int64, copy=False)
+-    codes = codes.astype(np.int64, copy=False)
+-    max_code = int(max(train_codes.max(initial=0), codes.max(initial=0)))
+-    cnt = np.bincount(train_codes, minlength=max_code + 1).astype(np.float32)
+-    sm = np.bincount(train_codes, weights=train_y.astype(np.float32),
+-                     minlength=max_code + 1).astype(np.float32)
+-    c = cnt[codes]
+-    s = sm[codes]
+-    if is_train:
+-        yy = train_y.astype(np.float32)
+-        c_eff = np.maximum(c - 1.0, 0.0)
+-        mean = (s - yy + prior * m) / (c_eff + m)
+-        count = np.log1p(c_eff)
+-    else:
+-        mean = (s + prior * m) / (c + m)
+-        count = np.log1p(c)
+-    return mean.astype(np.float32), count.astype(np.float32)
++            _, inv = np.unique(allv, return_inverse=True)
++            a = inv[:ntr]
++            b = inv[ntr:ntr+nva]
++            c = inv[ntr+nva:]
++        tr_cols.append(a.astype(np.int32, copy=False))
++        va_cols.append(b.astype(np.int32, copy=False))
++        t_cols.append(c.astype(np.int32, copy=False))
++    return np.column_stack(tr_cols), np.column_stack(va_cols), np.column_stack(t_cols)
+ 
+ 
+ def build_feature_matrices(splits, target):
+@@ -109,37 +56,24 @@
+     Xtr_base, ytr, _ = enc['train']
+     Xva_base, yva, _ = enc['valid']
+     Xt_base, _, _ = enc[target]
+-
+     target_is_valid = (target == 'valid')
+-    Xtr_cat, Xva_cat, Xt_cat = make_cats(Xtr_base, Xva_base, Xt_base, target_is_valid)
+-
+-    prior = float(np.mean(ytr))
+-    stat_cols_tr, stat_cols_va, stat_cols_t = [], [], []
+-    for j in range(Xtr_cat.shape[1]):
+-        mn, ct = stat_features(Xtr_cat[:, j], ytr, Xtr_cat[:, j], True, prior)
+-        stat_cols_tr.extend([mn, ct])
+-        mn, ct = stat_features(Xtr_cat[:, j], ytr, Xva_cat[:, j], False, prior)
+-        stat_cols_va.extend([mn, ct])
+-        if target_is_valid:
+-            stat_cols_t = stat_cols_va
+-        else:
+-            mn, ct = stat_features(Xtr_cat[:, j], ytr, Xt_cat[:, j], False, prior)
+-            stat_cols_t.extend([mn, ct])
++    Xtr_cat, Xva_cat, Xt_cat = factorize_cols(Xtr_base, Xva_base, Xt_base, target_is_valid)
+ 
+     dtr = duration_array(splits['train'])
+     dva = duration_array(splits['valid'])
+     dt = dva if target_is_valid else duration_array(splits[target])
+ 
+-    def finish(Xcat, stat_cols, dur):
++    def finish(Xcat, dur):
+         dur = dur.astype(np.float32)
+-        extra = [np.log1p(np.maximum(dur, 0.0)).astype(np.float32),
+-                 (dur / 100000.0).astype(np.float32)]
+-        return np.column_stack([Xcat] + stat_cols + extra).astype(np.float32, copy=False)
++        extra = np.column_stack([
++            np.log1p(np.maximum(dur, 0.0)).astype(np.float32),
++            (dur / 100000.0).astype(np.float32),
++        ])
++        return np.column_stack([Xcat.astype(np.float32), extra]).astype(np.float32, copy=False)
+ 
+-    Ftr = finish(Xtr_cat, stat_cols_tr, dtr)
+-    Fva = finish(Xva_cat, stat_cols_va, dva)
+-    Ft = Fva if target_is_valid else finish(Xt_cat, stat_cols_t, dt)
+-    return Ftr, ytr.astype(np.int32), Fva, yva.astype(np.int32), Ft
++    return (finish(Xtr_cat, dtr), ytr.astype(np.int32),
++            finish(Xva_cat, dva), yva.astype(np.int32),
++            finish(Xt_cat, dt))
+ 
+ 
+ def train_classifier(splits, target, seed=0, verbose=True):
+@@ -147,21 +81,22 @@
+     Ftr, ytr, Fva, yva, Ft = build_feature_matrices(splits, target)
+     if verbose:
+         print(f"features train={Ftr.shape} valid={Fva.shape} target={Ft.shape} build {time.time()-t0:.1f}s")
++        print(f"train pos={float(np.mean(ytr)):.4f} valid pos={float(np.mean(yva)):.4f}")
+ 
+     clf = lgb.LGBMClassifier(
+         objective='binary',
+         metric='binary_logloss',
+         boosting_type='gbdt',
+-        n_estimators=500,
+-        learning_rate=0.04,
+-        num_leaves=127,
++        n_estimators=350,
++        learning_rate=0.05,
++        num_leaves=63,
+         max_depth=-1,
+-        min_child_samples=300,
++        min_child_samples=500,
+         subsample=0.85,
+         subsample_freq=1,
+         colsample_bytree=0.9,
+-        reg_alpha=0.05,
+-        reg_lambda=1.0,
++        reg_alpha=0.1,
++        reg_lambda=2.0,
+         random_state=seed,
+         n_jobs=-1,
+         verbose=-1,
+@@ -169,10 +104,8 @@
+     )
+     callbacks = [lgb.early_stopping(30, first_metric_only=True, verbose=verbose),
+                  lgb.log_evaluation(50 if verbose else 0)]
+-    clf.fit(Ftr, ytr,
+-            eval_set=[(Fva, yva)],
+-            categorical_feature=list(range(8)),
+-            callbacks=callbacks)
++    clf.fit(Ftr, ytr, eval_set=[(Fva, yva)],
++            categorical_feature=list(range(5)), callbacks=callbacks)
+     if verbose:
+         print(f"best_iteration={clf.best_iteration_} total {time.time()-t0:.1f}s")
+     return clf.predict_proba(Ft, num_iteration=clf.best_iteration_)[:, 1]
+@@ -185,6 +118,7 @@
+     ap.add_argument('--out', default=None)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
++    ap.add_argument('--invert', action='store_true')
+     a = ap.parse_args()
+ 
+     np.random.seed(a.seed)
+@@ -199,6 +133,8 @@
+     print({k: len(v) for k, v in splits.items()}, f"fields={FIELDS}")
+ 
+     scores = train_classifier(splits, target=target, seed=a.seed, verbose=a.out is None)
++    if a.invert:
++        scores = -scores
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")

@@ -1,0 +1,59 @@
+# iteration 35  (parent: 34)
+# hypothesis: improve 34: increasing candidate-context weight gave a clear gain, so push it to a majority vote while retaining older members only as diversification; if this improves, candidate context is the main ranker rather than a correction.
+# result: GAUC 0.702646 | nDCG@5 0.661154 | primary 0.6819 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/034_candidate_heavier_fusion.py
++++ logs-1k/record-run-4/solutions/035_candidate_dominant_fusion.py
+@@ -1,10 +1,9 @@
+-"""Heavier fusion weight for the candidate-context LightGBM member from node 33.
+-
+-The candidate/impression-set context member was the first large move after many
+-near-ties, but node 33 still gave it only about a quarter of the final vote once
+-the candidate-free node-30 base blend was included.  This keeps every member and
+-feature computation unchanged (so caches remain valid) and only raises the
+-candidate-context share in the per-user z/RRF fusion.
++"""Candidate-dominant fusion after node 34.
++
++Keeps the candidate-context LightGBM member and all older cached members unchanged,
++but raises the candidate-context member from the plurality vote in node 34 to a
++clear majority.  This tests whether the candidate/impression-set context signal
++is now the main model rather than just an ensemble correction.
+ """
+ import argparse, os, sys, math
+ from collections import defaultdict
+@@ -91,13 +90,12 @@
+     clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=220,learning_rate=0.05,num_leaves=63,min_child_samples=500,subsample=0.85,subsample_freq=1,colsample_bytree=0.9,reg_alpha=0.1,reg_lambda=2.0,random_state=int(seed),n_jobs=-1,verbose=-1,force_col_wise=True)
+     clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=[lgb.early_stopping(20,first_metric_only=True,verbose=False)])
+     p=clf.predict(Ft,num_iteration=clf.best_iteration_,raw_score=True).astype(np.float32)
+-    np.save(f'pred_cache/034_fallback_minimal_split{split_name}_seed{seed}.npy',p)
++    np.save(f'pred_cache/035_fallback_minimal_split{split_name}_seed{seed}.npy',p)
+     return p
+ 
+ 
+ def train_candidate_member(splits,target,split_name,seed):
+     os.makedirs('pred_cache',exist_ok=True)
+-    # Member code is identical to node 33, so re-use its cache if present.
+     path=os.path.join('pred_cache',f'033_candidate_context_split{split_name}_seed{seed}.npy')
+     if os.path.isfile(path):
+         p=np.load(path)
+@@ -197,13 +195,15 @@
+     cand=train_candidate_member(splits,target,sp,a.seed)
+     base=node30_score(exact0,exact2,fast,stat,seq,aux,users)
+     inc=node24(exact0,exact2,fast,users)
+-    # Heavier but not exclusive candidate-context weighting: effective candidate
+-    # share rises from about 24% in node 33 to about 40% here.
++
++    # Candidate-dominant version of node 34.  The older members are retained for
++    # diversification, but the candidate-context member supplies most of both the
++    # z-score and rank-fusion signals.
+     arrs=[inc,stat,seq,aux,cand]
+-    weights=[0.18,0.05,0.12,0.15,0.50]
++    weights=[0.10,0.03,0.07,0.10,0.70]
+     zmain=z_per_user_blend(arrs,weights,users)
+-    rrf=rrf_per_user(arrs,weights,users,k=50.0)
+-    scores=z_per_user_blend([base,zmain,rrf],[0.12,0.53,0.35],users).astype(np.float64)
++    rrf=rrf_per_user(arrs,weights,users,k=45.0)
++    scores=z_per_user_blend([base,zmain,rrf],[0.05,0.55,0.40],users).astype(np.float64)
+     if a.out:
+         np.save(a.out,scores); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else:

@@ -1,0 +1,92 @@
+# iteration 18  (parent: 17)
+# hypothesis: improve 17: the rank blend helped both metrics, so add reciprocal-rank fusion at 15% to emphasize top positions for nDCG@5 while keeping 60% of the proven z-score blend for GAUC.
+# result: GAUC 0.670959 | nDCG@5 0.537668 | primary 0.604314 | verdict KEPT
+
+--- logs/record-run-14/solutions/017_rank_fusion_cached.py
++++ logs/record-run-14/solutions/018_rrf_fusion_cached.py
+@@ -257,13 +257,17 @@
+     return model
+ 
+ 
++def groups_by_user(users):
++    groups = defaultdict(list)
++    for i, u in enumerate(users):
++        groups[u].append(i)
++    return groups
++
++
+ def z_by_user(scores, users):
+     scores = np.asarray(scores, dtype=np.float64)
+     out = np.zeros_like(scores)
+-    groups = defaultdict(list)
+-    for i, u in enumerate(users):
+-        groups[u].append(i)
+-    for idx in groups.values():
++    for idx in groups_by_user(users).values():
+         v = scores[idx]
+         sd = v.std()
+         out[idx] = (v - v.mean()) / sd if sd > 1e-8 else (v - v.mean())
+@@ -273,10 +277,7 @@
+ def pct_rank_by_user(scores, users):
+     scores = np.asarray(scores, dtype=np.float64)
+     out = np.zeros_like(scores)
+-    groups = defaultdict(list)
+-    for i, u in enumerate(users):
+-        groups[u].append(i)
+-    for idx in groups.values():
++    for idx in groups_by_user(users).values():
+         idx = np.asarray(idx, dtype=np.int64)
+         n = len(idx)
+         if n <= 1:
+@@ -286,6 +287,22 @@
+         ranks = np.empty(n, dtype=np.float64)
+         ranks[order] = np.arange(n, dtype=np.float64) / float(n - 1)
+         out[idx] = ranks
++    return out
++
++
++def rrf_by_user(scores, users, c=20.0):
++    scores = np.asarray(scores, dtype=np.float64)
++    out = np.zeros_like(scores)
++    for idx in groups_by_user(users).values():
++        idx = np.asarray(idx, dtype=np.int64)
++        n = len(idx)
++        if n <= 1:
++            out[idx] = 0.0
++            continue
++        order = np.argsort(-scores[idx], kind='mergesort')
++        rr = np.empty(n, dtype=np.float64)
++        rr[order] = 1.0 / (c + 1.0 + np.arange(n, dtype=np.float64))
++        out[idx] = rr
+     return out
+ 
+ 
+@@ -323,21 +340,23 @@
+     enc, dim = build_augmented(splits, a.data_dir)
+     _, _, users = enc[target]
+     seeds = [a.seed, a.seed + 101, a.seed + 202, a.seed + 303, a.seed + 404]
+-    old_z, bal_z, old_r, bal_r = [], [], [], []
++    old_z, bal_z, old_r, bal_r, old_rrf, bal_rrf = [], [], [], [], [], []
+     for ms in seeds:
+         po = member_pred(enc, dim, target, ms, split_name, a.device, balanced=False)
+         pb = member_pred(enc, dim, target, ms, split_name, a.device, balanced=True)
+         old_z.append(z_by_user(po, users)); bal_z.append(z_by_user(pb, users))
+         old_r.append(pct_rank_by_user(po, users)); bal_r.append(pct_rank_by_user(pb, users))
++        old_rrf.append(rrf_by_user(po, users, c=20.0)); bal_rrf.append(rrf_by_user(pb, users, c=20.0))
+     old_score = z_by_user(np.mean(old_z, axis=0), users)
+     bal_score = z_by_user(np.mean(bal_z, axis=0), users)
+     score_blend = z_by_user(0.65 * old_score + 0.35 * bal_score, users)
+     old_rank = z_by_user(np.mean(old_r, axis=0), users)
+     bal_rank = z_by_user(np.mean(bal_r, axis=0), users)
+-    # Rank averaging is robust to member scale and targets top-k ordering; keep mostly the
+-    # proven score blend so GAUC is not sacrificed for nDCG.
+     rank_blend = z_by_user(0.70 * old_rank + 0.30 * bal_rank, users)
+-    scores = 0.70 * score_blend + 0.30 * rank_blend
+-    print(f'cached_rank_fusion score=0.70 rank=0.30 old/bal score=0.65/0.35 rank=0.70/0.30 members_each={len(seeds)} done in {time.time()-t0:.1f}s')
++    old_top = z_by_user(np.mean(old_rrf, axis=0), users)
++    bal_top = z_by_user(np.mean(bal_rrf, axis=0), users)
++    top_blend = z_by_user(0.65 * old_top + 0.35 * bal_top, users)
++    scores = 0.60 * score_blend + 0.25 * rank_blend + 0.15 * top_blend
++    print(f'cached_rrf_fusion score=0.60 rank=0.25 rrf20=0.15 old/bal score=0.65/0.35 rank=0.70/0.30 top=0.65/0.35 members_each={len(seeds)} done in {time.time()-t0:.1f}s')
+     np.save(a.out, scores.astype(np.float64))
+ 

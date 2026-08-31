@@ -1,0 +1,205 @@
+# iteration 28  (parent: 27)
+# hypothesis: draft watch-time weighting: implicit-feedback ranking commonly weights pairwise positives by confidence/engagement strength (BPR implicit feedback; Rendle 2009 https://arxiv.org/abs/1205.2618). Train a readable 30% BPR member whose positive pairs are weighted by clipped sqrt(log1p(play_time_ms)) rather than treating all long views equally.
+# result: GAUC 0.671426 | nDCG@5 0.537747 | primary 0.604587 | verdict KEPT
+
+--- logs/record-run-14/solutions/027_din_history_gated_fusion.py
++++ logs/record-run-14/solutions/028_watchtime_weighted_bpr.py
+@@ -41,6 +41,10 @@
+     try:
+         x=float(v); return 1.0 if np.isfinite(x) and x>0 else 0.0 if np.isfinite(x) else np.nan
+     except Exception: return np.nan
++def parse_float(v):
++    try:
++        x=float(v); return x if np.isfinite(x) and x>=0 else np.nan
++    except Exception: return np.nan
+ 
+ def read_raw_aux(data_dir):
+     q=defaultdict(deque); raw=[]; per=defaultdict(int); gi=0
+@@ -49,25 +53,29 @@
+             with open(fn,newline='') as f:
+                 for rec in csv.DictReader(f):
+                     k=csv_key(rec); loc=per[k[0]]; per[k[0]]+=1
+-                    raw.append((k,parse_hour(rec.get('hourmin','')),gi,loc,[parse_bin(rec.get(c,'')) for c in AUX_COLS])); gi+=1
++                    play=np.nan
++                    for c in ['play_time_ms','play_time','watch_time_ms','time_ms']:
++                        if c in rec:
++                            play=parse_float(rec.get(c,'')); break
++                    raw.append((k,parse_hour(rec.get('hourmin','')),gi,loc,[parse_bin(rec.get(c,'')) for c in AUX_COLS],play)); gi+=1
+         except FileNotFoundError: pass
+     total=max(1,gi); totals=dict(per)
+-    for k,hour,idx,loc,aux in raw:
+-        d=k[0]; q[k].append((hour,min(19,int(20*idx/total)),min(9,int(10*loc/max(1,totals.get(d,1)))),aux))
++    for k,hour,idx,loc,aux,play in raw:
++        d=k[0]; q[k].append((hour,min(19,int(20*idx/total)),min(9,int(10*loc/max(1,totals.get(d,1)))),aux,play))
+     return q,len(raw)
+ 
+ def build_augmented(splits,data_dir):
+-    enc0,dim0=encode(splits); auxq,nraw=read_raw_aux(data_dir); extra={}; auxlab={}; miss=0
++    enc0,dim0=encode(splits); auxq,nraw=read_raw_aux(data_dir); extra={}; auxlab={}; playw={}; miss=0
+     for sp,rows in splits.items():
+-        ev=[]; al=[]
++        ev=[]; al=[]; pw=[]
+         for r in rows:
+             k=row_key(r)
+-            if auxq.get(k): hour,gbin,dbin,a=auxq[k].popleft()
+-            else: hour,gbin,dbin,a=24,20,10,[np.nan]*len(AUX_COLS); miss+=1
++            if auxq.get(k): hour,gbin,dbin,a,play=auxq[k].popleft()
++            else: hour,gbin,dbin,a,play=24,20,10,[np.nan]*len(AUX_COLS),np.nan; miss+=1
+             tab=_s(r[4]); date=_s(r[0]); dow=date_to_dow(date); hb=hour//4 if hour<24 else 6
+             ev.append(('d='+date,'dow='+str(dow),'h='+str(hour),'hb='+str(hb),'th='+tab+'_'+str(hour),'td='+tab+'_'+date,'gb='+str(gbin),'db='+date+'_'+str(dbin)))
+-            al.append(a)
+-        extra[sp]=ev; auxlab[sp]=np.asarray(al,dtype=np.float32)
++            al.append(a); pw.append(play)
++        extra[sp]=ev; auxlab[sp]=np.asarray(al,dtype=np.float32); playw[sp]=np.asarray(pw,dtype=np.float32)
+     maps=[]; off=dim0; n_extra=len(next(iter(extra.values()))[0])
+     for j in range(n_extra):
+         cats={}
+@@ -80,14 +88,14 @@
+         X0,y,u=enc0[sp]; H=np.empty((len(X0),n_extra),dtype=np.int64)
+         for i,v in enumerate(extra[sp]):
+             for j in range(n_extra): H[i,j]=maps[j][v[j]]
+-        enc[sp]=(np.concatenate([X0.astype(np.int64),H],1),y,u,auxlab[sp])
+-    print(f'raw_aux rows={nraw} missing={miss} dim={off}',flush=True); return enc,off
++        enc[sp]=(np.concatenate([X0.astype(np.int64),H],1),y,u,auxlab[sp],playw[sp])
++    print(f'raw_aux rows={nraw} missing={miss} dim={off} play_nan_train={np.isnan(playw.get("train",np.array([]))).mean() if len(playw.get("train",[])) else 1:.4f}',flush=True); return enc,off
+ 
+ def build_hist(enc,K=20):
+     hist={}; state=defaultdict(lambda: deque(maxlen=K)); pad=-1
+     for sp in ['train','valid','test']:
+         if sp not in enc: continue
+-        X,y,u,_=enc[sp]; hv=np.full((len(X),K),pad,dtype=np.int64); ha=np.full((len(X),K),pad,dtype=np.int64)
++        X,y,u,_,_=enc[sp]; hv=np.full((len(X),K),pad,dtype=np.int64); ha=np.full((len(X),K),pad,dtype=np.int64)
+         for i,uu in enumerate(u):
+             h=list(state[uu]); L=len(h)
+             if L:
+@@ -128,7 +136,7 @@
+         E=self.V[X]; s=E.sum(1); base=self.b+self.W[X].sum(1)+0.5*((s*s).sum(1)-(E*E).sum((1,2)))
+         item=self.V[X[:,1]]+self.V[X[:,2]]; mask=(hv!=self.pad); hist=self.V[hv]+self.V[ha]; it=item[:,None,:].expand_as(hist)
+         a=self.att(torch.cat([hist,it,hist*it,it-hist],2)).squeeze(-1); a=a.masked_fill(~mask,-1e9)
+-        w=torch.softmax(a,1)*mask.float(); denom=w.sum(1,keepdim=True).clamp_min(1e-6); h=(hist*w[:,:,None]).sum(1)/denom
++        w=torch.softmax(a,1)*mask.float(); h=(hist*w[:,:,None]).sum(1)/w.sum(1,keepdim=True).clamp_min(1e-6)
+         return base+self.out(torch.cat([item,h,item*h],1)).squeeze(1)
+     @torch.no_grad()
+     def predict(self,X,hv,ha,bs=100000,device='cpu'):
+@@ -136,40 +144,46 @@
+         for i in range(0,len(X),bs): out.append(self(torch.from_numpy(X[i:i+bs].astype(np.int64)).to(device),torch.from_numpy(hv[i:i+bs].astype(np.int64)).to(device),torch.from_numpy(ha[i:i+bs].astype(np.int64)).to(device)).cpu().numpy())
+         return np.concatenate(out)
+ 
+-def pair_data(y,users,balanced=False):
++def pair_data(y,users,balanced=False,pos_weight=None):
+     pos=defaultdict(list); neg=defaultdict(list)
+     for i,(u,yy) in enumerate(zip(users,y)): (pos if yy>0.5 else neg)[u].append(i)
+     pidx=[]; pools=[]; pw=[]
+     for u,ps in pos.items():
+         ns=neg.get(u)
+         if not ns: continue
+-        arr=np.asarray(ns,dtype=np.int64); w=1.0/float(min(len(ps),5)) if balanced else 1.0
+-        for p in ps: pidx.append(p); pools.append(arr); pw.append(w)
++        arr=np.asarray(ns,dtype=np.int64); ub=1.0/float(min(len(ps),5)) if balanced else 1.0
++        for p in ps:
++            pidx.append(p); pools.append(arr); pw.append(ub*(float(pos_weight[p]) if pos_weight is not None else 1.0))
+     pw=np.asarray(pw,dtype=np.float32)
+-    if len(pw) and balanced: pw/=max(1e-6,pw.mean())
++    if len(pw): pw/=max(1e-6,float(np.mean(pw)))
+     return np.asarray(pidx,dtype=np.int64),pools,pw
++
++def make_play_conf(y,play_ms):
++    sec=np.nan_to_num(play_ms.astype(np.float64),nan=0.0,posinf=0.0,neginf=0.0)/1000.0
++    c=np.sqrt(np.log1p(np.maximum(sec,0.0)))
++    pos=c[y>0.5]
++    if len(pos) and np.nanmax(pos)>0:
++        hi=np.percentile(pos,95); c=np.clip(c,0,hi); m=np.mean(c[y>0.5]); c=c/max(m,1e-6)
++    else: c=np.ones_like(c)
++    return np.clip(c,0.25,3.0).astype(np.float32)
+ 
+ def aux_bce(logits,labels):
+     mask=torch.isfinite(labels)
+     if mask.sum().item()==0: return logits.sum()*0.0
+     return torch.nn.functional.binary_cross_entropy_with_logits(logits,torch.nan_to_num(labels,nan=0.0),reduction='none')[mask].mean()
+ 
+-def train_bpr(enc,dim,seed,balanced=False,k=16,lr=0.001,l2=3e-6,epochs=40,bs=8192,patience=4,device='cpu'):
+-    Xtr,ytr,utr,_=enc['train']; Xva,yva,uva,_=enc['valid']; model=TorchFM(dim,k,seed).to(device)
++def train_bpr(enc,dim,seed,balanced=False,watch=False,k=16,lr=0.001,l2=3e-6,epochs=40,bs=8192,patience=4,device='cpu'):
++    Xtr,ytr,utr,_,ptr=enc['train']; Xva,yva,uva,_,_=enc['valid']; model=TorchFM(dim,k,seed).to(device)
+     opt=torch.optim.Adam([{'params':[model.V,model.W],'weight_decay':l2},{'params':[model.b],'weight_decay':0}],lr=lr)
+-    Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); ytr_t=torch.from_numpy(ytr.astype(np.float32)); bce=torch.nn.BCEWithLogitsLoss(); rng=np.random.default_rng(seed+17); pidx,pools,pw=pair_data(ytr,utr,balanced); pw_t=torch.from_numpy(pw.astype(np.float32)); n_steps=max(len(ytr),len(pidx)); best=-1; bad=0; best_state=None
++    Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); ytr_t=torch.from_numpy(ytr.astype(np.float32)); bce=torch.nn.BCEWithLogitsLoss(); rng=np.random.default_rng(seed+17+(10000 if watch else 0)); posw=make_play_conf(ytr,ptr) if watch else None; pidx,pools,pw=pair_data(ytr,utr,balanced or watch,posw); pw_t=torch.from_numpy(pw.astype(np.float32)); n_steps=max(len(ytr),len(pidx)); best=-1; bad=0; best_state=None
+     for ep in range(1,epochs+1):
+         model.train(); order=rng.integers(0,len(pidx),size=n_steps,dtype=np.int64)
+         for st in range(0,len(order),bs):
+             which=order[st:st+bs]; pp=pidx[which]; nn=np.empty(len(which),dtype=np.int64)
+             for j,w in enumerate(which):
+                 pool=pools[int(w)]; nn[j]=pool[rng.integers(0,len(pool))]
+-            both=np.concatenate([pp,nn]); both_t=torch.from_numpy(both); logits=model(Xtr_t[both_t].to(device)); lp,ln=logits[:len(pp)],logits[len(pp):]; base=torch.nn.functional.softplus(-(lp-ln))
+-            if balanced:
+-                wt=pw_t[torch.from_numpy(which)].to(device); loss_pair=(base*wt).sum()/torch.clamp(wt.sum(),min=1e-6)
+-            else: loss_pair=base.mean()
+-            loss=loss_pair+0.02*bce(logits,ytr_t[both_t].to(device)); opt.zero_grad(set_to_none=True); loss.backward(); opt.step()
+-        m=evaluate(uva,yva,model.predict(Xva,device=device))['primary']; print(f'bpr balanced={balanced} seed={seed} ep={ep} p={m:.6f}',flush=True)
++            both=np.concatenate([pp,nn]); bt=torch.from_numpy(both); logits=model(Xtr_t[bt].to(device)); lp,ln=logits[:len(pp)],logits[len(pp):]; wt=pw_t[torch.from_numpy(which)].to(device); pair=torch.nn.functional.softplus(-(lp-ln)); loss_pair=(pair*wt).sum()/torch.clamp(wt.sum(),min=1e-6) if (balanced or watch) else pair.mean(); loss=loss_pair+0.02*bce(logits,ytr_t[bt].to(device)); opt.zero_grad(set_to_none=True); loss.backward(); opt.step()
++        m=evaluate(uva,yva,model.predict(Xva,device=device))['primary']; print(f'bpr balanced={balanced} watch={watch} seed={seed} ep={ep} p={m:.6f}',flush=True)
+         if m>best+1e-5: best=m; bad=0; best_state={kk:vv.detach().cpu().clone() for kk,vv in model.state_dict().items()}
+         else:
+             bad+=1
+@@ -178,7 +192,7 @@
+     return model
+ 
+ def train_mtbpr(enc,dim,seed,k=16,lr=0.001,l2=3e-6,epochs=35,bs=8192,patience=4,device='cpu'):
+-    Xtr,ytr,utr,atr=enc['train']; Xva,yva,uva,_=enc['valid']; model=MultiTaskFM(dim,k,len(AUX_COLS),seed).to(device)
++    Xtr,ytr,utr,atr,_=enc['train']; Xva,yva,uva,_,_=enc['valid']; model=MultiTaskFM(dim,k,len(AUX_COLS),seed).to(device)
+     opt=torch.optim.Adam([{'params':[model.V,model.W,model.aux.weight,model.aux.bias],'weight_decay':l2},{'params':[model.b],'weight_decay':0}],lr=lr)
+     Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); ytr_t=torch.from_numpy(ytr.astype(np.float32)); atr_t=torch.from_numpy(atr.astype(np.float32)); bce=torch.nn.BCEWithLogitsLoss(); rng=np.random.default_rng(seed+311); pidx,pools,pw=pair_data(ytr,utr,True); pw_t=torch.from_numpy(pw.astype(np.float32)); n_steps=max(len(ytr),len(pidx)); best=-1; bad=0; best_state=None
+     for ep in range(1,epochs+1):
+@@ -197,7 +211,7 @@
+     return model
+ 
+ def train_din(enc,hist,dim0,seed,k=16,lr=0.001,l2=3e-6,epochs=30,bs=4096,patience=4,device='cpu'):
+-    pad=dim0; Xtr,ytr,utr,_=enc['train']; Xva,yva,uva,_=enc['valid']; hvtr,hatr=hist['train']; hvva,hava=hist['valid']; hvtr=np.where(hvtr<0,pad,hvtr); hatr=np.where(hatr<0,pad,hatr); hvva=np.where(hvva<0,pad,hvva); hava=np.where(hava<0,pad,hava)
++    pad=dim0; Xtr,ytr,utr,_,_=enc['train']; Xva,yva,uva,_,_=enc['valid']; hvtr,hatr=hist['train']; hvva,hava=hist['valid']; hvtr=np.where(hvtr<0,pad,hvtr); hatr=np.where(hatr<0,pad,hatr); hvva=np.where(hvva<0,pad,hvva); hava=np.where(hava<0,pad,hava)
+     model=DINFM(dim0+1,k,pad,seed).to(device); att_params=list(model.att.parameters())+list(model.out.parameters())
+     opt=torch.optim.Adam([{'params':[model.V,model.W]+att_params,'weight_decay':l2},{'params':[model.b],'weight_decay':0}],lr=lr)
+     Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); hv_t=torch.from_numpy(hvtr.astype(np.int64)); ha_t=torch.from_numpy(hatr.astype(np.int64)); ytr_t=torch.from_numpy(ytr.astype(np.float32)); bce=torch.nn.BCEWithLogitsLoss(); rng=np.random.default_rng(seed+701); pidx,pools,pw=pair_data(ytr,utr,True); pw_t=torch.from_numpy(pw.astype(np.float32)); n_steps=max(len(ytr),len(pidx)); best=-1; bad=0; best_state=None
+@@ -207,7 +221,7 @@
+             which=order[st:st+bs]; pp=pidx[which]; nn=np.empty(len(which),dtype=np.int64)
+             for j,w in enumerate(which):
+                 pool=pools[int(w)]; nn[j]=pool[rng.integers(0,len(pool))]
+-            both=np.concatenate([pp,nn]); bt=torch.from_numpy(both); logits=model(Xtr_t[bt].to(device),hv_t[bt].to(device),ha_t[bt].to(device)); lp,ln=logits[:len(pp)],logits[len(pp):]; wt=pw_t[torch.from_numpy(which)].to(device); loss=(torch.nn.functional.softplus(-(lp-ln))*wt).sum()/torch.clamp(wt.sum(),min=1e-6)+0.02*bce(logits,ytr_t[bt].to(device)); opt.zero_grad(set_to_none=True); loss.backward(); opt.step()
++            both=np.concatenate([pp,nn]); bt=torch.from_numpy(both); logits=model(Xtr_t[bt].to(device),hv_t[bt].to(device),ha_t[bt].to(device)); lp,ln=logits[:len(pp)],logits[len(pp):]; wt=pw_t[torch.from_numpy(which)].to(device); loss=(torch.nn.functional.softplus(-(lp-ln))*wt).sum()/torch.clamp(wt.sum(),min=1e-6)+0.02*bce(logits,ytr_t[bt].to(device)); opt.zero_grad(set_to_none=True); loss.backward(); opt.step();
+             with torch.no_grad(): model.V[pad].zero_()
+         pred=model.predict(Xva,hvva,hava,device=device); m=evaluate(uva,yva,pred)['primary']; print(f'din seed={seed} ep={ep} p={m:.6f}',flush=True)
+         if m>best+1e-5: best=m; bad=0; best_state={kk:vv.detach().cpu().clone() for kk,vv in model.state_dict().items()}
+@@ -245,10 +259,11 @@
+     return z_by_user(0.60*z_by_user(np.mean(z,0),users)+0.25*z_by_user(np.mean(r,0),users)+0.15*z_by_user(np.mean(rr,0),users),users)
+ 
+ def member_pred(enc,dim,target,mseed,split_name,device,mode,hist=None):
+-    os.makedirs('pred_cache',exist_ok=True); prefix={'bpr':'010_time_bpr_v1','balanced':'016_time_bpr_ndcgbal_v1','mtbpr':'021_time_mtbpr_aux_v1','din':'024_din_histpos_v1'}[mode]; path=os.path.join('pred_cache',f'{prefix}_{split_name}_seed{mseed}.npy')
++    os.makedirs('pred_cache',exist_ok=True); prefix={'bpr':'010_time_bpr_v1','balanced':'016_time_bpr_ndcgbal_v1','mtbpr':'021_time_mtbpr_aux_v1','din':'024_din_histpos_v1','watch':'028_playtime_weight_bpr_v1'}[mode]; path=os.path.join('pred_cache',f'{prefix}_{split_name}_seed{mseed}.npy')
+     if os.path.isfile(path): print('load',path,flush=True); return np.load(path)
+     if mode=='bpr': model=train_bpr(enc,dim,mseed,balanced=False,device=device); p=model.predict(enc[target][0],device=device)
+     elif mode=='balanced': model=train_bpr(enc,dim,mseed,balanced=True,device=device); p=model.predict(enc[target][0],device=device)
++    elif mode=='watch': model=train_bpr(enc,dim,mseed,balanced=True,watch=True,device=device); p=model.predict(enc[target][0],device=device)
+     elif mode=='mtbpr': model=train_mtbpr(enc,dim,mseed,device=device); p=model.predict(enc[target][0],device=device)
+     else:
+         model=train_din(enc,hist,dim,mseed,device=device); hv,ha=hist[target]; hv=np.where(hv<0,dim,hv); ha=np.where(ha<0,dim,ha); p=model.predict(enc[target][0],hv,ha,device=device)
+@@ -266,14 +281,13 @@
+     old=[member_pred(enc,dim,target,s,split_name,a.device,'bpr') for s in seeds5]
+     bal=[member_pred(enc,dim,target,s,split_name,a.device,'balanced') for s in seeds5]
+     mt=[member_pred(enc,dim,target,s,split_name,a.device,'mtbpr') for s in seeds5]
+-    parent=z_by_user(0.70*z_by_user(0.65*composite(old,users)+0.35*composite(bal,users),users)+0.30*composite(mt,users),users)
+     din=[member_pred(enc,dim,target,s,split_name,a.device,'din',hist) for s in seeds5]
+-    dinc=composite(din,users)
+-    hv,_=hist[target]; hlen=(hv>=0).sum(1).astype(np.float64)
+-    # DIN history attention is only informative for users with enough previous positive watches.
+-    # Use a per-user gate: mostly parent for cold users, up to 35% sequence signal for rich histories.
+-    alpha=0.10+0.25*np.minimum(hlen,8.0)/8.0
+-    scores=z_by_user((1.0-alpha)*parent+alpha*dinc,users)
+-    print(f'din_history_gated_fusion alpha_mean={alpha.mean():.4f} alpha_min={alpha.min():.4f} alpha_max={alpha.max():.4f} total_time={time.time()-t0:.1f}s',flush=True)
++    base=z_by_user(0.70*z_by_user(0.65*composite(old,users)+0.35*composite(bal,users),users)+0.30*composite(mt,users),users)
++    dinc=composite(din,users); hv,_=hist[target]; hlen=(hv>=0).sum(1).astype(np.float64); alpha=0.10+0.25*np.minimum(hlen,8.0)/8.0
++    parent=z_by_user((1.0-alpha)*base+alpha*dinc,users)
++    watch=[member_pred(enc,dim,target,s,split_name,a.device,'watch') for s in seeds5]
++    watchc=composite(watch,users)
++    scores=z_by_user(0.70*parent+0.30*watchc,users)
++    print(f'watchtime_weighted_bpr blend=0.30 alpha_mean={alpha.mean():.4f} total_time={time.time()-t0:.1f}s',flush=True)
+     np.save(a.out,scores.astype(np.float64))
+ 

@@ -1,0 +1,87 @@
+# iteration 4  (parent: 3)
+# hypothesis: improve 3: replace averaging three random negatives with online hard negative selection from five same-user candidates, focusing BPR updates on negatives most likely to affect the top ranks.
+# result: GAUC 0.635734 | nDCG@5 0.523704 | primary 0.579719 | verdict worse
+
+--- logs/record-run-15-bryan-pure/solutions/003_bpr_3neg_fm.py
++++ logs/record-run-15-bryan-pure/solutions/004_bpr_hardneg_fm.py
+@@ -1,10 +1,10 @@
+-"""FM with same-user BPR, sampling three negatives per positive.
++"""FM with same-user BPR and online hard negative selection.
+ 
+-Node 2 showed that pairwise same-user BPR helps. This refinement keeps the same
+-model but gives each positive impression three independently sampled negatives
+-from the same user and averages the BPR loss over all three comparisons. More
+-negative coverage should reduce the chance that training spends an epoch on easy
+-or uninformative pairs, especially for nDCG@5.
++Node 3 improved BPR by drawing three same-user negatives per positive. This
++variant draws a small candidate set of same-user negatives for each positive,
++scores them with the current model, and applies BPR only against the highest
++scoring (hardest) candidate. The aim is to spend updates on negatives that can
++enter the user's top ranks rather than averaging many already-easy pairs.
+ """
+ import argparse
+ import os
+@@ -69,7 +69,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=50, bs=8192, patience=5,
+-        seed=0, device='cpu', verbose=True, nneg=3):
++        seed=0, device='cpu', verbose=True, ncand=5):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -82,7 +82,7 @@
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     pos_idx, pos_users, neg_by_u = make_pair_sampler(ytr, utr)
+     if verbose:
+-        print(f"BPR train positives: {len(pos_idx):,d} from {len(neg_by_u):,d} mixed-label users; nneg={nneg}")
++        print(f"BPR train positives: {len(pos_idx):,d} from {len(neg_by_u):,d} mixed-label users; hard ncand={ncand}")
+     if len(pos_idx) == 0:
+         raise RuntimeError('no same-user positive/negative training pairs found')
+ 
+@@ -97,19 +97,19 @@
+         for i in range(0, len(order), bs):
+             sel = order[i:i + bs]
+             pidx = pos_idx[sel]
+-            nidx = np.empty((len(sel), nneg), dtype=np.int64)
+-            # Keep the same per-positive same-user pairing as node 2, just draw
+-            # several negatives. Users have ragged negative lists, so a compact
+-            # Python loop is clearer and still cheap versus the model pass.
++            cand_idx = np.empty((len(sel), ncand), dtype=np.int64)
+             for j, uu in enumerate(pos_users[sel]):
+                 ns = neg_by_u[uu]
+-                nidx[j] = ns[rng.integers(len(ns), size=nneg)]
++                cand_idx[j] = ns[rng.integers(len(ns), size=ncand)]
+ 
+             xp = Xtr_t[torch.from_numpy(pidx)].to(device)
+-            xn = Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
++            xc = Xtr_t[torch.from_numpy(cand_idx.reshape(-1))].to(device)
+             opt.zero_grad(set_to_none=True)
+-            sp = model(xp).repeat_interleave(nneg)
+-            sn = model(xn)
++            sp = model(xp)
++            sc = model(xc).view(len(sel), ncand)
++            # Online hard negative: only the candidate currently ranked highest
++            # by the model contributes to the BPR update.
++            sn = sc.max(dim=1).values
+             loss = torch.nn.functional.softplus(-(sp - sn)).mean()
+             loss.backward()
+             opt.step()
+@@ -117,7 +117,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | hard-bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -168,7 +168,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_3neg_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_hardneg_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

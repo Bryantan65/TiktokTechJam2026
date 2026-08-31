@@ -1,0 +1,225 @@
+# iteration 15  (parent: 14)
+# hypothesis: improve 14: add a genuinely different BPR member that weights positive-negative pairs by log play_time confidence, as in heterogeneous implicit-feedback BPR extensions (e.g. Adaptive BPR, https://www.sciencedirect.com/science/article/abs/pii/S0950705114003530); blend it 50/50 with the cached node-14 ensemble so its signal is readable.
+# result: GAUC 0.670636 | nDCG@5 0.537333 | primary 0.603984 | verdict no-op
+
+--- logs/record-run-14/solutions/014_time_bpr_seed_ensemble.py
++++ logs/record-run-14/solutions/015_watchtime_weighted_bpr_blend.py
+@@ -43,10 +43,14 @@
+ 
+ 
+ def find_log_files(data_dir):
+-    pats = [os.path.join(data_dir, 'log_standard*.csv'), os.path.join(data_dir, '*log_standard*.csv')]
++    pats = [
++        os.path.join(data_dir, 'log_standard*.csv'),
++        os.path.join(data_dir, 'data', 'log_standard*.csv'),
++        os.path.join(data_dir, '**', 'log_standard*.csv'),
++    ]
+     files = []
+     for p in pats:
+-        files.extend(glob.glob(p))
++        files.extend(glob.glob(p, recursive=True))
+     files = sorted(set(f for f in files if 'random' not in os.path.basename(f).lower()))
+     def order(f):
+         b = os.path.basename(f)
+@@ -72,6 +76,15 @@
+         return 24
+ 
+ 
++def parse_float(v):
++    try:
++        if v is None or v == '':
++            return np.nan
++        return float(v)
++    except Exception:
++        return np.nan
++
++
+ def date_to_dow(d):
+     try:
+         return datetime.strptime(_s(d), '%Y%m%d').weekday()
+@@ -79,7 +92,7 @@
+         return 7
+ 
+ 
+-def read_time_aux(data_dir):
++def read_aux(data_dir):
+     q = defaultdict(deque)
+     files = find_log_files(data_dir)
+     global_idx = 0
+@@ -93,37 +106,46 @@
+                     k = csv_key(rec)
+                     hm = rec.get('hourmin', rec.get('time_ms', rec.get('timestamp', '')))
+                     hour = parse_hour(hm)
++                    # Used only as a training confidence weight, never as a prediction feature.
++                    pt = parse_float(rec.get('play_time_ms', rec.get('play_time', rec.get('watch_time_ms', ''))))
+                     d = k[0]
+                     local = per_date_count[d]
+                     per_date_count[d] += 1
+-                    raw.append((k, hour, global_idx, local))
++                    raw.append((k, hour, global_idx, local, pt))
+                     global_idx += 1
+         except FileNotFoundError:
+             continue
+     totals_by_date = dict(per_date_count)
+     total = max(1, global_idx)
+-    for k, hour, gi, local in raw:
++    for k, hour, gi, local, pt in raw:
+         d = k[0]
+         gbin = min(19, int(20 * gi / total))
+         dbin = min(9, int(10 * local / max(1, totals_by_date.get(d, 1))))
+-        q[k].append((hour, gbin, dbin))
++        q[k].append((hour, gbin, dbin, pt))
+     return q, len(raw)
+ 
+ 
+ def build_augmented(splits, data_dir):
+     enc0, dim0 = encode(splits)
+-    auxq, nraw = read_time_aux(data_dir)
++    auxq, nraw = read_aux(data_dir)
+     aux = {}
++    play = {}
+     miss = 0
++    p_miss = 0
+     for sp, rows in splits.items():
+         vals = []
+-        for r in rows:
++        pts = np.full(len(rows), np.nan, dtype=np.float32)
++        for i, r in enumerate(rows):
+             k = row_key(r)
+             if auxq.get(k):
+-                hour, gbin, dbin = auxq[k].popleft()
++                hour, gbin, dbin, pt = auxq[k].popleft()
++                pts[i] = pt
++                if not np.isfinite(pt):
++                    p_miss += 1
+             else:
+                 hour, gbin, dbin = 24, 20, 10
+                 miss += 1
++                p_miss += 1
+             tab = _s(r[4])
+             date = _s(r[0])
+             dow = date_to_dow(date)
+@@ -139,6 +161,7 @@
+                 'db=' + date + '_' + str(dbin),
+             ))
+         aux[sp] = vals
++        play[sp] = pts
+     maps = []
+     n_extra = len(next(iter(aux.values()))[0]) if aux and len(next(iter(aux.values()))) else 0
+     off = dim0
+@@ -158,8 +181,8 @@
+             for j in range(n_extra):
+                 H[i, j] = maps[j][v[j]]
+         enc[sp] = (np.concatenate([X0.astype(np.int64), H], axis=1), y, u)
+-    print(f'time_aux raw_rows={nraw} missing_matches={miss} extra_fields={n_extra} dim={off}')
+-    return enc, off
++    print(f'aux raw_rows={nraw} missing_matches={miss} play_missing={p_miss} extra_fields={n_extra} dim={off}')
++    return enc, off, play
+ 
+ 
+ class TorchFM(torch.nn.Module):
+@@ -201,7 +224,25 @@
+     return np.asarray(pidx, dtype=np.int64), pools
+ 
+ 
+-def train_model(enc, dim, seed, k=16, lr=0.001, l2=3e-6, epochs=40, bs=8192, patience=4, device='cpu'):
++def positive_play_weights(y, play_train):
++    w = np.ones(len(y), dtype=np.float32)
++    if play_train is None:
++        return w
++    mask = (np.asarray(y) > 0.5) & np.isfinite(play_train) & (play_train > 0)
++    vals = np.log1p(play_train[mask].astype(np.float64))
++    if len(vals) < 100:
++        return w
++    med = np.median(vals)
++    if med <= 0 or not np.isfinite(med):
++        return w
++    rel = np.clip(vals / med, 0.5, 2.0)
++    rel = rel / max(1e-6, rel.mean())
++    w[mask] = rel.astype(np.float32)
++    print(f'play_weight positives={mask.sum()} med_log={med:.3f} min={rel.min():.3f} max={rel.max():.3f} mean={rel.mean():.3f}')
++    return w
++
++
++def train_model(enc, dim, seed, play_weights=None, k=16, lr=0.001, l2=3e-6, epochs=40, bs=8192, patience=4, device='cpu'):
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+@@ -211,6 +252,9 @@
+     ], lr=lr)
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     ytr_t = torch.from_numpy(ytr.astype(np.float32))
++    if play_weights is None:
++        play_weights = np.ones(len(ytr), dtype=np.float32)
++    wt_t = torch.from_numpy(play_weights.astype(np.float32))
+     rng = np.random.default_rng(seed + 17)
+     bce_loss = torch.nn.BCEWithLogitsLoss()
+     pos_idx, neg_pools = build_pairs(ytr, utr)
+@@ -223,14 +267,16 @@
+             which = order[st:st+bs]
+             pp = pos_idx[which]
+             nn = np.empty(len(which), dtype=np.int64)
+-            for j, w in enumerate(which):
+-                pool = neg_pools[int(w)]
++            for j, widx in enumerate(which):
++                pool = neg_pools[int(widx)]
+                 nn[j] = pool[rng.integers(0, len(pool))]
+             both = np.concatenate([pp, nn])
+             xb = Xtr_t[torch.from_numpy(both)].to(device)
+             logits = model(xb)
+             lp, ln = logits[:len(pp)], logits[len(pp):]
+-            loss = torch.nn.functional.softplus(-(lp - ln)).mean()
++            wb = wt_t[torch.from_numpy(pp)].to(device)
++            pair_losses = torch.nn.functional.softplus(-(lp - ln))
++            loss = (pair_losses * wb).sum() / torch.clamp(wb.sum(), min=1e-6)
+             yb = ytr_t[torch.from_numpy(both)].to(device)
+             loss = loss + 0.02 * bce_loss(logits, yb)
+             opt.zero_grad(set_to_none=True)
+@@ -263,13 +309,13 @@
+     return out
+ 
+ 
+-def member_pred(enc, dim, target, mseed, split_name, device):
++def member_pred(enc, dim, target, mseed, split_name, device, cache_prefix, play_weights=None):
+     os.makedirs('pred_cache', exist_ok=True)
+-    path = os.path.join('pred_cache', f'010_time_bpr_v1_{split_name}_seed{mseed}.npy')
++    path = os.path.join('pred_cache', f'{cache_prefix}_{split_name}_seed{mseed}.npy')
+     if os.path.isfile(path):
+         print('load', path, flush=True)
+         return np.load(path)
+-    model = train_model(enc, dim, seed=mseed, device=device)
++    model = train_model(enc, dim, seed=mseed, play_weights=play_weights, device=device)
+     X, _, _ = enc[target]
+     p = model.predict(X, device=device).astype(np.float64)
+     np.save(path, p)
+@@ -293,16 +339,22 @@
+         splits = load(a.data_dir); target = a.split; split_name = a.split
+     print({k: len(v) for k, v in splits.items()}, 'base_fields=', FIELDS)
+     t0 = time.time()
+-    enc, dim = build_augmented(splits, a.data_dir)
++    enc, dim, play = build_augmented(splits, a.data_dir)
+     _, _, users = enc[target]
+-    # Same unchanged node-13 BPR member, but average five independently initialised/sampled copies.
+-    # Per-user z-scaling aligns member score scales before fusion; for a single member it is rank-invariant.
++    Xtr, ytr, _ = enc['train']
++    pw = positive_play_weights(ytr, play.get('train'))
+     seeds = [a.seed, a.seed + 101, a.seed + 202, a.seed + 303, a.seed + 404]
+-    zs = []
++    old_z = []
++    wt_z = []
+     for ms in seeds:
+-        p = member_pred(enc, dim, target, ms, split_name, a.device)
+-        zs.append(z_by_user(p, users))
+-    scores = np.mean(zs, axis=0)
+-    print(f'ensemble_members={len(seeds)} done in {time.time()-t0:.1f}s')
++        # Unchanged node-14 member cache name; if absent, retrains the same unweighted member.
++        p_old = member_pred(enc, dim, target, ms, split_name, a.device, '010_time_bpr_v1', play_weights=None)
++        old_z.append(z_by_user(p_old, users))
++        p_wt = member_pred(enc, dim, target, ms, split_name, a.device, '015_time_bpr_playw_v1', play_weights=pw)
++        wt_z.append(z_by_user(p_wt, users))
++    old_ens = z_by_user(np.mean(old_z, axis=0), users)
++    wt_ens = z_by_user(np.mean(wt_z, axis=0), users)
++    scores = 0.5 * old_ens + 0.5 * wt_ens
++    print(f'blend old=0.5 play_weighted=0.5 members_each={len(seeds)} done in {time.time()-t0:.1f}s')
+     np.save(a.out, scores.astype(np.float64))
+ 

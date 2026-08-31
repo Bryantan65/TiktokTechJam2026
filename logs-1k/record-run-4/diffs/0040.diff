@@ -1,0 +1,250 @@
+# iteration 40  (parent: 39)
+# hypothesis: debug 39: the richer candidate-context member timed out, so keep node 38 intact and test the same row-position/duration-context idea as a much smaller member with fewer features and trees at a readable 25% blend.
+# result: GAUC 0.702579 | nDCG@5 0.662788 | primary 0.682683 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/039_candidate_context_v2.py
++++ logs-1k/record-run-4/solutions/040_light_context_member.py
+@@ -1,8 +1,8 @@
+-"""Richer candidate-context member blended from node 38.
+-
+-Adds non-label features computed only from the impression candidate set: per-user row
+-position/repeat position and duration/popularity context.  The old candidate-context
+-member is kept as a hedge while the new member has readable weight.
++"""Debug node 39: cheap row-position context member blended into node 38.
++
++The previous richer candidate-context member timed out.  This keeps node 38 intact
++and adds a much smaller LightGBM member trained only on cheap non-label candidate
++context signals (row/user position and duration relative to candidate-set means).
+ """
+ import argparse, os, sys, math
+ from collections import defaultdict
+@@ -31,12 +31,10 @@
+     trs=[]; vas=[]; tes=[]
+     for j in range(Xtr.shape[1]):
+         if target_is_valid:
+-            vals=np.concatenate([Xtr[:,j],Xva[:,j]])
+-            inv=np.unique(vals,return_inverse=True)[1]; n=len(Xtr)
++            vals=np.concatenate([Xtr[:,j],Xva[:,j]]); inv=np.unique(vals,return_inverse=True)[1]; n=len(Xtr)
+             trs.append(inv[:n]); vas.append(inv[n:]); tes.append(inv[n:])
+         else:
+-            vals=np.concatenate([Xtr[:,j],Xva[:,j],Xt[:,j]])
+-            inv=np.unique(vals,return_inverse=True)[1]; n=len(Xtr); m=len(Xva)
++            vals=np.concatenate([Xtr[:,j],Xva[:,j],Xt[:,j]]); inv=np.unique(vals,return_inverse=True)[1]; n=len(Xtr); m=len(Xva)
+             trs.append(inv[:n]); vas.append(inv[n:n+m]); tes.append(inv[n+m:])
+     return np.column_stack(trs).astype(np.int32),np.column_stack(vas).astype(np.int32),np.column_stack(tes).astype(np.int32)
+ 
+@@ -53,8 +51,7 @@
+     F=np.empty((n,18),dtype=np.float32)
+     for i,r in enumerate(rows):
+         u,v,a,tab,db=r[1],r[2],r[3],r[4],dur_bucket_ms(r[5])
+-        uv=cuv[(u,v)]; ua=cua[(u,a)]; ut=cut[(u,tab)]; ud=cud[(u,db)]
+-        denom=max(cu[u],1)
++        uv=cuv[(u,v)]; ua=cua[(u,a)]; ut=cut[(u,tab)]; ud=cud[(u,db)]; denom=max(cu[u],1)
+         seen_uv[(u,v)]+=1; seen_ua[(u,a)]+=1
+         ou=seen_uv[(u,v)]; oa=seen_ua[(u,a)]
+         F[i,0]=math.log1p(uv);       F[i,1]=uv/denom
+@@ -69,77 +66,61 @@
+     return F
+ 
+ 
+-def candidate_context_v2(rows):
++def light_context_features(rows):
+     n=len(rows)
+-    old=candidate_count_features(rows)
+-    cu=defaultdict(int); cv=defaultdict(int); ca=defaultdict(int); ct=defaultdict(int); cd=defaultdict(int)
+-    cuv=defaultdict(int); cua=defaultdict(int); cut=defaultdict(int); cud=defaultdict(int); cvu=defaultdict(int); cau=defaultdict(int)
+-    usum=defaultdict(float); usq=defaultdict(float); vsum=defaultdict(float); asum=defaultdict(float)
+-    uvids=defaultdict(set); uauths=defaultdict(set); utabs=defaultdict(set)
+-    vusers=defaultdict(set); ausers=defaultdict(set)
++    cu=defaultdict(int); cuv=defaultdict(int); cua=defaultdict(int); cut=defaultdict(int); cud=defaultdict(int)
++    usum=defaultdict(float); usq=defaultdict(float); vsum=defaultdict(float); vcnt=defaultdict(int); asum=defaultdict(float); acnt=defaultdict(int)
+     for r in rows:
+         u,v,a,tab,db=r[1],r[2],r[3],r[4],dur_bucket_ms(r[5]); d=float(r[5])
+-        cu[u]+=1; cv[v]+=1; ca[a]+=1; ct[tab]+=1; cd[db]+=1
+-        cuv[(u,v)]+=1; cua[(u,a)]+=1; cut[(u,tab)]+=1; cud[(u,db)]+=1
+-        usum[u]+=d; usq[u]+=d*d; vsum[v]+=d; asum[a]+=d
+-        uvids[u].add(v); uauths[u].add(a); utabs[u].add(tab); vusers[v].add(u); ausers[a].add(u)
+-    for v,s in vusers.items(): cvu[v]=len(s)
+-    for a,s in ausers.items(): cau[a]=len(s)
++        cu[u]+=1; cuv[(u,v)]+=1; cua[(u,a)]+=1; cut[(u,tab)]+=1; cud[(u,db)]+=1
++        usum[u]+=d; usq[u]+=d*d; vsum[v]+=d; vcnt[v]+=1; asum[a]+=d; acnt[a]+=1
+     seen_u=defaultdict(int); seen_uv=defaultdict(int); seen_ua=defaultdict(int); seen_ut=defaultdict(int); seen_ud=defaultdict(int)
+-    F=np.empty((n, old.shape[1]+28), dtype=np.float32)
+-    F[:,:old.shape[1]]=old
+-    off=old.shape[1]
+-    invn=1.0/max(n-1,1)
++    F=np.empty((n,15),dtype=np.float32); invn=1.0/max(n-1,1)
+     for i,r in enumerate(rows):
+         u,v,a,tab,db=r[1],r[2],r[3],r[4],dur_bucket_ms(r[5]); d=float(r[5])
+-        nuc=max(cu[u],1); nvc=max(cv[v],1); nac=max(ca[a],1)
+-        uv=max(cuv[(u,v)],1); ua=max(cua[(u,a)],1); ut=max(cut[(u,tab)],1); ud=max(cud[(u,db)],1)
++        nuc=max(cu[u],1); uv=max(cuv[(u,v)],1); ua=max(cua[(u,a)],1); ut=max(cut[(u,tab)],1); ud=max(cud[(u,db)],1)
+         seen_u[u]+=1; seen_uv[(u,v)]+=1; seen_ua[(u,a)]+=1; seen_ut[(u,tab)]+=1; seen_ud[(u,db)]+=1
+-        pos=seen_u[u]; muv=usum[u]/nuc; var=max(usq[u]/nuc-muv*muv,0.0); sdu=math.sqrt(var)+1e-6
+-        mvv=vsum[v]/nvc; maa=asum[a]/nac
+-        j=off
+-        F[i,j]=i*invn; j+=1
+-        F[i,j]=pos/nuc; j+=1
+-        F[i,j]=(nuc-pos+1)/nuc; j+=1
+-        F[i,j]=math.log1p(nuc); j+=1
+-        F[i,j]=math.log1p(len(uvids[u])); j+=1
+-        F[i,j]=math.log1p(len(uauths[u])); j+=1
+-        F[i,j]=len(utabs[u]); j+=1
+-        F[i,j]=len(uvids[u])/nuc; j+=1
+-        F[i,j]=len(uauths[u])/nuc; j+=1
+-        F[i,j]=math.log1p(cvu[v]); j+=1
+-        F[i,j]=math.log1p(cau[a]); j+=1
+-        F[i,j]=cvu[v]/max(nvc,1); j+=1
+-        F[i,j]=cau[a]/max(nac,1); j+=1
+-        F[i,j]=nvc/max(nuc,1); j+=1
+-        F[i,j]=nac/max(nuc,1); j+=1
+-        F[i,j]=(d-muv)/sdu; j+=1
+-        F[i,j]=math.log1p(max(d,0.0))-math.log1p(max(muv,0.0)); j+=1
+-        F[i,j]=d/(muv+1.0); j+=1
+-        F[i,j]=d/(mvv+1.0); j+=1
+-        F[i,j]=d/(maa+1.0); j+=1
+-        F[i,j]=abs(d-muv)/(sdu); j+=1
+-        F[i,j]=seen_uv[(u,v)]/uv; j+=1
+-        F[i,j]=(uv-seen_uv[(u,v)]+1)/uv; j+=1
+-        F[i,j]=seen_ua[(u,a)]/ua; j+=1
+-        F[i,j]=(ua-seen_ua[(u,a)]+1)/ua; j+=1
+-        F[i,j]=seen_ut[(u,tab)]/ut; j+=1
+-        F[i,j]=seen_ud[(u,db)]/ud; j+=1
+-        F[i,j]=ct[tab]/max(cd[db],1); j+=1
++        pos=seen_u[u]; mu=usum[u]/nuc; var=max(usq[u]/nuc-mu*mu,0.0); sd=math.sqrt(var)+1e-6
++        F[i,0]=i*invn
++        F[i,1]=pos/nuc
++        F[i,2]=(nuc-pos+1)/nuc
++        F[i,3]=math.log1p(nuc)
++        F[i,4]=(d-mu)/sd
++        F[i,5]=abs(d-mu)/sd
++        F[i,6]=d/(mu+1.0)
++        F[i,7]=d/(vsum[v]/max(vcnt[v],1)+1.0)
++        F[i,8]=d/(asum[a]/max(acnt[a],1)+1.0)
++        F[i,9]=seen_uv[(u,v)]/uv
++        F[i,10]=(uv-seen_uv[(u,v)]+1)/uv
++        F[i,11]=seen_ua[(u,a)]/ua
++        F[i,12]=(ua-seen_ua[(u,a)]+1)/ua
++        F[i,13]=seen_ut[(u,tab)]/ut
++        F[i,14]=seen_ud[(u,db)]/ud
+     return F
+ 
+ 
+-def base_feature_mats(splits,target,context_fn=candidate_count_features):
++def base_feature_mats(splits,target):
+     enc,_=encode(splits); Xtr0,ytr,_=enc['train']; Xva0,yva,_=enc['valid']; Xt0,_,_=enc[target]
+     Xtr,Xva,Xt=factorize_cols(Xtr0,Xva0,Xt0,target=='valid')
+     dtr=duration_array(splits['train']); dva=duration_array(splits['valid']); dt=dva if target=='valid' else duration_array(splits[target])
+-    Ftr=np.column_stack([Xtr.astype(np.float32),np.log1p(np.maximum(dtr,0))[:,None],(dtr/100000.0)[:,None],context_fn(splits['train'])]).astype(np.float32)
+-    Fva=np.column_stack([Xva.astype(np.float32),np.log1p(np.maximum(dva,0))[:,None],(dva/100000.0)[:,None],context_fn(splits['valid'])]).astype(np.float32)
+-    Ft=np.column_stack([Xt.astype(np.float32),np.log1p(np.maximum(dt,0))[:,None],(dt/100000.0)[:,None],context_fn(splits[target])]).astype(np.float32)
++    Ftr=np.column_stack([Xtr.astype(np.float32),np.log1p(np.maximum(dtr,0))[:,None],(dtr/100000.0)[:,None],candidate_count_features(splits['train'])]).astype(np.float32)
++    Fva=np.column_stack([Xva.astype(np.float32),np.log1p(np.maximum(dva,0))[:,None],(dva/100000.0)[:,None],candidate_count_features(splits['valid'])]).astype(np.float32)
++    Ft=np.column_stack([Xt.astype(np.float32),np.log1p(np.maximum(dt,0))[:,None],(dt/100000.0)[:,None],candidate_count_features(splits[target])]).astype(np.float32)
++    return Ftr,ytr,Fva,yva,Ft,enc
++
++
++def light_feature_mats(splits,target):
++    enc,_=encode(splits); Xtr0,ytr,_=enc['train']; Xva0,yva,_=enc['valid']; Xt0,_,_=enc[target]
++    Xtr,Xva,Xt=factorize_cols(Xtr0,Xva0,Xt0,target=='valid')
++    dtr=duration_array(splits['train']); dva=duration_array(splits['valid']); dt=dva if target=='valid' else duration_array(splits[target])
++    Ftr=np.column_stack([Xtr.astype(np.float32),np.log1p(np.maximum(dtr,0))[:,None],light_context_features(splits['train'])]).astype(np.float32)
++    Fva=np.column_stack([Xva.astype(np.float32),np.log1p(np.maximum(dva,0))[:,None],light_context_features(splits['valid'])]).astype(np.float32)
++    Ft=np.column_stack([Xt.astype(np.float32),np.log1p(np.maximum(dt,0))[:,None],light_context_features(splits[target])]).astype(np.float32)
+     return Ftr,ytr,Fva,yva,Ft
+ 
+ 
+ def train_minimal(splits,target,split_name,seed=0):
++    os.makedirs('pred_cache',exist_ok=True)
+     enc,_=encode(splits); Xtr0,ytr,_=enc['train']; Xva0,yva,_=enc['valid']; Xt0,_,_=enc[target]
+     Xtr,Xva,Xt=factorize_cols(Xtr0,Xva0,Xt0,target=='valid')
+     dtr=duration_array(splits['train']); dva=duration_array(splits['valid']); dt=dva if target=='valid' else duration_array(splits[target])
+@@ -149,33 +130,32 @@
+     clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=220,learning_rate=0.05,num_leaves=63,min_child_samples=500,subsample=0.85,subsample_freq=1,colsample_bytree=0.9,reg_alpha=0.1,reg_lambda=2.0,random_state=int(seed),n_jobs=-1,verbose=-1,force_col_wise=True)
+     clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=[lgb.early_stopping(20,first_metric_only=True,verbose=False)])
+     p=clf.predict(Ft,num_iteration=clf.best_iteration_,raw_score=True).astype(np.float32)
+-    np.save(f'pred_cache/039_fallback_minimal_split{split_name}_seed{seed}.npy',p)
++    np.save(f'pred_cache/040_fallback_minimal_split{split_name}_seed{seed}.npy',p)
+     return p
+ 
+ 
+-def train_old_candidate(splits,target,split_name,seed):
++def train_candidate_member(splits,target,split_name,seed):
++    os.makedirs('pred_cache',exist_ok=True)
+     path=os.path.join('pred_cache',f'033_candidate_context_split{split_name}_seed{seed}.npy')
+     if os.path.isfile(path):
+         p=np.load(path)
+         if len(p)==len(splits[target]): return p.astype(np.float32,copy=False)
+-    Ftr,ytr,Fva,yva,Ft=base_feature_mats(splits,target,candidate_count_features)
+-    clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=320,learning_rate=0.045,num_leaves=95,min_child_samples=700,subsample=0.82,subsample_freq=1,colsample_bytree=0.86,reg_alpha=0.2,reg_lambda=3.0,random_state=int(seed)+12013,n_jobs=-1,verbose=-1,force_col_wise=True)
++    Ftr,ytr,Fva,yva,Ft,_=base_feature_mats(splits,target)
++    clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=320,learning_rate=0.045,num_leaves=95,max_depth=-1,min_child_samples=700,subsample=0.82,subsample_freq=1,colsample_bytree=0.86,reg_alpha=0.2,reg_lambda=3.0,random_state=int(seed)+12013,n_jobs=-1,verbose=-1,force_col_wise=True)
+     clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=[lgb.early_stopping(28,first_metric_only=True,verbose=False)])
+-    p=clf.predict(Ft,num_iteration=clf.best_iteration_,raw_score=True).astype(np.float32)
+-    np.save(path,p); return p
+-
+-
+-def train_v2_candidate(splits,target,split_name,seed):
++    p=clf.predict(Ft,num_iteration=clf.best_iteration_,raw_score=True).astype(np.float32); np.save(path,p); return p
++
++
++def train_light_member(splits,target,split_name,seed):
+     os.makedirs('pred_cache',exist_ok=True)
+-    path=os.path.join('pred_cache',f'039_candidate_context_v2_split{split_name}_seed{seed}.npy')
++    path=os.path.join('pred_cache',f'040_light_rowpos_context_split{split_name}_seed{seed}.npy')
+     if os.path.isfile(path):
+         p=np.load(path)
+         if len(p)==len(splits[target]): return p.astype(np.float32,copy=False)
+-    Ftr,ytr,Fva,yva,Ft=base_feature_mats(splits,target,candidate_context_v2)
+-    clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=300,learning_rate=0.045,num_leaves=111,min_child_samples=650,subsample=0.82,subsample_freq=1,colsample_bytree=0.84,reg_alpha=0.25,reg_lambda=3.5,random_state=int(seed)+39039,n_jobs=-1,verbose=-1,force_col_wise=True)
+-    clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=[lgb.early_stopping(26,first_metric_only=True,verbose=False)])
+-    p=clf.predict(Ft,num_iteration=clf.best_iteration_,raw_score=True).astype(np.float32)
+-    np.save(path,p); return p
++    Ftr,ytr,Fva,yva,Ft=light_feature_mats(splits,target)
++    clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=120,learning_rate=0.06,num_leaves=47,max_depth=-1,min_child_samples=1200,subsample=0.80,subsample_freq=1,colsample_bytree=0.82,reg_alpha=0.3,reg_lambda=4.0,random_state=int(seed)+40040,n_jobs=-1,verbose=-1,force_col_wise=True)
++    clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=[lgb.early_stopping(14,first_metric_only=True,verbose=False)])
++    p=clf.predict(Ft,num_iteration=clf.best_iteration_,raw_score=True).astype(np.float32); np.save(path,p); return p
+ 
+ 
+ def load_first(names,n):
+@@ -234,7 +214,6 @@
+         splits=load(a.data_dir); target=a.split
+     print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}')
+     enc,_=encode(splits); users=np.asarray(enc[target][2]); n=len(users); sp=a.split
+-    os.makedirs('pred_cache',exist_ok=True)
+     exact0=load_first([f'{p}_node11_raw_split{sp}_mseed0.npy' for p in ['018','019','020','021','022','023','024','025','026','028','029']],n)
+     exact2=load_first([f'{p}_node11_raw_split{sp}_mseed2.npy' for p in ['018','019','020','021','022','023','024','025','026','028','029']],n)
+     fast=load_first([f'{p}_fast_lgbm_split{sp}_mseed4.npy' for p in ['022','023','024','025','026','028','029']],n)
+@@ -242,7 +221,7 @@
+     seq=load_first([f'{p}_user_history_seq_split{sp}_mseed8.npy' for p in ['026','028','029']],n)
+     aux=load_first([f'029_aux_soft_seq_split{sp}_mseed10.npy'],n)
+     fallback_cache={}
+-    def fb(seed):
++    def fb(seed=0):
+         if seed not in fallback_cache: fallback_cache[seed]=train_minimal(splits,target,sp,seed)
+         return fallback_cache[seed]
+     if exact0 is None: exact0=fb(0)
+@@ -251,15 +230,18 @@
+     if stat is None: stat=fb(6)
+     if seq is None: seq=fb(8)
+     if aux is None: aux=fb(10)
+-    oldcand=train_old_candidate(splits,target,sp,a.seed)
+-    newcand=train_v2_candidate(splits,target,sp,a.seed)
++    cand=train_candidate_member(splits,target,sp,a.seed)
++    light=train_light_member(splits,target,sp,a.seed)
+     base=node30_score(exact0,exact2,fast,stat,seq,aux,users)
+     inc=node24(exact0,exact2,fast,users)
+-    arrs=[inc,stat,seq,aux,oldcand,newcand]
+-    weights=[0.045,0.015,0.050,0.050,0.235,0.605]
++
++    # Node-38 fusion, then readable 25% addition of the cheap row-position member.
++    arrs=[inc,stat,seq,aux,cand]
++    weights=[0.08,0.02,0.075,0.075,0.75]
+     zmain=z_per_user_blend(arrs,weights,users)
+     rrf=rrf_per_user(arrs,weights,users,k=45.0)
+-    scores=z_per_user_blend([base,zmain,rrf],[0.035,0.590,0.375],users).astype(np.float64)
++    node38=z_per_user_blend([base,zmain,rrf],[0.04,0.58,0.38],users)
++    scores=z_per_user_blend([node38,light],[0.75,0.25],users).astype(np.float64)
+     if a.out:
+         np.save(a.out,scores); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else:

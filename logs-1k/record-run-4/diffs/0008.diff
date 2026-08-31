@@ -1,0 +1,54 @@
+# iteration 8  (parent: 7)
+# hypothesis: debug 7: LightGBM lambdarank refuses query groups above 10000 rows, so split only oversized users into consecutive <=10000 chunks while preserving same-user grouping for all normal users. This should finally produce a dev score for the LambdaMART/statistics draft.
+# result: GAUC 0.575092 | nDCG@5 0.377325 | primary 0.476209 | verdict screen
+
+--- logs-1k/record-run-4/solutions/007_lgbm_lambdarank_users_np.py
++++ logs-1k/record-run-4/solutions/008_lgbm_lambdarank_chunked.py
+@@ -1,9 +1,9 @@
+ """LightGBM LambdaMART ranker with train-only historical statistics.
+ 
+-Debug of node 6: encode() returns users as a Python sequence, so indexing it by a
+-NumPy permutation fails.  Convert users to np.asarray before sorting into
+-LightGBM query groups.  The rest keeps node 6's dense non-negative categorical
+-factorization.
++Debug of node 7: LightGBM's lambdarank has a hard query-size limit of 10,000
++rows, while a few users have more impressions.  Keep rows sorted by user but
++split oversized user groups into consecutive chunks of <=10,000 so training can
++run without changing prediction order.
+ """
+ import argparse
+ import os
+@@ -141,12 +141,24 @@
+     return enc, Ftr, ytr.astype(np.int32), Fva, yva.astype(np.int32), Ft
+ 
+ 
++def split_counts(counts, max_group=10000):
++    out = []
++    for c in counts:
++        c = int(c)
++        while c > max_group:
++            out.append(max_group)
++            c -= max_group
++        if c > 0:
++            out.append(c)
++    return out
++
++
+ def sort_by_user(F, y, users):
+     users = np.asarray(users)
+     order = np.argsort(users, kind='stable')
+     us = users[order]
+     _, counts = np.unique(us, return_counts=True)
+-    return F[order], y[order], counts.tolist()
++    return F[order], y[order], split_counts(counts, 10000)
+ 
+ 
+ def train_ranker(splits, target, seed=0, verbose=True):
+@@ -159,6 +171,7 @@
+ 
+     if verbose:
+         print(f"features train={Ftr_s.shape} valid={Fva_s.shape} target={Ft.shape} build {time.time()-t0:.1f}s")
++        print(f"groups train={len(gtr)} max={max(gtr)} valid={len(gva)} max={max(gva)}")
+ 
+     ranker = lgb.LGBMRanker(
+         objective='lambdarank',

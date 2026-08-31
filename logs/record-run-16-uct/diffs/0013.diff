@@ -1,0 +1,77 @@
+# iteration 13  (parent: 12)
+# hypothesis: improve 12: keep the cached six-member ensemble but replace linear rank-percentile fusion with reciprocal-rank fusion (c=10), concentrating the 30% rank signal on top positions that drive nDCG@5.
+# result: GAUC 0.670652 | nDCG@5 0.537697 | primary 0.604174 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/012_seedbag_rankblend.py
++++ logs/record-run-16-uct/solutions/013_rrf_fusion.py
+@@ -1,10 +1,9 @@
+-"""Rank-aware fusion of the cached seed-bagged BPR/soft-hard FM members.
+-
+-Parent 011 averaged per-user z-scored logits from six unchanged member models
+-(2 mechanisms x seeds 0/1/2).  This variant keeps member training identical and
+-adds a per-user rank-percentile fusion signal, blended at 30%, to focus the
+-ensemble on the top of each user's list for nDCG@5 while retaining most GAUC
+-from score averaging.
++"""RRF-style fusion of cached seed-bagged BPR/soft-hard FM members.
++
++Parent 012 added 30% linear rank-percentile fusion to the six unchanged member
++predictions. This variant keeps the same members and score-z component, but
++replaces the linear rank signal with per-user reciprocal-rank fusion, which
++puts more contrast into the very top positions that matter for nDCG@5.
+ """
+ import argparse
+ import os
+@@ -179,8 +178,8 @@
+     return out
+ 
+ 
+-def per_user_rank_percentile(pred, groups):
+-    """Within-user rank score in [0,1], higher is better."""
++def per_user_rrf(pred, groups, c=10.0):
++    """Reciprocal rank score per user; higher model score gets rank 1."""
+     out = np.empty_like(pred, dtype=np.float64)
+     for idx in groups:
+         vals = pred[idx]
+@@ -188,10 +187,11 @@
+         if n <= 1:
+             out[idx] = 0.0
+             continue
+-        order = np.argsort(vals, kind='mergesort')  # ascending
++        # descending ranks: best item has rank 1
++        order = np.argsort(-vals, kind='mergesort')
+         ranks = np.empty(n, dtype=np.float64)
+-        ranks[order] = np.arange(n, dtype=np.float64)
+-        out[idx] = ranks / (n - 1.0)
++        ranks[order] = np.arange(1, n + 1, dtype=np.float64)
++        out[idx] = 1.0 / (c + ranks)
+     return out
+ 
+ 
+@@ -222,7 +222,7 @@
+     groups = user_groups(users)
+ 
+     bag_seeds = [0, 1, 2]
+-    z_bpr, z_soft, r_bpr, r_soft = [], [], [], []
++    z_bpr, z_soft, rr_bpr, rr_soft = [], [], [], []
+     for s in bag_seeds:
+         pb = get_member_preds('bpr1', enc, dim, target, split_name, s, a.device,
+                               verbose=(a.out is None))
+@@ -230,13 +230,13 @@
+                               verbose=(a.out is None))
+         z_bpr.append(per_user_z(pb, groups))
+         z_soft.append(per_user_z(ps, groups))
+-        r_bpr.append(per_user_rank_percentile(pb, groups))
+-        r_soft.append(per_user_rank_percentile(ps, groups))
++        rr_bpr.append(per_user_rrf(pb, groups, c=10.0))
++        rr_soft.append(per_user_rrf(ps, groups, c=10.0))
+ 
+     score_z = 0.60 * np.mean(z_bpr, axis=0) + 0.40 * np.mean(z_soft, axis=0)
+-    score_rank = 0.60 * np.mean(r_bpr, axis=0) + 0.40 * np.mean(r_soft, axis=0)
+-    score_rank = per_user_z(score_rank, groups)
+-    scores = 0.70 * score_z + 0.30 * score_rank
++    score_rrf = 0.60 * np.mean(rr_bpr, axis=0) + 0.40 * np.mean(rr_soft, axis=0)
++    score_rrf = per_user_z(score_rrf, groups)
++    scores = 0.70 * score_z + 0.30 * score_rrf
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

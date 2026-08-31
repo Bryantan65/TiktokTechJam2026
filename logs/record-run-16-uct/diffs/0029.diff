@@ -1,0 +1,174 @@
+# iteration 29  (parent: 24)
+# hypothesis: draft time features: branch from the best despite UCT because the convergence watch needs a higher-payoff new mechanism; CTR writeups commonly use hour/weekday/recency features (Kaggle kernels index https://www.kaggle.com/kernels), so join raw CSV hourmin and add a small smoothed TRAIN-only user-hour/user-weekday residual to node 024.
+# result: GAUC None | nDCG@5 None | primary None | verdict failed
+
+--- logs/record-run-16-uct/solutions/024_rank60_power_rank.py
++++ logs/record-run-16-uct/solutions/029_time_residual.py
+@@ -1,15 +1,16 @@
+-"""Cached FM ensemble with top-emphasized rank fusion and history prior.
+-
+-Refines node 022: keep its 60% rank / 40% score fusion and 10% train-only
+-history prior, but transform per-member rank percentiles with p^2 before
+-averaging.  The raw 60% rank blend likely over-weighted mid-list order; p^2
+-keeps the rank signal monotone while emphasizing the top of each user's list,
+-which is where nDCG@5 is measured.
++"""Node 024 ensemble plus a small TRAIN-only time residual.
++
++This drafts a time-feature branch from the current best: raw CSV hourmin is not
++present in data.load() tuples, so we join it back by the six tuple fields and
++add smoothed user-hour / user-weekday / tab-hour residuals at low weight.
+ """
+ import argparse
++import csv
++import datetime as _dt
+ import os
+ import sys
+ import time
++from collections import defaultdict, deque
+ 
+ import numpy as np
+ import torch
+@@ -211,7 +212,6 @@
+ 
+ 
+ def build_history_signal(splits, target):
+-    """TRAIN-only residual target encoding for repeated user context."""
+     user_stat = {}
+     uv_stat, ua_stat, ut_stat = {}, {}, {}
+     global_sum, global_cnt = 0.0, 0
+@@ -237,6 +237,122 @@
+     return out
+ 
+ 
++def _norm_num(x):
++    try:
++        return str(int(float(x)))
++    except Exception:
++        return str(x)
++
++
++def _row_key(row):
++    return (str(row[0]), str(row[1]), str(row[2]), str(row[3]), str(row[4]), _norm_num(row[5]))
++
++
++def _csv_key(rec):
++    def get(*names):
++        for n in names:
++            if n in rec:
++                return rec[n]
++        return ''
++    return (str(get('date')), str(get('user_id', 'user')), str(get('video_id', 'photo_id', 'item_id')),
++            str(get('author_id')), str(get('tab')), _norm_num(get('duration_ms', 'duration')))
++
++
++def _parse_hour(x):
++    if x is None:
++        return -1
++    s = str(x).strip()
++    if not s:
++        return -1
++    try:
++        if ':' in s:
++            return int(s.split(':')[0]) % 24
++        v = int(float(s))
++        if v >= 100:
++            return (v // 100) % 24
++        return v % 24
++    except Exception:
++        return -1
++
++
++def _weekday(date_val):
++    try:
++        s = str(int(date_val))
++        return _dt.datetime.strptime(s, '%Y%m%d').weekday()
++    except Exception:
++        return -1
++
++
++def load_time_extras(data_dir, splits):
++    """Return {(split,row_index): (hour_bucket, weekday)} by joining raw CSV rows."""
++    files = ['log_standard_4_08_to_4_21_pure.csv', 'log_standard_4_22_to_5_08_pure.csv']
++    q = defaultdict(deque)
++    for fn in files:
++        path = os.path.join(data_dir, fn)
++        if not os.path.isfile(path):
++            continue
++        try:
++            with open(path, newline='', encoding='utf-8') as f:
++                rd = csv.DictReader(f)
++                for rec in rd:
++                    hm = rec.get('hourmin', rec.get('hour_min', rec.get('time', '')))
++                    h = _parse_hour(hm)
++                    hb = h // 4 if h >= 0 else -1
++                    d = rec.get('date', '')
++                    q[_csv_key(rec)].append((hb, _weekday(d)))
++        except Exception:
++            continue
++    extras = {}
++    for sp, rows in splits.items():
++        arr = []
++        for row in rows:
++            dq = q.get(_row_key(row))
++            if dq and len(dq):
++                arr.append(dq.popleft())
++            else:
++                arr.append((-1, _weekday(row[0])))
++        extras[sp] = arr
++    return extras
++
++
++def build_time_signal(splits, target, extras):
++    user_stat, tab_stat = {}, {}
++    uh_stat, uw_stat, uth_stat, th_stat = {}, {}, {}, {}
++    gsum, gcnt = 0.0, 0
++    for i, row in enumerate(splits['train']):
++        u, tab, y = row[1], row[4], float(row[6])
++        hb, wd = extras.get('train', [(-1, -1)] * len(splits['train']))[i]
++        add_stat(user_stat, u, y)
++        add_stat(tab_stat, tab, y)
++        if hb >= 0:
++            add_stat(uh_stat, (u, hb), y)
++            add_stat(uth_stat, (u, tab, hb), y)
++            add_stat(th_stat, (tab, hb), y)
++        if wd >= 0:
++            add_stat(uw_stat, (u, wd), y)
++        gsum += y
++        gcnt += 1
++    gm = gsum / max(1, gcnt)
++    out = np.zeros(len(splits[target]), dtype=np.float64)
++    targ_extra = extras.get(target, [(-1, -1)] * len(splits[target]))
++    for i, row in enumerate(splits[target]):
++        u, tab = row[1], row[4]
++        hb, wd = targ_extra[i]
++        us, uc = user_stat.get(u, (gm, 0))
++        ub = us / uc if uc > 0 else gm
++        ts, tc = tab_stat.get(tab, (gm, 0))
++        tb = ts / tc if tc > 0 else gm
++        val = 0.0
++        if hb >= 0:
++            val += 0.55 * smoothed_dev(uh_stat, (u, hb), ub, alpha=8.0)
++            val += 0.25 * smoothed_dev(uth_stat, (u, tab, hb), ub, alpha=12.0)
++            val += 0.18 * smoothed_dev(th_stat, (tab, hb), tb, alpha=80.0)
++        if wd >= 0:
++            val += 0.25 * smoothed_dev(uw_stat, (u, wd), ub, alpha=12.0)
++        out[i] = val
++    return out
++
++
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser()
+     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+@@ -281,7 +397,11 @@
+     ensemble = 0.40 * score_z + 0.60 * score_rank
+ 
+     hist = per_user_z(build_history_signal(splits, target), groups)
+-    scores = 0.90 * ensemble + 0.10 * hist
++    best = 0.90 * ensemble + 0.10 * hist
++
++    extras = load_time_extras(a.data_dir, splits)
++    tm = per_user_z(build_time_signal(splits, target, extras), groups)
++    scores = 0.95 * best + 0.05 * tm
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

@@ -1,0 +1,154 @@
+# iteration 3  (parent: 2)
+# hypothesis: improve 2: BPR improved ranking but had higher seed spread, so add a small BCE term on sampled positive/negative rows to stabilize pointwise calibration while keeping same-user pairwise optimization dominant.
+# result: GAUC 0.668749 | nDCG@5 0.536213 | primary 0.602481 | verdict noise
+
+--- logs/record-run-13/solutions/002_bpr_fm.py
++++ logs/record-run-13/solutions/003_bpr_bce_fm.py
+@@ -1,12 +1,9 @@
+-"""Pairwise BPR-trained FM for within-user ranking.
++"""FM trained with a same-user pairwise BPR loss plus a small pointwise BCE term.
+ 
+-Compared with 001_torch_fm.py, the model and features are unchanged but the
+-training objective is changed from pointwise BCE to Bayesian Personalized
+-Ranking: for each user, score observed positives above negatives from the same
+-user. This aligns the update with the within-user ranking metrics.
+-
+-Reference formulation: Rendle et al., Bayesian Personalized Ranking from
+-Implicit Feedback, https://www.alphaxiv.org/abs/1205.2618
++Node 2 showed BPR is directionally better than BCE but noisier.  This keeps the
++ranking-aligned update (positive row above negative row for the same user) and
++adds BCE on those sampled rows to preserve the useful pointwise signal/scale from
++001 without letting it dominate the pairwise objective.
+ """
+ import argparse
+ import os
+@@ -20,7 +17,7 @@
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 '..', 'kuairand-starter-kit'))
+ from data import load, encode, FIELDS          # noqa: E402
+-from evaluate import evaluate                  # noqa: E402  early stopping only
++from evaluate import evaluate                  # noqa: E402
+ 
+ 
+ class TorchFM(torch.nn.Module):
+@@ -49,12 +46,6 @@
+ 
+ 
+ def make_user_pair_sources(y, users):
+-    """Return positive indices and matching per-positive negative pools.
+-
+-    One training example is (u, positive row, negative row) with positive and
+-    negative rows belonging to the same user. Users without both classes carry no
+-    pairwise ranking information and are skipped.
+-    """
+     pos = defaultdict(list)
+     neg = defaultdict(list)
+     for i, (yy, uu) in enumerate(zip(y, users)):
+@@ -76,17 +67,12 @@
+ 
+ 
+ def sample_epoch_pairs(pos_idx, neg_pools, rng, neg_per_pos=3):
+-    npos = len(pos_idx)
+-    total = npos * neg_per_pos
++    total = len(pos_idx) * neg_per_pos
+     p_out = np.empty(total, dtype=np.int64)
+     n_out = np.empty(total, dtype=np.int64)
+     k = 0
+-    # Sample negatives from the corresponding user's negative pool.  This loop
+-    # is cheap relative to torch training and avoids materialising a huge ragged
+-    # user-by-negative matrix.
+     for p, pool in zip(pos_idx, neg_pools):
+-        m = len(pool)
+-        draws = pool[rng.integers(0, m, size=neg_per_pos)]
++        draws = pool[rng.integers(0, len(pool), size=neg_per_pos)]
+         p_out[k:k + neg_per_pos] = p
+         n_out[k:k + neg_per_pos] = draws
+         k += neg_per_pos
+@@ -95,7 +81,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        neg_per_pos=3, seed=0, device='cpu', verbose=True):
++        neg_per_pos=3, bce_weight=0.25, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -108,7 +94,7 @@
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     pos_idx, neg_pools = make_user_pair_sources(ytr, utr)
+     if len(pos_idx) == 0:
+-        raise RuntimeError('No users with both positive and negative examples; cannot train BPR')
++        raise RuntimeError('No users with both positive and negative examples; cannot train pairs')
+ 
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+@@ -118,6 +104,8 @@
+         p_idx, n_idx = sample_epoch_pairs(pos_idx, neg_pools, rng, neg_per_pos=neg_per_pos)
+         model.train()
+         losses = []
++        bpr_losses = []
++        bce_losses = []
+         for i in range(0, len(p_idx), bs):
+             ps = torch.from_numpy(p_idx[i:i + bs])
+             ns = torch.from_numpy(n_idx[i:i + bs])
+@@ -126,18 +114,27 @@
+             opt.zero_grad(set_to_none=True)
+             sp = model(xp)
+             sn = model(xn)
+-            # -log sigmoid(score_pos - score_neg), stable implementation.
+-            loss = torch.nn.functional.softplus(-(sp - sn)).mean()
++            bpr = torch.nn.functional.softplus(-(sp - sn)).mean()
++            # Pointwise term on exactly the rows participating in the pairwise
++            # update.  The constant bias cannot affect the final within-user
++            # score, but BCE helps keep item/video/author effects calibrated.
++            bce = 0.5 * (torch.nn.functional.binary_cross_entropy_with_logits(
++                sp, torch.ones_like(sp)) +
++                torch.nn.functional.binary_cross_entropy_with_logits(
++                sn, torch.zeros_like(sn)))
++            loss = bpr + bce_weight * bce
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
++            bpr_losses.append(bpr.item())
++            bce_losses.append(bce.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | loss {np.mean(losses):.4f} "
++                  f"bpr {np.mean(bpr_losses):.4f} bce {np.mean(bce_losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+-                  f"primary {va['primary']:.4f} | pairs {len(p_idx):,d} | "
+-                  f"{time.time() - t0:.1f}s")
++                  f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+@@ -162,6 +159,7 @@
+     ap.add_argument('--lr', type=float, default=0.001)
+     ap.add_argument('--epochs', type=int, default=40)
+     ap.add_argument('--neg_per_pos', type=int, default=3)
++    ap.add_argument('--bce_weight', type=float, default=0.25)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+@@ -178,8 +176,8 @@
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+     model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs,
+-                     neg_per_pos=a.neg_per_pos, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
++                     neg_per_pos=a.neg_per_pos, bce_weight=a.bce_weight,
++                     seed=a.seed, device=a.device, verbose=a.out is None)
+ 
+     X, y, users = enc[target]
+     scores = model.predict(X, device=a.device)
+@@ -188,7 +186,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_bce_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             Xs, ys, us = enc[sp]
+             r = evaluate(us, ys, model.predict(Xs, device=a.device))

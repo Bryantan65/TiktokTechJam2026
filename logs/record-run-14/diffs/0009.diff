@@ -1,0 +1,263 @@
+# iteration 9  (parent: 8)
+# hypothesis: improve 8: the hand-smoothed historical scores were weak; expose user-video/user-author/user-tab as hashed FM fields so training learns the amount of memorisation instead of fixed target-encoding weights.
+# result: GAUC 0.662558 | nDCG@5 0.533675 | primary 0.598117 | verdict worse
+
+--- logs/record-run-14/solutions/008_hist_blend.py
++++ logs/record-run-14/solutions/009_hash_cross_fm.py
+@@ -1,17 +1,16 @@
+-"""Blend FM/BPR logits with leakage-free historical preference target encodings.
+-
+-CTR/ranking competition writeups for recommenders commonly add user-item and
+-session/item interaction features to a neural or GBDT ranker (e.g. Kaggle OTTO
+-20th place: https://www.kaggle.com/competitions/otto-recommender-system/writeups/kicchotto-20th-place-solution).
+-Here the target metric is within-user, so we add smoothed train-only historical
+-preferences for user-author, user-video and user-tab, then blend them at readable
+-weight with the two strongest FM losses.  No raw long_view CSV column is read.
++"""FM with hashed within-user cross fields.
++
++Node 8's hand-smoothed history features were only a weak post-hoc correction.
++This version gives the FM explicit first-order memorisation slots for the same
++within-user preferences (user-video, user-author, user-tab) plus author-tab, so
++BCE/BPR training can learn the smoothing and interactions instead of using fixed
++weights.
+ """
+ import argparse
+-import math
+ import os
+ import sys
+ import time
++import zlib
+ from collections import defaultdict
+ 
+ import numpy as np
+@@ -21,6 +20,39 @@
+                              '..', 'kuairand-starter-kit'))
+ from data import load, encode, FIELDS          # noqa: E402
+ from evaluate import evaluate                  # noqa: E402
++
++# Bucket sizes keep Adam memory bounded while giving common crosses dedicated-ish ids.
++CROSS_SPECS = [
++    ('uv', 600_000),   # user-video repeated exposures / pair preference
++    ('ua', 400_000),   # user-author preference
++    ('ut', 80_000),    # user-tab preference
++    ('at', 120_000),   # author-tab context
++]
++
++
++def h2(a, b, mod):
++    s = (str(a) + '\x1f' + str(b)).encode('utf8')
++    return zlib.crc32(s) % mod
++
++
++def augment_encoded(splits):
++    enc0, dim0 = encode(splits)
++    enc = {}
++    for sp, rows in splits.items():
++        X0, y, u = enc0[sp]
++        H = np.empty((len(rows), len(CROSS_SPECS)), dtype=np.int64)
++        offsets = []
++        off = dim0
++        for _, m in CROSS_SPECS:
++            offsets.append(off); off += m
++        for i, r in enumerate(rows):
++            user, video, author, tab = r[1], r[2], r[3], r[4]
++            H[i, 0] = offsets[0] + h2(user, video, CROSS_SPECS[0][1])
++            H[i, 1] = offsets[1] + h2(user, author, CROSS_SPECS[1][1])
++            H[i, 2] = offsets[2] + h2(user, tab, CROSS_SPECS[2][1])
++            H[i, 3] = offsets[3] + h2(author, tab, CROSS_SPECS[3][1])
++        enc[sp] = (np.concatenate([X0.astype(np.int64), H], axis=1), y, u)
++    return enc, off
+ 
+ 
+ class TorchFM(torch.nn.Module):
+@@ -47,10 +79,28 @@
+         return np.concatenate(out)
+ 
+ 
+-def train_bce(splits, seed=0, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4, device='cpu'):
+-    enc, dim = encode(splits)
+-    Xtr, ytr, _ = enc['train']
+-    Xva, yva, uva = enc['valid']
++def build_pair_sampler(y, users):
++    pos_by_user = defaultdict(list); neg_by_user = defaultdict(list)
++    for i, (u, yy) in enumerate(zip(users, y)):
++        if yy > 0.5:
++            pos_by_user[u].append(i)
++        else:
++            neg_by_user[u].append(i)
++    pos_idx, neg_pools = [], []
++    for u, ps in pos_by_user.items():
++        ns = neg_by_user.get(u)
++        if not ns:
++            continue
++        arr = np.asarray(ns, dtype=np.int64)
++        for p in ps:
++            pos_idx.append(p); neg_pools.append(arr)
++    return np.asarray(pos_idx, dtype=np.int64), neg_pools
++
++
++def train_bce(splits, seed=0, k=16, lr=0.001, l2=3e-6, epochs=40, bs=8192,
++              patience=4, device='cpu'):
++    enc, dim = augment_encoded(splits)
++    Xtr, ytr, _ = enc['train']; Xva, yva, uva = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}], lr=lr)
+@@ -79,36 +129,15 @@
+     return model, enc
+ 
+ 
+-def build_pair_sampler(y, users):
+-    pos_by_user = defaultdict(list); neg_by_user = defaultdict(list)
+-    for i, (u, yy) in enumerate(zip(users, y)):
+-        if yy > 0.5:
+-            pos_by_user[u].append(i)
+-        else:
+-            neg_by_user[u].append(i)
+-    pos_idx, neg_pools = [], []
+-    for u, ps in pos_by_user.items():
+-        ns = neg_by_user.get(u)
+-        if not ns:
+-            continue
+-        arr = np.asarray(ns, dtype=np.int64)
+-        for p in ps:
+-            pos_idx.append(p); neg_pools.append(arr)
+-    return np.asarray(pos_idx, dtype=np.int64), neg_pools
+-
+-
+-def train_bpr(splits, seed=0, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-              bce_weight=0.05, device='cpu'):
+-    enc, dim = encode(splits)
+-    Xtr, ytr, utr = enc['train']
+-    Xva, yva, uva = enc['valid']
++def train_bpr(splits, seed=0, k=16, lr=0.001, l2=3e-6, epochs=40, bs=8192,
++              patience=4, bce_weight=0.02, device='cpu'):
++    enc, dim = augment_encoded(splits)
++    Xtr, ytr, utr = enc['train']; Xva, yva, uva = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}], lr=lr)
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64)); ytr_t = torch.from_numpy(ytr.astype(np.float32))
+     pos_idx, neg_pools = build_pair_sampler(ytr, utr)
+-    if len(pos_idx) == 0:
+-        raise RuntimeError('no within-user pairs')
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+     n_pairs = max(len(ytr), len(pos_idx))
+@@ -145,75 +174,29 @@
+     return model, enc
+ 
+ 
+-def add_count(d, key, y):
+-    v = d[key]; v[0] += float(y); v[1] += 1.0
+-
+-
+-def prob(pos, cnt, prior, alpha):
+-    return (pos + alpha * prior) / (cnt + alpha) if cnt > 0 else prior
+-
+-
+-def logit(p):
+-    p = min(max(float(p), 1e-5), 1.0 - 1e-5)
+-    return math.log(p / (1.0 - p))
+-
+-
+-def historical_scores(train_rows, target_rows):
+-    global_pos = sum(float(r[6]) for r in train_rows); global_cnt = float(len(train_rows))
+-    gp = global_pos / max(global_cnt, 1.0)
+-    user = defaultdict(lambda: [0.0, 0.0]); ua = defaultdict(lambda: [0.0, 0.0])
+-    uv = defaultdict(lambda: [0.0, 0.0]); ut = defaultdict(lambda: [0.0, 0.0])
+-    author = defaultdict(lambda: [0.0, 0.0]); video = defaultdict(lambda: [0.0, 0.0])
+-    tab = defaultdict(lambda: [0.0, 0.0]); at = defaultdict(lambda: [0.0, 0.0])
+-    for r in train_rows:
+-        y = float(r[6]); u = r[1]; v = r[2]; a = r[3]; t = r[4]
+-        add_count(user, u, y); add_count(ua, (u, a), y); add_count(uv, (u, v), y); add_count(ut, (u, t), y)
+-        add_count(author, a, y); add_count(video, v, y); add_count(tab, t, y); add_count(at, (a, t), y)
+-    out = np.zeros(len(target_rows), dtype=np.float32)
+-    g_log = logit(gp)
+-    for i, r in enumerate(target_rows):
+-        u = r[1]; v = r[2]; a = r[3]; t = r[4]
+-        upos, ucnt = user.get(u, (0.0, 0.0))
+-        up = prob(upos, ucnt, gp, 30.0)
+-        ulog = logit(up)
+-        s = 0.0
+-        p, c = ua.get((u, a), (0.0, 0.0)); s += 1.05 * (logit(prob(p, c, up, 8.0)) - ulog)
+-        p, c = uv.get((u, v), (0.0, 0.0)); s += 1.25 * (logit(prob(p, c, up, 5.0)) - ulog)
+-        p, c = ut.get((u, t), (0.0, 0.0)); s += 0.75 * (logit(prob(p, c, up, 15.0)) - ulog)
+-        p, c = author.get(a, (0.0, 0.0)); s += 0.35 * (logit(prob(p, c, gp, 50.0)) - g_log)
+-        p, c = video.get(v, (0.0, 0.0)); s += 0.20 * (logit(prob(p, c, gp, 20.0)) - g_log)
+-        p, c = tab.get(t, (0.0, 0.0)); s += 0.25 * (logit(prob(p, c, gp, 200.0)) - g_log)
+-        p, c = at.get((a, t), (0.0, 0.0)); s += 0.15 * (logit(prob(p, c, gp, 80.0)) - g_log)
+-        out[i] = s
+-    return out
+-
+-
+ def z_by_user(scores, users):
+     scores = np.asarray(scores, dtype=np.float64)
+-    out = np.zeros_like(scores, dtype=np.float64)
++    out = np.zeros_like(scores)
+     groups = defaultdict(list)
+     for i, u in enumerate(users):
+         groups[u].append(i)
+     for idxs in groups.values():
+         vals = scores[idxs]
+         sd = vals.std()
+-        if sd > 1e-8:
+-            out[idxs] = (vals - vals.mean()) / sd
+-        else:
+-            out[idxs] = 0.0
++        out[idxs] = (vals - vals.mean()) / sd if sd > 1e-8 else 0.0
+     return out
+ 
+ 
+ def cached_member(name, split_name, target, seed, train_fn, splits, device):
+     os.makedirs('pred_cache', exist_ok=True)
+-    path = os.path.join('pred_cache', f'008_{name}_{split_name}_seed{seed}.npy')
++    path = os.path.join('pred_cache', f'009_{name}_{split_name}_seed{seed}.npy')
+     if os.path.isfile(path):
+-        return np.load(path)
++        return np.load(path), None
+     model, enc = train_fn(splits, seed=seed, device=device)
+-    X, _, _ = enc[target]
++    X, _, users = enc[target]
+     preds = model.predict(X, device=device).astype(np.float64)
+     np.save(path, preds)
+-    return preds
++    return preds, users
+ 
+ 
+ if __name__ == '__main__':
+@@ -231,22 +214,20 @@
+         splits = load_dev(a.data_dir); target = 'valid'; split_name = 'dev'
+     else:
+         splits = load(a.data_dir); target = a.split; split_name = a.split
+-    print({k: len(v) for k, v in splits.items()}, f"fields={FIELDS}; hist blend")
+-
++    print({k: len(v) for k, v in splits.items()}, f"fields={FIELDS}+hashed_crosses")
+     t0 = time.time()
+-    bce_pred = cached_member('bce', split_name, target, a.seed, train_bce, splits, a.device)
+-    bpr_pred = cached_member('bpr05', split_name, target, a.seed, train_bpr, splits, a.device)
+-    hist_pred = historical_scores(splits['train'], splits[target]).astype(np.float64)
+-    _, _, users = encode(splits)[0][target]
+-    scores = (0.35 * z_by_user(bce_pred, users) +
+-              0.35 * z_by_user(bpr_pred, users) +
+-              0.30 * z_by_user(hist_pred, users))
+-    print(f"built blended predictions in {time.time() - t0:.1f}s")
+-
++    bce_pred, users = cached_member('cross_bce', split_name, target, a.seed, train_bce, splits, a.device)
++    bpr_pred, users2 = cached_member('cross_bpr02', split_name, target, a.seed, train_bpr, splits, a.device)
++    if users is None:
++        enc_tmp, _ = augment_encoded(splits)
++        users = enc_tmp[target][2]
++    # Equal readable blend: pointwise cross biases help nDCG, BPR keeps GAUC aligned.
++    scores = 0.50 * z_by_user(bce_pred, users) + 0.50 * z_by_user(bpr_pred, users)
++    print(f"built cross-FM blend in {time.time() - t0:.1f}s")
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        X, y, users = encode(splits)[0][target]
+-        print(evaluate(users, y, scores))
+-
++        _, y, u = augment_encoded(splits)[0][target]
++        print(evaluate(u, y, scores))
++

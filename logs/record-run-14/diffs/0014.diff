@@ -1,0 +1,51 @@
+# iteration 14  (parent: 13)
+# hypothesis: improve 13: the BPR-only time model is seed-noisy but each seed is strong; average five independent unchanged BPR members with per-user z-score fusion so variance drops and nDCG@5 benefits from consensus top-5 ordering.
+# result: GAUC 0.670636 | nDCG@5 0.537333 | primary 0.603984 | verdict KEPT
+
+--- logs/record-run-14/solutions/013_time_bpr_only.py
++++ logs/record-run-14/solutions/014_time_bpr_seed_ensemble.py
+@@ -237,7 +237,7 @@
+             loss.backward(); opt.step()
+         pred = model.predict(Xva, device=device)
+         m = evaluate(uva, yva, pred)['primary']
+-        print(f'bpr epoch={ep} valid_primary={m:.6f}', flush=True)
++        print(f'bpr seed={seed} epoch={ep} valid_primary={m:.6f}', flush=True)
+         if m > best + 1e-5:
+             best = m; bad = 0
+             best_state = {kk: vv.detach().cpu().clone() for kk, vv in model.state_dict().items()}
+@@ -263,13 +263,13 @@
+     return out
+ 
+ 
+-def member_pred(enc, dim, target, seed, split_name, device):
++def member_pred(enc, dim, target, mseed, split_name, device):
+     os.makedirs('pred_cache', exist_ok=True)
+-    # Reuse the unchanged node-10 BPR member exactly; if absent, train it from scratch.
+-    path = os.path.join('pred_cache', f'010_time_bpr_v1_{split_name}_seed{seed}.npy')
++    path = os.path.join('pred_cache', f'010_time_bpr_v1_{split_name}_seed{mseed}.npy')
+     if os.path.isfile(path):
++        print('load', path, flush=True)
+         return np.load(path)
+-    model = train_model(enc, dim, seed=seed, device=device)
++    model = train_model(enc, dim, seed=mseed, device=device)
+     X, _, _ = enc[target]
+     p = model.predict(X, device=device).astype(np.float64)
+     np.save(path, p)
+@@ -295,8 +295,14 @@
+     t0 = time.time()
+     enc, dim = build_augmented(splits, a.data_dir)
+     _, _, users = enc[target]
+-    pbpr = member_pred(enc, dim, target, a.seed, split_name, a.device)
+-    scores = z_by_user(pbpr, users)
+-    print(f'done in {time.time()-t0:.1f}s')
++    # Same unchanged node-13 BPR member, but average five independently initialised/sampled copies.
++    # Per-user z-scaling aligns member score scales before fusion; for a single member it is rank-invariant.
++    seeds = [a.seed, a.seed + 101, a.seed + 202, a.seed + 303, a.seed + 404]
++    zs = []
++    for ms in seeds:
++        p = member_pred(enc, dim, target, ms, split_name, a.device)
++        zs.append(z_by_user(p, users))
++    scores = np.mean(zs, axis=0)
++    print(f'ensemble_members={len(seeds)} done in {time.time()-t0:.1f}s')
+     np.save(a.out, scores.astype(np.float64))
+ 

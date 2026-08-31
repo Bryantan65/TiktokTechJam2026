@@ -1,0 +1,82 @@
+# iteration 26  (parent: 24)
+# hypothesis: improve 24: target/user-history encodings are common in ranking blends (e.g. Kaggle TE guide https://www.kaggle.com/c/home-credit-default-risk/discussion/116344); add a small smoothed user-duration-bucket residual to node 024's 10% train-only history prior to capture within-user duration preference without retraining members.
+# result: GAUC 0.671264 | nDCG@5 0.537777 | primary 0.60452 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/024_rank60_power_rank.py
++++ logs/record-run-16-uct/solutions/026_hist_duration.py
+@@ -1,10 +1,10 @@
+-"""Cached FM ensemble with top-emphasized rank fusion and history prior.
+-
+-Refines node 022: keep its 60% rank / 40% score fusion and 10% train-only
+-history prior, but transform per-member rank percentiles with p^2 before
+-averaging.  The raw 60% rank blend likely over-weighted mid-list order; p^2
+-keeps the rank signal monotone while emphasizing the top of each user's list,
+-which is where nDCG@5 is measured.
++"""Cached FM ensemble with top-emphasized rank fusion and richer history prior.
++
++Refines node 024: keep its best cached six-member p^2 rank/score ensemble, but
++add a small user-duration-bucket residual to the existing train-only
++user-video/user-author/user-tab history signal.  Duration preference is a
++within-user effect not directly represented by the residual prior, and the
++extra term is smoothed and only 10% of the final score.
+ """
+ import argparse
+ import os
+@@ -210,30 +210,53 @@
+     return rate - base
+ 
+ 
++def duration_bucket(duration_ms):
++    try:
++        d = float(duration_ms)
++    except Exception:
++        d = 0.0
++    # Coarse buckets to avoid sparse exact-duration memorization.
++    if d < 5_000:
++        return 0
++    if d < 10_000:
++        return 1
++    if d < 20_000:
++        return 2
++    if d < 40_000:
++        return 3
++    if d < 80_000:
++        return 4
++    if d < 160_000:
++        return 5
++    return 6
++
++
+ def build_history_signal(splits, target):
+     """TRAIN-only residual target encoding for repeated user context."""
+     user_stat = {}
+-    uv_stat, ua_stat, ut_stat = {}, {}, {}
++    uv_stat, ua_stat, ut_stat, ud_stat = {}, {}, {}, {}
+     global_sum, global_cnt = 0.0, 0
+     for row in splits['train']:
+-        u, v, au, tab, y = row[1], row[2], row[3], row[4], row[6]
++        u, v, au, tab, dur, y = row[1], row[2], row[3], row[4], row[5], row[6]
+         yy = float(y)
+         add_stat(user_stat, u, yy)
+         add_stat(uv_stat, (u, v), yy)
+         add_stat(ua_stat, (u, au), yy)
+         add_stat(ut_stat, (u, tab), yy)
++        add_stat(ud_stat, (u, duration_bucket(dur)), yy)
+         global_sum += yy
+         global_cnt += 1
+     global_mean = global_sum / max(1, global_cnt)
+ 
+     out = np.zeros(len(splits[target]), dtype=np.float64)
+     for i, row in enumerate(splits[target]):
+-        u, v, au, tab = row[1], row[2], row[3], row[4]
++        u, v, au, tab, dur = row[1], row[2], row[3], row[4], row[5]
+         us, uc = user_stat.get(u, (global_mean, 0))
+         base = us / uc if uc > 0 else global_mean
+         out[i] = (1.00 * smoothed_dev(uv_stat, (u, v), base, alpha=1.0) +
+                   0.45 * smoothed_dev(ua_stat, (u, au), base, alpha=5.0) +
+-                  0.20 * smoothed_dev(ut_stat, (u, tab), base, alpha=10.0))
++                  0.20 * smoothed_dev(ut_stat, (u, tab), base, alpha=10.0) +
++                  0.15 * smoothed_dev(ud_stat, (u, duration_bucket(dur)), base, alpha=12.0))
+     return out
+ 
+ 

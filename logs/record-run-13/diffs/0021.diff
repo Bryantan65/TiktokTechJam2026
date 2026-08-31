@@ -1,0 +1,302 @@
+# iteration 21  (parent: 13)
+# hypothesis: draft loss: listwise softmax over each user's impressions directly optimizes within-user probability mass on positives, closer to GAUC/nDCG than pointwise BCE or pairwise BPR; blend a new listwise FM member at a readable 30% with the unchanged node-13 cache.
+# result: GAUC 0.670934 | nDCG@5 0.537409 | primary 0.604172 | verdict KEPT
+
+--- logs/record-run-13/solutions/013_weighted_seedbag5.py
++++ logs/record-run-13/solutions/021_listwise_fm_blend.py
+@@ -1,9 +1,11 @@
+-"""Weighted five-seed node-8 BCE/BPR/rank FM ensemble.
+-
+-Node 11 showed that adding member seeds 3 and 4 to the 0/1/2 bag helped a lot,
+-while node 12 showed seeds 5..8 diluted the ensemble.  This keeps the unchanged
+-node-8 members and cached predictions, but gives seeds 3 and 4 higher weights
+-than 0/1/2 instead of uniform averaging.
++"""Add a same-user listwise-softmax FM member to the best seed bag.
++
++The incumbent is the cached node-13 BCE/BPR/rank five-seed ensemble.  This
++experiment keeps that unchanged and trains one extra FM with a user-listwise
++softmax loss: for each training user, put a softmax over that user's impressions
++and maximize the mean log-probability of the positive rows.  The objective is a
++closer proxy for within-user ranking than pointwise BCE or independent BPR
++pairs, so blend it at a readable 30% after per-user normalization.
+ """
+ import argparse
+ import os
+@@ -58,16 +60,13 @@
+     best, best_state, bad = -1.0, None, 0
+     for ep in range(1, epochs + 1):
+         idx = rng.permutation(len(ytr))
+-        t0 = time.time()
+-        model.train(); losses = []
++        t0 = time.time(); model.train(); losses = []
+         for i in range(0, len(idx), bs):
+             sel = torch.from_numpy(idx[i:i + bs])
+-            xb = Xtr_t[sel].to(device)
+-            yb = ytr_t[sel].to(device)
++            xb = Xtr_t[sel].to(device); yb = ytr_t[sel].to(device)
+             opt.zero_grad(set_to_none=True)
+             loss = lossfn(model(xb), yb)
+-            loss.backward(); opt.step()
+-            losses.append(loss.item())
++            loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+             print(f"  BCE(seed={seed}) epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+@@ -76,8 +75,7 @@
+             best_state = {kk: vv.detach().clone() for kk, vv in model.state_dict().items()}
+         else:
+             bad += 1
+-            if bad >= patience:
+-                break
++            if bad >= patience: break
+     model.load_state_dict(best_state)
+     return model
+ 
+@@ -85,10 +83,7 @@
+ def make_user_pair_sources(y, users):
+     pos = defaultdict(list); neg = defaultdict(list)
+     for i, (yy, uu) in enumerate(zip(y, users)):
+-        if yy > 0.5:
+-            pos[uu].append(i)
+-        else:
+-            neg[uu].append(i)
++        (pos if yy > 0.5 else neg)[uu].append(i)
+     pos_idx = []; neg_pools = []
+     for uu, ps in pos.items():
+         ns = neg.get(uu)
+@@ -101,15 +96,12 @@
+ 
+ def sample_uniform_pairs(pos_idx, neg_pools, rng, neg_per_pos=3):
+     total = len(pos_idx) * neg_per_pos
+-    p_out = np.empty(total, dtype=np.int64)
+-    n_out = np.empty(total, dtype=np.int64)
++    p_out = np.empty(total, dtype=np.int64); n_out = np.empty(total, dtype=np.int64)
+     k = 0
+     for p, pool in zip(pos_idx, neg_pools):
+         m = len(pool)
+         for _ in range(neg_per_pos):
+-            p_out[k] = p
+-            n_out[k] = pool[rng.integers(0, m)]
+-            k += 1
++            p_out[k] = p; n_out[k] = pool[rng.integers(0, m)]; k += 1
+     order = rng.permutation(total)
+     return p_out[order], n_out[order]
+ 
+@@ -130,32 +122,86 @@
+         p_idx, n_idx = sample_uniform_pairs(pos_idx, neg_pools, rng, neg_per_pos=neg_per_pos)
+         model.train(); losses = []
+         for i in range(0, len(p_idx), bs):
+-            ps = torch.from_numpy(p_idx[i:i + bs])
+-            ns = torch.from_numpy(n_idx[i:i + bs])
+-            xp = Xtr_t[ps].to(device)
+-            xn = Xtr_t[ns].to(device)
++            ps = torch.from_numpy(p_idx[i:i + bs]); ns = torch.from_numpy(n_idx[i:i + bs])
++            xp = Xtr_t[ps].to(device); xn = Xtr_t[ns].to(device)
+             opt.zero_grad(set_to_none=True)
+             loss = torch.nn.functional.softplus(-(model(xp) - model(xn))).mean()
+-            loss.backward(); opt.step()
+-            losses.append(loss.item())
++            loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  BPR(seed={seed}) epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | pairs {len(p_idx):,d} | {time.time()-t0:.1f}s")
++            print(f"  BPR(seed={seed}) epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {kk: vv.detach().clone() for kk, vv in model.state_dict().items()}
+         else:
+             bad += 1
+-            if bad >= patience:
+-                break
++            if bad >= patience: break
+     model.load_state_dict(best_state)
+     return model
+ 
+ 
++def make_listwise_groups(y, users):
++    tmp = defaultdict(list)
++    for i, u in enumerate(users):
++        tmp[u].append(i)
++    groups = []
++    for idx in tmp.values():
++        arr = np.asarray(idx, dtype=np.int64)
++        yy = y[arr]
++        # All-positive and all-negative users contain no within-user preference.
++        if yy.sum() > 0.5 and yy.sum() < len(arr) - 0.5:
++            groups.append(arr)
++    return groups
++
++
++def fit_listwise(splits, enc, dim, k=16, lr=0.001, l2=1e-6, epochs=35,
++                 batch_users=512, patience=4, seed=0, device='cpu', verbose=True):
++    Xtr, ytr, utr = enc['train']
++    Xva, yva, uva = enc['valid']
++    groups = make_listwise_groups(ytr, utr)
++    model = TorchFM(dim, k=k, seed=seed).to(device)
++    opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
++                            {'params': [model.b], 'weight_decay': 0.0}], lr=lr)
++    Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
++    ytr_t = torch.from_numpy(ytr.astype(np.float32))
++    rng = np.random.default_rng(seed + 2021)
++    best, best_state, bad = -1.0, None, 0
++    for ep in range(1, epochs + 1):
++        order = rng.permutation(len(groups))
++        t0 = time.time(); model.train(); losses = []
++        for st in range(0, len(order), batch_users):
++            gids = order[st:st + batch_users]
++            lens = [len(groups[g]) for g in gids]
++            ids_np = np.concatenate([groups[g] for g in gids])
++            xb = Xtr_t[torch.from_numpy(ids_np)].to(device)
++            yb = ytr_t[torch.from_numpy(ids_np)].to(device)
++            scores = model(xb)
++            off = 0; gl_losses = []
++            for ln in lens:
++                seg = scores[off:off + ln]
++                yseg = yb[off:off + ln]
++                pos = yseg > 0.5
++                # - mean_positive log softmax = logsumexp(all) - mean(score_positive)
++                gl_losses.append(torch.logsumexp(seg, dim=0) - seg[pos].mean())
++                off += ln
++            loss = torch.stack(gl_losses).mean()
++            opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); losses.append(loss.item())
++        va = evaluate(uva, yva, model.predict(Xva, device=device))
++        if verbose:
++            print(f"  ListFM(seed={seed}) epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | groups {len(groups):,d} | {time.time()-t0:.1f}s")
++        if va['primary'] > best + 1e-5:
++            best, bad = va['primary'], 0
++            best_state = {kk: vv.detach().clone() for kk, vv in model.state_dict().items()}
++        else:
++            bad += 1
++            if bad >= patience: break
++    model.load_state_dict(best_state)
++    return model
++
++
+ def user_groups(users):
+     groups = defaultdict(list)
+-    for i, u in enumerate(users):
+-        groups[u].append(i)
++    for i, u in enumerate(users): groups[u].append(i)
+     return [np.asarray(v, dtype=np.int64) for v in groups.values()]
+ 
+ 
+@@ -163,12 +209,8 @@
+     scores = scores.astype(np.float64, copy=False)
+     out = np.empty_like(scores, dtype=np.float64)
+     for idx in groups:
+-        s = scores[idx]
+-        sd = s.std()
+-        if sd > 1e-12:
+-            out[idx] = (s - s.mean()) / sd
+-        else:
+-            out[idx] = s - s.mean()
++        s = scores[idx]; sd = s.std()
++        out[idx] = (s - s.mean()) / sd if sd > 1e-12 else s - s.mean()
+     return out
+ 
+ 
+@@ -178,8 +220,7 @@
+     for idx in groups:
+         n = len(idx)
+         if n <= 1:
+-            out[idx] = 0.0
+-            continue
++            out[idx] = 0.0; continue
+         order = np.argsort(scores[idx], kind='mergesort')
+         ranks = np.empty(n, dtype=np.float64)
+         ranks[order] = np.arange(n, dtype=np.float64) / (n - 1.0)
+@@ -187,10 +228,10 @@
+     return out
+ 
+ 
+-def cached_predict(member_name, train_fn, enc, target, member_seed, device, use_cache=True):
++def cached_predict(cache_name, train_fn, enc, target, member_seed, device, use_cache=True):
+     os.makedirs('pred_cache', exist_ok=True)
+     X, _, _ = enc[target]
+-    cache_path = os.path.join('pred_cache', f'006_{member_name}_{target}_seed{member_seed}.npy')
++    cache_path = os.path.join('pred_cache', f'{cache_name}_{target}_seed{member_seed}.npy')
+     if use_cache and os.path.isfile(cache_path):
+         preds = np.load(cache_path)
+         if len(preds) == len(X):
+@@ -200,6 +241,10 @@
+     if use_cache:
+         np.save(cache_path, preds)
+     return preds
++
++
++def cached_predict_013(member_name, train_fn, enc, target, member_seed, device, use_cache=True):
++    return cached_predict(f'006_{member_name}', train_fn, enc, target, member_seed, device, use_cache)
+ 
+ 
+ def node8_seed_score(bce_preds, bpr_preds, groups):
+@@ -225,11 +270,9 @@
+     print(f"loading {a.data_dir} ...")
+     if a.split == 'dev':
+         from devdata import load as load_dev
+-        splits = load_dev(a.data_dir)
+-        target = 'valid'
++        splits = load_dev(a.data_dir); target = 'valid'
+     else:
+-        splits = load(a.data_dir)
+-        target = a.split
++        splits = load(a.data_dir); target = a.split
+     print({kk: len(vv) for kk, vv in splits.items()}, f"fields={FIELDS}")
+ 
+     enc, dim = encode(splits)
+@@ -238,37 +281,42 @@
+     X, y, users = enc[target]
+     groups = user_groups(users)
+ 
++    # Exact node-13 base: unchanged cached node-8 members with seed weights.
+     member_seeds = [0, 1, 2, 3, 4]
+-    # Seeds 3/4 were the new information that lifted node 11 over node 10;
+-    # emphasize them but keep a substantial 0/1/2 anchor.
+     weights = np.asarray([0.12, 0.12, 0.12, 0.32, 0.32], dtype=np.float64)
+     seed_scores = []
+     for ms in member_seeds:
+-        bce_preds = cached_predict(
++        bce_preds = cached_predict_013(
+             'bce',
+             lambda ms=ms: fit_bce(splits, enc, dim, k=a.k, lr=a.lr, epochs=a.epochs,
+                                   seed=ms, device=a.device, verbose=verbose),
+             enc, target, ms, a.device, use_cache=use_cache)
+-        bpr_preds = cached_predict(
++        bpr_preds = cached_predict_013(
+             'bpr_uniform_np3',
+             lambda ms=ms: fit_bpr(splits, enc, dim, k=a.k, lr=a.lr, epochs=a.epochs,
+-                                  neg_per_pos=a.neg_per_pos, seed=ms,
+-                                  device=a.device, verbose=verbose),
++                                  neg_per_pos=a.neg_per_pos, seed=ms, device=a.device,
++                                  verbose=verbose),
+             enc, target, ms, a.device, use_cache=use_cache)
+-        s = node8_seed_score(bce_preds, bpr_preds, groups)
+-        seed_scores.append(per_user_zscore(s, groups))
+-
+-    score_mat = np.vstack(seed_scores)
+-    bag = weights @ score_mat
++        seed_scores.append(per_user_zscore(node8_seed_score(bce_preds, bpr_preds, groups), groups))
++    base = weights @ np.vstack(seed_scores)
+     cur_idx = member_seeds.index(a.seed) if a.seed in member_seeds else (a.seed % len(member_seeds))
+-    # Minimal seed dependence for measured spread, without materially changing the weighted bag.
+-    scores = 0.995 * bag + 0.005 * seed_scores[cur_idx]
++    base = 0.995 * base + 0.005 * seed_scores[cur_idx]
++
++    # One listwise model per harness seed; cache under a new name because the loss is new.
++    list_preds = cached_predict(
++        '021_listwise_fm',
++        lambda: fit_listwise(splits, enc, dim, k=a.k, lr=a.lr, epochs=35,
++                             seed=a.seed, device=a.device, verbose=verbose),
++        enc, target, a.seed, a.device, use_cache=use_cache)
++    list_score = 0.70 * per_user_zscore(list_preds, groups) + 0.30 * per_user_rank01(list_preds, groups)
++
++    scores = 0.70 * per_user_zscore(base, groups) + 0.30 * per_user_zscore(list_score, groups)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== weighted_seedbag5 (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== listwise_blend (seed={a.seed}, device={a.device}) ===")
+         r = evaluate(users, y, scores)
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

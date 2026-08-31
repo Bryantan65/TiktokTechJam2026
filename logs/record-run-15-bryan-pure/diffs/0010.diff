@@ -1,0 +1,303 @@
+# iteration 10  (parent: 9)
+# hypothesis: debug 9: the large drop likely came from assuming raw CSV prefix alignment and over-strong watch weights, so align play_time by row keys and restrict it to a gentle confidence nudge [0.7,1.3] on the same node-7 BPR loss.
+# result: GAUC 0.670656 | nDCG@5 0.536898 | primary 0.603777 | verdict KEPT
+
+--- logs/record-run-15-bryan-pure/solutions/009_watchtime_weighted_bpr.py
++++ logs/record-run-15-bryan-pure/solutions/010_gentle_watch_bpr.py
+@@ -1,17 +1,17 @@
+-"""Watch-time weighted 3-negative BPR FM seed bag with per-user z fusion.
+-
+-This copies node 7's best BPR ensemble, but changes member training: each
+-positive/negative pair is weighted by a normalized log watch-time signal from the
+-raw KuaiRand log CSVs.  Cached predictions use a new name because the member
+-loss has changed.  If raw play_time_ms cannot be loaded/aligned, it falls back to
+-uniform weights so the script remains standalone.
++"""Gentle watch-time confidence weights for same-user BPR FM.
++
++Debug of node 9: keep the successful node-7 architecture/fusion, but fix the
++watch-time formulation to be much less aggressive and align raw CSV rows to the
++actual train tuples by keys instead of assuming a prefix.  Positive pair weights
++are 1 + 0.15 z(log watch-ratio), clipped to [0.7, 1.3], so watch time can only
++nudge BPR rather than redefine the target.
+ """
+ import argparse
+ import csv
+ import os
+ import sys
+ import time
+-from collections import defaultdict
++from collections import defaultdict, deque
+ 
+ import numpy as np
+ import torch
+@@ -46,83 +46,103 @@
+         return np.concatenate(out)
+ 
+ 
++def row_get(row, names, default=''):
++    for n in names:
++        if n in row and row[n] not in ('', 'None', 'nan'):
++            return row[n]
++    return default
++
++
++def row_float(row, names, default=0.0):
++    v = row_get(row, names, '')
++    try:
++        return float(v)
++    except Exception:
++        return default
++
++
+ def find_log_files(data_dir):
+-    cands = [
+-        data_dir,
+-        os.path.join(data_dir, 'data'),
+-        os.path.dirname(data_dir),
+-    ]
+     names = ['log_standard_4_08_to_4_21_pure.csv', 'log_standard_4_22_to_5_08_pure.csv']
+-    for base in cands:
++    for base in [data_dir, os.path.join(data_dir, 'data'), os.path.dirname(data_dir)]:
+         paths = [os.path.join(base, n) for n in names]
+         if all(os.path.isfile(p) for p in paths):
+             return paths
+     return None
+ 
+ 
+-def get_float(row, keys, default=0.0):
+-    for k in keys:
+-        if k in row and row[k] not in ('', 'None', 'nan'):
+-            try:
+-                return float(row[k])
+-            except Exception:
+-                pass
+-    return default
+-
+-
+-def load_train_watch_weights(data_dir, splits, verbose=True):
+-    """Return one weight per training row, aligned by preserved raw CSV order.
+-
+-    data.load uses the two standard logs in order.  In KuaiRand-Pure the first
+-    file is the train window and the second is split into valid/test, so the
+-    first len(train) raw rows align to splits['train'].  A few defensive checks
+-    keep failures from corrupting the experiment silently.
+-    """
++def make_key_from_tuple(r, with_author=True):
++    if with_author:
++        return (str(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4]))
++    return (str(r[0]), str(r[1]), str(r[2]), str(r[4]))
++
++
++def make_keys_from_csv(row):
++    date = str(row_get(row, ['date', 'day'], ''))
++    user = str(row_get(row, ['user_id', 'user'], ''))
++    video = str(row_get(row, ['video_id', 'item_id', 'photo_id'], ''))
++    author = str(row_get(row, ['author_id', 'author'], ''))
++    tab = str(row_get(row, ['tab'], ''))
++    full = (date, user, video, author, tab) if author != '' else None
++    short = (date, user, video, tab)
++    return full, short
++
++
++def load_gentle_watch_weights(data_dir, splits, verbose=False):
++    ntr = len(splits['train'])
+     paths = find_log_files(data_dir)
+-    ntr = len(splits['train'])
+     if paths is None:
+         if verbose:
+-            print('raw log CSVs not found; using uniform BPR weights')
++            print('raw logs not found; uniform weights')
+         return np.ones(ntr, dtype=np.float32)
+ 
+-    vals = []
+-    total_needed = ntr
++    full_q = defaultdict(deque)
++    short_q = defaultdict(deque)
++    rid = 0
+     for path in paths:
+         with open(path, 'r', newline='', encoding='utf-8') as f:
+             rdr = csv.DictReader(f)
+             for row in rdr:
+-                play = get_float(row, ['play_time_ms', 'play_time', 'watch_time_ms', 'time_ms'], 0.0)
+-                dur = get_float(row, ['duration_ms', 'video_duration', 'duration'], 0.0)
+-                # Use watch ratio when duration is available, but cap replays/outliers.
+-                if dur > 0:
+-                    ratio = max(0.0, min(play / dur, 5.0))
+-                    vals.append(np.log1p(ratio))
+-                else:
+-                    vals.append(np.log1p(max(0.0, play) / 1000.0))
+-                if len(vals) >= total_needed:
+-                    break
+-        if len(vals) >= total_needed:
+-            break
+-
+-    if len(vals) < ntr:
+-        if verbose:
+-            print(f'only loaded {len(vals)} raw rows for {ntr} train rows; using uniform BPR weights')
+-        return np.ones(ntr, dtype=np.float32)
+-
+-    w = np.asarray(vals[:ntr], dtype=np.float32)
+-    # Convert to a gentle confidence weight: mean 1 on positive rows, clipped so
+-    # one viral/replayed item cannot dominate BPR updates.
++                play = row_float(row, ['play_time_ms', 'play_time', 'watch_time_ms'], 0.0)
++                full, short = make_keys_from_csv(row)
++                rec = (rid, play)
++                if full is not None:
++                    full_q[full].append(rec)
++                short_q[short].append(rec)
++                rid += 1
++
++    vals = np.zeros(ntr, dtype=np.float32)
++    miss = 0
++    for i, r in enumerate(splits['train']):
++        rec = None
++        fq = full_q.get(make_key_from_tuple(r, True))
++        if fq:
++            rec = fq.popleft()
++        else:
++            sq = short_q.get(make_key_from_tuple(r, False))
++            if sq:
++                rec = sq.popleft()
++        if rec is None:
++            miss += 1
++            play = 0.0
++        else:
++            play = rec[1]
++        dur = float(r[5]) if float(r[5]) > 0 else 0.0
++        if dur > 0:
++            vals[i] = np.log1p(max(0.0, min(play / dur, 5.0)))
++        else:
++            vals[i] = np.log1p(max(0.0, play) / 1000.0)
++
+     y = np.asarray([r[6] for r in splits['train']], dtype=np.float32)
+     pos = y > 0.5
+-    if pos.any() and np.isfinite(w[pos]).all() and w[pos].mean() > 1e-8:
+-        w = w / float(w[pos].mean())
+-        w = np.clip(w, 0.25, 3.0)
+-    else:
+-        w[:] = 1.0
++    w = np.ones(ntr, dtype=np.float32)
++    pv = vals[pos]
++    if pos.any() and np.isfinite(pv).all() and pv.std() > 1e-8 and miss < 0.2 * ntr:
++        z = (pv - pv.mean()) / pv.std()
++        w[pos] = np.clip(1.0 + 0.15 * z, 0.7, 1.3)
++        w[pos] /= max(float(w[pos].mean()), 1e-8)
+     if verbose:
+-        print(f'watch BPR weights: mean_pos={w[pos].mean() if pos.any() else w.mean():.3f} '
+-              f'p10={np.percentile(w[pos] if pos.any() else w,10):.3f} '
+-              f'p90={np.percentile(w[pos] if pos.any() else w,90):.3f}')
++        pp = w[pos] if pos.any() else w
++        print(f'gentle watch weights: missing={miss}/{ntr} mean={pp.mean():.3f} min={pp.min():.3f} max={pp.max():.3f}')
+     return w.astype(np.float32)
+ 
+ 
+@@ -156,10 +176,10 @@
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     w_t = torch.from_numpy(pair_weights.astype(np.float32))
+     pos_idx, pos_users, neg_by_u = make_pair_sampler(ytr, utr)
+-    if verbose:
+-        print(f"member seed={seed}: watch-weighted BPR positives {len(pos_idx):,d} from {len(neg_by_u):,d} mixed-label users; nneg={nneg}")
+     if len(pos_idx) == 0:
+         raise RuntimeError('no same-user positive/negative training pairs found')
++    if verbose:
++        print(f'member seed={seed}: gentle watch BPR positives {len(pos_idx):,d}; nneg={nneg}')
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+     for ep in range(1, epochs + 1):
+@@ -180,23 +200,19 @@
+             opt.zero_grad(set_to_none=True)
+             sp = model(xp).repeat_interleave(nneg)
+             sn = model(xn)
+-            raw = torch.nn.functional.softplus(-(sp - sn))
+-            loss = (raw * ww).mean()
++            loss = (torch.nn.functional.softplus(-(sp - sn)) * ww).mean()
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  member {seed} epoch {ep:2d} | wbpr {np.mean(losses):.4f} | valid "
+-                  f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
++            print(f"  member {seed} epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+         else:
+             bad += 1
+             if bad >= patience:
+-                if verbose:
+-                    print(f"  member {seed} early stop at epoch {ep}")
+                 break
+     model.load_state_dict(best_state)
+     return model
+@@ -204,18 +220,16 @@
+ 
+ def cached_member_predictions(enc, dim, pair_weights, target, split_name, k, lr, epochs, seed, device, verbose):
+     os.makedirs('pred_cache', exist_ok=True)
+-    cache_path = os.path.join('pred_cache', f'009_watchwbpr_member_seed{seed}_{split_name}_{target}.npy')
++    cache_path = os.path.join('pred_cache', f'010_gentlewatch_bpr_member_seed{seed}_{split_name}_{target}.npy')
+     if os.path.isfile(cache_path):
+         if verbose:
+-            print(f"loading cached member predictions: {cache_path}")
++            print(f'loading cached member predictions: {cache_path}')
+         return np.load(cache_path)
+     model = train_one_member(enc, dim, pair_weights, k=k, lr=lr, epochs=epochs, seed=seed,
+                              device=device, verbose=verbose, nneg=3)
+     X, y, users = enc[target]
+     preds = model.predict(X, device=device).astype(np.float64)
+     np.save(cache_path, preds)
+-    if verbose:
+-        print(f"saved cached member predictions: {cache_path}")
+     return preds
+ 
+ 
+@@ -228,10 +242,7 @@
+         idx = np.asarray(idxs, dtype=np.int64)
+         vals = scores[idx]
+         sd = vals.std()
+-        if sd > 1e-12:
+-            scores[idx] = (vals - vals.mean()) / sd
+-        else:
+-            scores[idx] = 0.0
++        scores[idx] = (vals - vals.mean()) / sd if sd > 1e-12 else 0.0
+     return scores
+ 
+ 
+@@ -239,7 +250,7 @@
+                  seed=0, device='cpu', verbose=True, members=3):
+     enc, dim = encode(splits)
+     X, y, users = enc[target]
+-    pair_weights = load_train_watch_weights(data_dir, splits, verbose=verbose)
++    pair_weights = load_gentle_watch_weights(data_dir, splits, verbose=verbose)
+     member_seeds = [seed + 1000 * m for m in range(members)]
+     fused = []
+     for ms in member_seeds:
+@@ -261,7 +272,7 @@
+     a = ap.parse_args()
+ 
+     torch.manual_seed(a.seed)
+-    print(f"loading {a.data_dir} ...")
++    print(f'loading {a.data_dir} ...')
+     if a.split == 'dev':
+         from devdata import load as load_dev
+         splits = load_dev(a.data_dir)
+@@ -269,15 +280,14 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
++    print({k_: len(v) for k_, v in splits.items()}, f'fields={FIELDS}')
+ 
+     scores = run_ensemble(splits, target, a.split, a.data_dir, k=a.k, lr=a.lr,
+                           epochs=a.epochs, seed=a.seed, device=a.device,
+                           verbose=a.out is None, members=3)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+-        print(f"wrote {len(scores):,d} predictions for split={a.split}")
++        print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else:
+-        print(f"\n=== watchtime_weighted_bpr (seed={a.seed}, device={a.device}) ===")
+-        print(f"produced {len(scores):,d} predictions for split={a.split}")
+-
++        print(f'produced {len(scores):,d} predictions for split={a.split}')
++

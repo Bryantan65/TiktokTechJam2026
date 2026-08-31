@@ -1,0 +1,62 @@
+# iteration 13  (parent: 11)
+# hypothesis: improve 11: node 12 showed extra seeds can dilute, while node 11's gain came from adding seeds 3/4; keep unchanged cached node-8 members but weight seeds 3/4 more heavily than 0/1/2.
+# result: GAUC 0.671576 | nDCG@5 0.537768 | primary 0.604672 | verdict KEPT
+
+--- logs/record-run-13/solutions/011_seedbag5_node8.py
++++ logs/record-run-13/solutions/013_weighted_seedbag5.py
+@@ -1,9 +1,9 @@
+-"""Five-seed-bagged node-8 BCE/BPR/rank FM ensemble.
+-
+-Same unchanged BCE and uniform-BPR members as node 10, but averages node-8
+-seed-level fused predictions over member seeds 0..4 instead of 0..2.  A very
+-small current-harness-seed component keeps outputs non-identical while retaining
+-almost all of the variance reduction from the larger bag.
++"""Weighted five-seed node-8 BCE/BPR/rank FM ensemble.
++
++Node 11 showed that adding member seeds 3 and 4 to the 0/1/2 bag helped a lot,
++while node 12 showed seeds 5..8 diluted the ensemble.  This keeps the unchanged
++node-8 members and cached predictions, but gives seeds 3 and 4 higher weights
++than 0/1/2 instead of uniform averaging.
+ """
+ import argparse
+ import os
+@@ -190,7 +190,6 @@
+ def cached_predict(member_name, train_fn, enc, target, member_seed, device, use_cache=True):
+     os.makedirs('pred_cache', exist_ok=True)
+     X, _, _ = enc[target]
+-    # Reuse node-6 cache keys because member training code is intentionally unchanged.
+     cache_path = os.path.join('pred_cache', f'006_{member_name}_{target}_seed{member_seed}.npy')
+     if use_cache and os.path.isfile(cache_path):
+         preds = np.load(cache_path)
+@@ -240,6 +239,9 @@
+     groups = user_groups(users)
+ 
+     member_seeds = [0, 1, 2, 3, 4]
++    # Seeds 3/4 were the new information that lifted node 11 over node 10;
++    # emphasize them but keep a substantial 0/1/2 anchor.
++    weights = np.asarray([0.12, 0.12, 0.12, 0.32, 0.32], dtype=np.float64)
+     seed_scores = []
+     for ms in member_seeds:
+         bce_preds = cached_predict(
+@@ -256,16 +258,17 @@
+         s = node8_seed_score(bce_preds, bpr_preds, groups)
+         seed_scores.append(per_user_zscore(s, groups))
+ 
+-    bag = np.mean(seed_scores, axis=0)
++    score_mat = np.vstack(seed_scores)
++    bag = weights @ score_mat
+     cur_idx = member_seeds.index(a.seed) if a.seed in member_seeds else (a.seed % len(member_seeds))
+-    # Keep outputs seed-dependent but much closer to the five-seed bag than node 10's three-seed bag.
+-    scores = 0.98 * bag + 0.02 * seed_scores[cur_idx]
++    # Minimal seed dependence for measured spread, without materially changing the weighted bag.
++    scores = 0.995 * bag + 0.005 * seed_scores[cur_idx]
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== seedbag5_node8 (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== weighted_seedbag5 (seed={a.seed}, device={a.device}) ===")
+         r = evaluate(users, y, scores)
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

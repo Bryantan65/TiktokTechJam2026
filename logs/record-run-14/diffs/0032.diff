@@ -1,0 +1,70 @@
+# iteration 32  (parent: 31)
+# hypothesis: improve 31: the empirical prior helped, so make it more ranking-like: add sparse user-video repeat rates and fuse raw/z, percentile, and RRF forms at a still-small 12.5% weight to target top-5 ties.
+# result: GAUC None | nDCG@5 None | primary None | verdict failed
+
+--- logs/record-run-14/solutions/031_fixed_seed27_statprior.py
++++ logs/record-run-14/solutions/032_statprior_uv_rank.py
+@@ -1,10 +1,8 @@
+-import argparse, importlib.util, os, sys
++import argparse, importlib.util, os
+ from collections import defaultdict
+ import numpy as np
+ import torch
+ 
+-# Reuse the complete standalone training/fusion implementation from node 30.
+-# If caches are absent, its member_pred functions still train the requested members from scratch.
+ BASE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '030_fixed_seed27_export.py')
+ spec = importlib.util.spec_from_file_location('base030', BASE_PATH)
+ base = importlib.util.module_from_spec(spec)
+@@ -38,22 +36,27 @@
+     Xtr, ytr, _, _ = enc['train']
+     Xta = enc[target][0]
+     specs = [
+-        (lambda X: X[:, 1], 0.22, 40.0),                 # video
+-        (lambda X: X[:, 2], 0.18, 35.0),                 # author
+-        (lambda X: X[:, 3], 0.10, 80.0),                 # tab
+-        (lambda X: X[:, 4], 0.06, 80.0),                 # duration bucket
+-        (lambda X: X[:, 5], 0.05, 80.0),                 # date
+-        (lambda X: X[:, 7], 0.04, 80.0),                 # hour
+-        (lambda X: list(zip(X[:, 3], X[:, 7])), 0.09, 50.0),   # tab-hour
+-        (lambda X: list(zip(X[:, 0], X[:, 2])), 0.13, 20.0),   # user-author
+-        (lambda X: list(zip(X[:, 0], X[:, 3])), 0.08, 30.0),   # user-tab
+-        (lambda X: list(zip(X[:, 2], X[:, 3])), 0.05, 30.0),   # author-tab
++        (lambda X: X[:, 1], 0.20, 45.0),                       # video
++        (lambda X: X[:, 2], 0.16, 40.0),                       # author
++        (lambda X: X[:, 3], 0.08, 90.0),                       # tab
++        (lambda X: X[:, 4], 0.05, 90.0),                       # duration bucket
++        (lambda X: X[:, 5], 0.04, 90.0),                       # date
++        (lambda X: X[:, 7], 0.035, 90.0),                      # hour
++        (lambda X: list(zip(X[:, 3], X[:, 7])), 0.075, 60.0),  # tab-hour
++        (lambda X: list(zip(X[:, 0], X[:, 1])), 0.16, 6.0),    # user-video repeat history
++        (lambda X: list(zip(X[:, 0], X[:, 2])), 0.12, 18.0),   # user-author
++        (lambda X: list(zip(X[:, 0], X[:, 3])), 0.07, 28.0),   # user-tab
++        (lambda X: list(zip(X[:, 2], X[:, 3])), 0.045, 35.0),  # author-tab
+     ]
+     parts = []
+     for fn, w, a in specs:
+         s = stat_score(fn(Xtr), ytr, fn(Xta), alpha=a)
+         parts.append(w * base.z_by_user(s, users))
+-    return base.z_by_user(np.sum(parts, axis=0), users)
++    raw = base.z_by_user(np.sum(parts, axis=0), users)
++    # Empirical rates are sparse; percentile rank within user makes them act as robust top-list tie breakers.
++    pr = base.percentile_by_user(raw, users)
++    rr = base.rrf_by_user(raw, users)
++    return base.z_by_user(0.72 * raw + 0.20 * pr + 0.08 * rr, users)
+ 
+ 
+ def main():
+@@ -86,10 +89,8 @@
+     alpha = 0.10 + 0.25 * np.minimum(hlen, 8.0) / 8.0
+     strong = base.z_by_user((1.0 - alpha) * parent + alpha * dinc, users)
+     stat = make_stat_member(enc, target, users)
+-    # Train-only empirical rates are mostly redundant with FM embeddings, so use them only as a small
+-    # tie-breaker after per-user normalization.
+-    scores = base.z_by_user(0.91 * strong + 0.09 * stat, users)
+-    print('fixed_seed27_plus_statprior stat_weight=0.09', flush=True)
++    scores = base.z_by_user(0.875 * strong + 0.125 * stat, users)
++    print('fixed_seed27_plus_uv_rank_statprior stat_weight=0.125', flush=True)
+     np.save(a.out, scores.astype(np.float64))
+ 
+ 

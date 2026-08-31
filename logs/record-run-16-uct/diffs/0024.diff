@@ -1,0 +1,55 @@
+# iteration 24  (parent: 22)
+# hypothesis: improve 22: node 022's stronger 60% rank blend hurt slightly, likely because plain percentile rank over-weights mid-list swaps; square the per-member rank percentile before fusion to emphasize the top of each user's list where nDCG@5 is measured.
+# result: GAUC 0.671633 | nDCG@5 0.538027 | primary 0.60483 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/022_rank60_hist10.py
++++ logs/record-run-16-uct/solutions/024_rank60_power_rank.py
+@@ -1,9 +1,10 @@
+-"""Cached FM ensemble with a stronger rank-percentile component plus history prior.
+-
+-Refines node 019: the score-vs-rank weight had improved as rank weight was
+-increased through the previous hand-fusion steps, while making the history prior
+-stronger failed.  Keep node-019's 10% train-only user-context residual prior but
+-push the cached member fusion from 50/50 score/rank to 40/60 score/rank.
++"""Cached FM ensemble with top-emphasized rank fusion and history prior.
++
++Refines node 022: keep its 60% rank / 40% score fusion and 10% train-only
++history prior, but transform per-member rank percentiles with p^2 before
++averaging.  The raw 60% rank blend likely over-weighted mid-list order; p^2
++keeps the rank signal monotone while emphasizing the top of each user's list,
++which is where nDCG@5 is measured.
+ """
+ import argparse
+ import os
+@@ -178,7 +179,7 @@
+     return out
+ 
+ 
+-def per_user_rank_percentile(pred, groups):
++def per_user_rank_percentile(pred, groups, power=1.0):
+     out = np.empty_like(pred, dtype=np.float64)
+     for idx in groups:
+         vals = pred[idx]
+@@ -189,7 +190,10 @@
+         order = np.argsort(vals, kind='mergesort')
+         ranks = np.empty(n, dtype=np.float64)
+         ranks[order] = np.arange(n, dtype=np.float64)
+-        out[idx] = ranks / (n - 1.0)
++        pct = ranks / (n - 1.0)
++        if power != 1.0:
++            pct = pct ** power
++        out[idx] = pct
+     return out
+ 
+ 
+@@ -268,8 +272,8 @@
+                               verbose=(a.out is None))
+         z_bpr.append(per_user_z(pb, groups))
+         z_soft.append(per_user_z(ps, groups))
+-        r_bpr.append(per_user_rank_percentile(pb, groups))
+-        r_soft.append(per_user_rank_percentile(ps, groups))
++        r_bpr.append(per_user_rank_percentile(pb, groups, power=2.0))
++        r_soft.append(per_user_rank_percentile(ps, groups, power=2.0))
+ 
+     score_z = 0.60 * np.mean(z_bpr, axis=0) + 0.40 * np.mean(z_soft, axis=0)
+     score_rank = 0.60 * np.mean(r_bpr, axis=0) + 0.40 * np.mean(r_soft, axis=0)

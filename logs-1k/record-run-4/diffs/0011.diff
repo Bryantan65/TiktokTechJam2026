@@ -1,0 +1,86 @@
+# iteration 11  (parent: 10)
+# hypothesis: improve 10: the minimal LightGBM binary classifier recovered on dev, so validate that same stripped-down mechanism on the real valid split before adding back any features. This branches from node 10 despite UCT favoring #1 because node 10 is the only working diagnosis of the LightGBM direction and has not yet been measured on valid.
+# result: GAUC 0.67701 | nDCG@5 0.622695 | primary 0.649853 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/010_lgbm_binary_base_debug.py
++++ logs-1k/record-run-4/solutions/011_lgbm_binary_base_valid.py
+@@ -1,12 +1,10 @@
+-"""Debug node 9: minimal LightGBM classifier on only the official FM fields.
++"""Minimal LightGBM binary classifier on the official FM fields.
+ 
+-The same-feature binary classifier scored far below random on dev, so the bug is
+-likely in the tree feature/stat pipeline rather than LambdaMART grouping.  This
+-version removes all target/count statistics and manual cross features, uses only
+-the encoded official fields plus duration transforms, and negates probabilities
+-optionally only by a command-line flag (default no negation).  If this remains
+-bad, LightGBM categorical handling or dev drift is the issue; if it recovers,
+-the historical-stat construction was harmful/buggy.
++Node 10 showed on the train-only dev holdout that LightGBM itself is sane once
++broken historical/stat features are removed.  This validates that minimal model
++on the real valid split: encoded [user_id, video_id, author_id, tab,
++dur_bucket] as categorical features, plus two raw duration transforms, trained
++with binary logloss and early stopping on valid exactly as the FM baseline does.
+ """
+ import argparse
+ import os
+@@ -33,18 +31,20 @@
+     for j in range(Xtr.shape[1]):
+         if target_is_valid:
+             allv = np.concatenate([Xtr[:, j], Xva[:, j]])
+-            ntr = len(Xtr); nva = len(Xva)
++            ntr = len(Xtr)
++            nva = len(Xva)
+             _, inv = np.unique(allv, return_inverse=True)
+             a = inv[:ntr]
+-            b = inv[ntr:ntr+nva]
++            b = inv[ntr:ntr + nva]
+             c = b
+         else:
+             allv = np.concatenate([Xtr[:, j], Xva[:, j], Xt[:, j]])
+-            ntr = len(Xtr); nva = len(Xva)
++            ntr = len(Xtr)
++            nva = len(Xva)
+             _, inv = np.unique(allv, return_inverse=True)
+             a = inv[:ntr]
+-            b = inv[ntr:ntr+nva]
+-            c = inv[ntr+nva:]
++            b = inv[ntr:ntr + nva]
++            c = inv[ntr + nva:]
+         tr_cols.append(a.astype(np.int32, copy=False))
+         va_cols.append(b.astype(np.int32, copy=False))
+         t_cols.append(c.astype(np.int32, copy=False))
+@@ -80,7 +80,7 @@
+     t0 = time.time()
+     Ftr, ytr, Fva, yva, Ft = build_feature_matrices(splits, target)
+     if verbose:
+-        print(f"features train={Ftr.shape} valid={Fva.shape} target={Ft.shape} build {time.time()-t0:.1f}s")
++        print(f"features train={Ftr.shape} valid={Fva.shape} target={Ft.shape} build {time.time() - t0:.1f}s")
+         print(f"train pos={float(np.mean(ytr)):.4f} valid pos={float(np.mean(yva)):.4f}")
+ 
+     clf = lgb.LGBMClassifier(
+@@ -107,7 +107,7 @@
+     clf.fit(Ftr, ytr, eval_set=[(Fva, yva)],
+             categorical_feature=list(range(5)), callbacks=callbacks)
+     if verbose:
+-        print(f"best_iteration={clf.best_iteration_} total {time.time()-t0:.1f}s")
++        print(f"best_iteration={clf.best_iteration_} total {time.time() - t0:.1f}s")
+     return clf.predict_proba(Ft, num_iteration=clf.best_iteration_)[:, 1]
+ 
+ 
+@@ -118,7 +118,6 @@
+     ap.add_argument('--out', default=None)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+-    ap.add_argument('--invert', action='store_true')
+     a = ap.parse_args()
+ 
+     np.random.seed(a.seed)
+@@ -133,8 +132,6 @@
+     print({k: len(v) for k, v in splits.items()}, f"fields={FIELDS}")
+ 
+     scores = train_classifier(splits, target=target, seed=a.seed, verbose=a.out is None)
+-    if a.invert:
+-        scores = -scores
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")

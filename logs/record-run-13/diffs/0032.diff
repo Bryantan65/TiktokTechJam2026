@@ -1,0 +1,64 @@
+# iteration 32  (parent: 30)
+# hypothesis: improve 30: node 31 showed crosses hurt, but node 28 hinted sharper time helped nDCG; replace only coarse 4-hour with reusable 24-hour buckets while keeping date-free dow and the proven 60% time blend.
+# result: GAUC 0.672252 | nDCG@5 0.538302 | primary 0.605277 | verdict KEPT
+
+--- logs/record-run-13/solutions/030_time_nodate_60.py
++++ logs/record-run-13/solutions/032_time_hour24_nodate.py
+@@ -1,7 +1,8 @@
+-"""Node 29 variant: keep the date-free time member, but move the blend toward it.
+-
+-All member predictions are cached under the same names as node 29.  This script is otherwise a
+-standalone reproduction: if caches are absent it trains the unchanged base and date-free time members.
++"""Node 30 variant: replace coarse 4-hour time bucket with reusable 24-hour bucket.
++
++Base member is unchanged and cached under node 6 names.  The time member is new because
++its feature space changes from dow+hour4 to dow+hour24, but remains date-free so train
++embeddings generalize to valid/test dates.
+ """
+ import argparse, csv, datetime as _dt, os, sys, time
+ from collections import defaultdict
+@@ -129,7 +130,7 @@
+         if n in rec and rec[n]!='': return rec[n]
+     return None
+ 
+-def _hour_bucket(hourmin):
++def _hour24(hourmin):
+     if hourmin is None: return 'hUNK'
+     s=str(hourmin).strip()
+     if not s: return 'hUNK'
+@@ -137,7 +138,7 @@
+         if ':' in s: h=int(s.split(':',1)[0])
+         else:
+             v=int(float(s)); h=v//100 if v>=100 else v
+-        if 0<=h<=23: return 'h%02d'%(h//4)
++        if 0<=h<=23: return 'h%02d'%h
+     except Exception: pass
+     return 'hUNK'
+ 
+@@ -151,7 +152,7 @@
+                 date=_norm(_first(rec,['date'])); uid=_norm(_first(rec,['user_id','userId','user']))
+                 vid=_norm(_first(rec,['video_id','videoId','item_id','itemId'])); aid=_norm(_first(rec,['author_id','authorId']))
+                 tab=_norm(_first(rec,['tab'])); dur=_norm(_first(rec,['duration_ms','duration','video_duration']))
+-                hb=_hour_bucket(_first(rec,['hourmin','hour_min','time','timestamp']))
++                hb=_hour24(_first(rec,['hourmin','hour_min','time','timestamp']))
+                 if date and uid and vid and tab and dur:
+                     short[(date,uid,vid,tab,dur)].append(hb)
+                     if aid: full[(date,uid,vid,aid,tab,dur)].append(hb)
+@@ -194,7 +195,7 @@
+         for i,tup in enumerate(extras[name]):
+             for j in range(2): extra[i,j]=offsets[j]+maps[j][tup[j]]
+         enc[name]=(np.hstack([X.astype(np.int64),extra]),y,u)
+-    print(f"augmented fields={FIELDS+['dow','hour4']} dim {dim_base}->{off}")
++    print(f"augmented fields={FIELDS+['dow','hour24']} dim {dim_base}->{off}")
+     return enc,off
+ 
+ def make_bag(splits,enc,dim,target,groups,a,prefix):
+@@ -223,7 +224,7 @@
+     enc_base,dim_base=encode(splits); X,y,users=enc_base[target]; groups=user_groups(users)
+     base=make_bag(splits,enc_base,dim_base,target,groups,a,'006')
+     enc_time,dim_time=augment_with_time(splits,enc_base,dim_base,a.data_dir)
+-    timebag=make_bag(splits,enc_time,dim_time,target,groups,a,'029_time_nodate')
++    timebag=make_bag(splits,enc_time,dim_time,target,groups,a,'032_time_hour24_nodate')
+     base_f=0.70*per_user_zscore(base,groups)+0.30*per_user_rank01(base,groups)
+     time_f=0.70*per_user_zscore(timebag,groups)+0.30*per_user_rank01(timebag,groups)
+     scores=0.40*per_user_zscore(base_f,groups)+0.60*per_user_zscore(time_f,groups)

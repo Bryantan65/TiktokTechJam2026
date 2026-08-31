@@ -1,0 +1,34 @@
+# iteration 16  (parent: 14)
+# hypothesis: improve 14: the dev screen verified that raw hourmin joins hit every row, so spend the counted valid run on the same date/dow/4-hour augmented BCE+BPR seed bag. This directly tests whether the time-aware signal transfers from train-holdout to official valid.
+# result: GAUC 0.67152 | nDCG@5 0.537694 | primary 0.604607 | verdict KEPT
+
+--- logs/record-run-13/solutions/014_time_features_seedbag5.py
++++ logs/record-run-13/solutions/016_time_features_valid.py
+@@ -2,8 +2,8 @@
+ 
+ Adds temporal categorical fields to the same weighted five-seed BCE+BPR FM
+ ensemble as node 13: date, day-of-week, and a 4-hour bucket read from the raw
+-KuaiRand log CSV hourmin column when available.  Member cache keys are new
+-because the FM feature space changed.
++KuaiRand log CSV hourmin column when available. Cache keys match 014 because
++member training is unchanged; this copy exists to run valid after a dev screen.
+ """
+ import argparse
+ import csv
+@@ -223,7 +223,6 @@
+ 
+ 
+ def build_hour_maps(data_dir):
+-    """Raw log order is preserved; keep occurrence lists for duplicate keys."""
+     full = defaultdict(list)
+     short = defaultdict(list)
+     files = ['log_standard_4_08_to_4_21_pure.csv', 'log_standard_4_22_to_5_08_pure.csv']
+@@ -397,7 +396,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== time_features_seedbag5 (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== time_features_seedbag5_valid_copy (seed={a.seed}, device={a.device}) ===")
+         r = evaluate(users, y, scores)
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

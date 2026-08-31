@@ -1,0 +1,128 @@
+# iteration 16  (parent: 14)
+# hypothesis: improve 14: node 14 is GAUC-strong but nDCG is still the bottleneck, so train a complementary BPR member with per-user positive-count capped weights to approximate the unweighted per-user nDCG objective, then blend it at 35% so the signal is readable.
+# result: GAUC 0.670788 | nDCG@5 0.537436 | primary 0.604112 | verdict KEPT
+
+--- logs/record-run-14/solutions/014_time_bpr_seed_ensemble.py
++++ logs/record-run-14/solutions/016_ndcg_balanced_bpr_blend.py
+@@ -63,10 +63,7 @@
+         return 24
+     try:
+         x = int(float(v))
+-        if x >= 100:
+-            h = x // 100
+-        else:
+-            h = x
++        h = x // 100 if x >= 100 else x
+         return h if 0 <= h <= 23 else 24
+     except Exception:
+         return 24
+@@ -186,22 +183,29 @@
+         return np.concatenate(out)
+ 
+ 
+-def build_pairs(y, users):
++def build_pairs_and_weights(y, users, balanced=False):
+     pos = defaultdict(list); neg = defaultdict(list)
+     for i, (u, yy) in enumerate(zip(users, y)):
+         (pos if yy > 0.5 else neg)[u].append(i)
+-    pidx, pools = [], []
++    pidx, pools, weights = [], [], []
+     for u, ps in pos.items():
+         ns = neg.get(u)
+         if not ns:
+             continue
+         arr = np.asarray(ns, dtype=np.int64)
++        # GAUC weights users by positive count; nDCG@5 is per-user.  This mild cap makes a
++        # second member care less about users with many positives, without discarding GAUC signal.
++        w = 1.0 / float(min(len(ps), 5)) if balanced else 1.0
+         for p in ps:
+-            pidx.append(p); pools.append(arr)
+-    return np.asarray(pidx, dtype=np.int64), pools
+-
+-
+-def train_model(enc, dim, seed, k=16, lr=0.001, l2=3e-6, epochs=40, bs=8192, patience=4, device='cpu'):
++            pidx.append(p); pools.append(arr); weights.append(w)
++    weights = np.asarray(weights, dtype=np.float32)
++    if len(weights) and balanced:
++        weights /= max(1e-6, weights.mean())
++        print(f'balanced_pair_weights n={len(weights)} min={weights.min():.3f} max={weights.max():.3f} mean={weights.mean():.3f}')
++    return np.asarray(pidx, dtype=np.int64), pools, weights
++
++
++def train_model(enc, dim, seed, balanced=False, k=16, lr=0.001, l2=3e-6, epochs=40, bs=8192, patience=4, device='cpu'):
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+@@ -213,7 +217,8 @@
+     ytr_t = torch.from_numpy(ytr.astype(np.float32))
+     rng = np.random.default_rng(seed + 17)
+     bce_loss = torch.nn.BCEWithLogitsLoss()
+-    pos_idx, neg_pools = build_pairs(ytr, utr)
++    pos_idx, neg_pools, pair_w = build_pairs_and_weights(ytr, utr, balanced=balanced)
++    pair_w_t = torch.from_numpy(pair_w.astype(np.float32))
+     n_steps = max(len(ytr), len(pos_idx))
+     best = -1.0; best_state = None; bad = 0
+     for ep in range(1, epochs + 1):
+@@ -230,14 +235,18 @@
+             xb = Xtr_t[torch.from_numpy(both)].to(device)
+             logits = model(xb)
+             lp, ln = logits[:len(pp)], logits[len(pp):]
+-            loss = torch.nn.functional.softplus(-(lp - ln)).mean()
++            if balanced:
++                wb = pair_w_t[torch.from_numpy(which)].to(device)
++                loss_pair = (torch.nn.functional.softplus(-(lp - ln)) * wb).sum() / torch.clamp(wb.sum(), min=1e-6)
++            else:
++                loss_pair = torch.nn.functional.softplus(-(lp - ln)).mean()
+             yb = ytr_t[torch.from_numpy(both)].to(device)
+-            loss = loss + 0.02 * bce_loss(logits, yb)
++            loss = loss_pair + 0.02 * bce_loss(logits, yb)
+             opt.zero_grad(set_to_none=True)
+             loss.backward(); opt.step()
+         pred = model.predict(Xva, device=device)
+         m = evaluate(uva, yva, pred)['primary']
+-        print(f'bpr seed={seed} epoch={ep} valid_primary={m:.6f}', flush=True)
++        print(f'bpr balanced={balanced} seed={seed} epoch={ep} valid_primary={m:.6f}', flush=True)
+         if m > best + 1e-5:
+             best = m; bad = 0
+             best_state = {kk: vv.detach().cpu().clone() for kk, vv in model.state_dict().items()}
+@@ -263,13 +272,14 @@
+     return out
+ 
+ 
+-def member_pred(enc, dim, target, mseed, split_name, device):
++def member_pred(enc, dim, target, mseed, split_name, device, balanced=False):
+     os.makedirs('pred_cache', exist_ok=True)
+-    path = os.path.join('pred_cache', f'010_time_bpr_v1_{split_name}_seed{mseed}.npy')
++    prefix = '016_time_bpr_ndcgbal_v1' if balanced else '010_time_bpr_v1'
++    path = os.path.join('pred_cache', f'{prefix}_{split_name}_seed{mseed}.npy')
+     if os.path.isfile(path):
+         print('load', path, flush=True)
+         return np.load(path)
+-    model = train_model(enc, dim, seed=mseed, device=device)
++    model = train_model(enc, dim, seed=mseed, balanced=balanced, device=device)
+     X, _, _ = enc[target]
+     p = model.predict(X, device=device).astype(np.float64)
+     np.save(path, p)
+@@ -295,14 +305,15 @@
+     t0 = time.time()
+     enc, dim = build_augmented(splits, a.data_dir)
+     _, _, users = enc[target]
+-    # Same unchanged node-13 BPR member, but average five independently initialised/sampled copies.
+-    # Per-user z-scaling aligns member score scales before fusion; for a single member it is rank-invariant.
+     seeds = [a.seed, a.seed + 101, a.seed + 202, a.seed + 303, a.seed + 404]
+-    zs = []
++    old_z, bal_z = [], []
+     for ms in seeds:
+-        p = member_pred(enc, dim, target, ms, split_name, a.device)
+-        zs.append(z_by_user(p, users))
+-    scores = np.mean(zs, axis=0)
+-    print(f'ensemble_members={len(seeds)} done in {time.time()-t0:.1f}s')
++        old_z.append(z_by_user(member_pred(enc, dim, target, ms, split_name, a.device, balanced=False), users))
++        bal_z.append(z_by_user(member_pred(enc, dim, target, ms, split_name, a.device, balanced=True), users))
++    old_ens = z_by_user(np.mean(old_z, axis=0), users)
++    bal_ens = z_by_user(np.mean(bal_z, axis=0), users)
++    # Keep the strong GAUC-oriented incumbent dominant, but let the balanced member move rankings.
++    scores = 0.65 * old_ens + 0.35 * bal_ens
++    print(f'blend old=0.65 ndcg_balanced=0.35 members_each={len(seeds)} done in {time.time()-t0:.1f}s')
+     np.save(a.out, scores.astype(np.float64))
+ 

@@ -1,0 +1,90 @@
+# iteration 3  (parent: 2)
+# hypothesis: improve 2: sample three same-user negatives per positive instead of one so each epoch sees broader negative coverage and fewer easy-pair updates, while keeping the FM and pure BPR objective unchanged.
+# result: GAUC 0.670054 | nDCG@5 0.536882 | primary 0.603468 | verdict noise
+
+--- logs/record-run-15-bryan-pure/solutions/002_bpr_fm.py
++++ logs/record-run-15-bryan-pure/solutions/003_bpr_3neg_fm.py
+@@ -1,10 +1,10 @@
+-"""FM trained with a same-user BPR pairwise ranking loss.
++"""FM with same-user BPR, sampling three negatives per positive.
+ 
+-The baseline optimises pointwise BCE, while the reported metrics rank videos within
+-user. This version keeps the same FM/features/initialisation but trains on pairs
+-(pos impression, neg impression) from the same user using
+-    -log sigmoid(score_pos - score_neg)
+-following the BPR objective.
++Node 2 showed that pairwise same-user BPR helps. This refinement keeps the same
++model but gives each positive impression three independently sampled negatives
++from the same user and averages the BPR loss over all three comparisons. More
++negative coverage should reduce the chance that training spends an epoch on easy
++or uninformative pairs, especially for nDCG@5.
+ """
+ import argparse
+ import os
+@@ -47,11 +47,9 @@
+ 
+ 
+ def make_pair_sampler(y, users):
+-    """Return positives and per-positive user ids for users having both classes."""
+     pos_by_u = defaultdict(list)
+     neg_by_u = defaultdict(list)
+     for i, (yy, uu) in enumerate(zip(y, users)):
+-        # users may be strings/objects; dict keys are fine.
+         if yy > 0.5:
+             pos_by_u[uu].append(i)
+         else:
+@@ -71,7 +69,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=50, bs=8192, patience=5,
+-        seed=0, device='cpu', verbose=True):
++        seed=0, device='cpu', verbose=True, nneg=3):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -84,7 +82,7 @@
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     pos_idx, pos_users, neg_by_u = make_pair_sampler(ytr, utr)
+     if verbose:
+-        print(f"BPR train pairs: {len(pos_idx):,d} positives from {len(neg_by_u):,d} mixed-label users")
++        print(f"BPR train positives: {len(pos_idx):,d} from {len(neg_by_u):,d} mixed-label users; nneg={nneg}")
+     if len(pos_idx) == 0:
+         raise RuntimeError('no same-user positive/negative training pairs found')
+ 
+@@ -99,18 +97,20 @@
+         for i in range(0, len(order), bs):
+             sel = order[i:i + bs]
+             pidx = pos_idx[sel]
+-            # One fresh negative impression from the same user for every positive
+-            # impression. Sampling with replacement avoids ragged pair expansion.
+-            nidx = np.empty(len(sel), dtype=np.int64)
++            nidx = np.empty((len(sel), nneg), dtype=np.int64)
++            # Keep the same per-positive same-user pairing as node 2, just draw
++            # several negatives. Users have ragged negative lists, so a compact
++            # Python loop is clearer and still cheap versus the model pass.
+             for j, uu in enumerate(pos_users[sel]):
+                 ns = neg_by_u[uu]
+-                nidx[j] = ns[rng.integers(len(ns))]
++                nidx[j] = ns[rng.integers(len(ns), size=nneg)]
+ 
+             xp = Xtr_t[torch.from_numpy(pidx)].to(device)
+-            xn = Xtr_t[torch.from_numpy(nidx)].to(device)
++            xn = Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
+             opt.zero_grad(set_to_none=True)
+-            diff = model(xp) - model(xn)
+-            loss = torch.nn.functional.softplus(-diff).mean()
++            sp = model(xp).repeat_interleave(nneg)
++            sn = model(xn)
++            loss = torch.nn.functional.softplus(-(sp - sn)).mean()
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+@@ -168,7 +168,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_3neg_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

@@ -1,0 +1,388 @@
+# iteration 22  (parent: 13)
+# hypothesis: draft multi-task: ESMM-style auxiliary supervision for user actions (e.g. https://arxiv.org/abs/2204.05125 discusses entire-space multi-task recommendation) may regularize shared FM factors; train shared-interaction heads for click/like/follow/comment/forward and blend at a readable 30% with node 13.
+# result: GAUC 0.671089 | nDCG@5 0.537484 | primary 0.604287 | verdict KEPT
+
+--- logs/record-run-13/solutions/013_weighted_seedbag5.py
++++ logs/record-run-13/solutions/022_multitask_fm_blend.py
+@@ -1,15 +1,19 @@
+-"""Weighted five-seed node-8 BCE/BPR/rank FM ensemble.
+-
+-Node 11 showed that adding member seeds 3 and 4 to the 0/1/2 bag helped a lot,
+-while node 12 showed seeds 5..8 diluted the ensemble.  This keeps the unchanged
+-node-8 members and cached predictions, but gives seeds 3 and 4 higher weights
+-than 0/1/2 instead of uniform averaging.
++"""Blend the best node-13 ensemble with a multi-task FM member.
++
++The incumbent is the cached node-13 BCE/BPR/rank five-seed ensemble.  This adds
++one FM trained on the main label plus raw KuaiRand feedback auxiliaries
++(is_click/is_like/is_follow/is_comment/is_forward).  Auxiliary heads have
++separate linear terms but share the FM interaction embeddings, so engagement
++signals can regularize item/user cross factors without changing the prediction
++contract.  The new member is blended at a readable 30% after per-user z/rank
++normalization.
+ """
+ import argparse
++import csv
+ import os
+ import sys
+ import time
+-from collections import defaultdict
++from collections import defaultdict, deque
+ 
+ import numpy as np
+ import torch
+@@ -18,6 +22,9 @@
+                                 '..', 'kuairand-starter-kit'))
+ from data import load, encode, FIELDS          # noqa: E402
+ from evaluate import evaluate                  # noqa: E402  early stopping only
++
++
++AUX_COLS = ['is_click', 'is_like', 'is_follow', 'is_comment', 'is_forward']
+ 
+ 
+ class TorchFM(torch.nn.Module):
+@@ -44,6 +51,35 @@
+         return np.concatenate(out)
+ 
+ 
++class MultiTaskFM(torch.nn.Module):
++    def __init__(self, dim, n_tasks=6, k=16, seed=0):
++        super().__init__()
++        rng = np.random.default_rng(seed)
++        self.V = torch.nn.Parameter(torch.from_numpy(rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
++        self.W = torch.nn.Parameter(torch.zeros((n_tasks, dim), dtype=torch.float32))
++        self.b = torch.nn.Parameter(torch.zeros(n_tasks, dtype=torch.float32))
++
++    def forward_all(self, X):
++        E = self.V[X]
++        S = E.sum(1)
++        inter = 0.5 * ((S ** 2).sum(1) - (E ** 2).sum((1, 2)))
++        # W[:, X] -> tasks x batch x fields, then transpose to batch x tasks.
++        lin = self.W[:, X].sum(2).transpose(0, 1)
++        return lin + self.b.unsqueeze(0) + inter.unsqueeze(1)
++
++    def forward(self, X):
++        return self.forward_all(X)[:, 0]
++
++    @torch.no_grad()
++    def predict(self, X, bs=200_000, device='cpu'):
++        self.eval()
++        out = []
++        for i in range(0, len(X), bs):
++            xb = torch.from_numpy(X[i:i + bs].astype(np.int64)).to(device)
++            out.append(self(xb).cpu().numpy())
++        return np.concatenate(out)
++
++
+ def fit_bce(splits, enc, dim, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
+             patience=4, seed=0, device='cpu', verbose=True):
+     Xtr, ytr, _ = enc['train']
+@@ -52,22 +88,17 @@
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}], lr=lr)
+     lossfn = torch.nn.BCEWithLogitsLoss()
+-    Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+-    ytr_t = torch.from_numpy(ytr)
++    Xtr_t = torch.from_numpy(Xtr.astype(np.int64)); ytr_t = torch.from_numpy(ytr)
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+     for ep in range(1, epochs + 1):
+-        idx = rng.permutation(len(ytr))
+-        t0 = time.time()
+-        model.train(); losses = []
++        idx = rng.permutation(len(ytr)); t0 = time.time(); model.train(); losses = []
+         for i in range(0, len(idx), bs):
+             sel = torch.from_numpy(idx[i:i + bs])
+-            xb = Xtr_t[sel].to(device)
+-            yb = ytr_t[sel].to(device)
++            xb = Xtr_t[sel].to(device); yb = ytr_t[sel].to(device)
+             opt.zero_grad(set_to_none=True)
+             loss = lossfn(model(xb), yb)
+-            loss.backward(); opt.step()
+-            losses.append(loss.item())
++            loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+             print(f"  BCE(seed={seed}) epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+@@ -76,8 +107,7 @@
+             best_state = {kk: vv.detach().clone() for kk, vv in model.state_dict().items()}
+         else:
+             bad += 1
+-            if bad >= patience:
+-                break
++            if bad >= patience: break
+     model.load_state_dict(best_state)
+     return model
+ 
+@@ -85,10 +115,7 @@
+ def make_user_pair_sources(y, users):
+     pos = defaultdict(list); neg = defaultdict(list)
+     for i, (yy, uu) in enumerate(zip(y, users)):
+-        if yy > 0.5:
+-            pos[uu].append(i)
+-        else:
+-            neg[uu].append(i)
++        (pos if yy > 0.5 else neg)[uu].append(i)
+     pos_idx = []; neg_pools = []
+     for uu, ps in pos.items():
+         ns = neg.get(uu)
+@@ -101,15 +128,12 @@
+ 
+ def sample_uniform_pairs(pos_idx, neg_pools, rng, neg_per_pos=3):
+     total = len(pos_idx) * neg_per_pos
+-    p_out = np.empty(total, dtype=np.int64)
+-    n_out = np.empty(total, dtype=np.int64)
++    p_out = np.empty(total, dtype=np.int64); n_out = np.empty(total, dtype=np.int64)
+     k = 0
+     for p, pool in zip(pos_idx, neg_pools):
+         m = len(pool)
+         for _ in range(neg_per_pos):
+-            p_out[k] = p
+-            n_out[k] = pool[rng.integers(0, m)]
+-            k += 1
++            p_out[k] = p; n_out[k] = pool[rng.integers(0, m)]; k += 1
+     order = rng.permutation(total)
+     return p_out[order], n_out[order]
+ 
+@@ -126,28 +150,109 @@
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+     for ep in range(1, epochs + 1):
+-        t0 = time.time()
+-        p_idx, n_idx = sample_uniform_pairs(pos_idx, neg_pools, rng, neg_per_pos=neg_per_pos)
++        t0 = time.time(); p_idx, n_idx = sample_uniform_pairs(pos_idx, neg_pools, rng, neg_per_pos=neg_per_pos)
+         model.train(); losses = []
+         for i in range(0, len(p_idx), bs):
+-            ps = torch.from_numpy(p_idx[i:i + bs])
+-            ns = torch.from_numpy(n_idx[i:i + bs])
+-            xp = Xtr_t[ps].to(device)
+-            xn = Xtr_t[ns].to(device)
++            ps = torch.from_numpy(p_idx[i:i + bs]); ns = torch.from_numpy(n_idx[i:i + bs])
++            xp = Xtr_t[ps].to(device); xn = Xtr_t[ns].to(device)
+             opt.zero_grad(set_to_none=True)
+             loss = torch.nn.functional.softplus(-(model(xp) - model(xn))).mean()
+-            loss.backward(); opt.step()
+-            losses.append(loss.item())
++            loss.backward(); opt.step(); losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  BPR(seed={seed}) epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | pairs {len(p_idx):,d} | {time.time()-t0:.1f}s")
++            print(f"  BPR(seed={seed}) epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {kk: vv.detach().clone() for kk, vv in model.state_dict().items()}
+         else:
+             bad += 1
+-            if bad >= patience:
+-                break
++            if bad >= patience: break
++    model.load_state_dict(best_state)
++    return model
++
++
++def read_raw_aux(data_dir):
++    by_key = defaultdict(deque)
++    paths = [
++        os.path.join(data_dir, 'log_standard_4_08_to_4_21_pure.csv'),
++        os.path.join(data_dir, 'log_standard_4_22_to_5_08_pure.csv'),
++    ]
++    n = 0
++    for path in paths:
++        if not os.path.isfile(path):
++            continue
++        with open(path, 'r', newline='', encoding='utf-8') as f:
++            rdr = csv.DictReader(f)
++            for r in rdr:
++                key = (str(r.get('date', '')), str(r.get('user_id', '')),
++                       str(r.get('video_id', '')), str(r.get('tab', '')))
++                vals = []
++                for c in AUX_COLS:
++                    try:
++                        vals.append(float(r.get(c, 0) or 0))
++                    except Exception:
++                        vals.append(0.0)
++                by_key[key].append(np.asarray(vals, dtype=np.float32))
++                n += 1
++    return by_key, n
++
++
++def align_aux_to_splits(splits, data_dir):
++    queues, nraw = read_raw_aux(data_dir)
++    out = {}
++    hits = 0; total = 0
++    # Consume in split order. The date is in the key, so train/valid/test do not
++    # steal each other's rows; occurrence order handles repeated impressions.
++    for name in ['train', 'valid', 'test']:
++        if name not in splits:
++            continue
++        arr = np.zeros((len(splits[name]), len(AUX_COLS)), dtype=np.float32)
++        for i, row in enumerate(splits[name]):
++            key = (str(row[0]), str(row[1]), str(row[2]), str(row[4]))
++            q = queues.get(key)
++            if q:
++                arr[i] = q.popleft(); hits += 1
++            total += 1
++        out[name] = arr
++    print(f"raw aux rows {nraw} aligned {hits}/{total} using cols {AUX_COLS}")
++    return out
++
++
++def fit_multitask(splits, enc, dim, aux_train, k=16, lr=0.001, l2=1e-6,
++                  epochs=40, bs=8192, patience=4, seed=0, device='cpu', verbose=True):
++    Xtr, ytr, _ = enc['train']
++    Xva, yva, uva = enc['valid']
++    model = MultiTaskFM(dim, n_tasks=1 + len(AUX_COLS), k=k, seed=seed).to(device)
++    opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
++                            {'params': [model.b], 'weight_decay': 0.0}], lr=lr)
++    Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
++    ytr_t = torch.from_numpy(ytr.astype(np.float32))
++    aux_t = torch.from_numpy(aux_train.astype(np.float32))
++    rng = np.random.default_rng(seed + 17)
++    # Click is common and informative; rarer social actions are useful but noisy.
++    aux_w = torch.tensor([0.20, 0.08, 0.05, 0.05, 0.05], dtype=torch.float32, device=device)
++    best, best_state, bad = -1.0, None, 0
++    for ep in range(1, epochs + 1):
++        idx = rng.permutation(len(ytr)); t0 = time.time(); model.train(); losses = []
++        for i in range(0, len(idx), bs):
++            sel = torch.from_numpy(idx[i:i + bs])
++            xb = Xtr_t[sel].to(device); yb = ytr_t[sel].to(device); ab = aux_t[sel].to(device)
++            opt.zero_grad(set_to_none=True)
++            logits = model.forward_all(xb)
++            main_loss = torch.nn.functional.binary_cross_entropy_with_logits(logits[:, 0], yb)
++            aux_loss_each = torch.nn.functional.binary_cross_entropy_with_logits(
++                logits[:, 1:], ab, reduction='none').mean(0)
++            loss = main_loss + (aux_w * aux_loss_each).sum()
++            loss.backward(); opt.step(); losses.append(loss.item())
++        va = evaluate(uva, yva, model.predict(Xva, device=device))
++        if verbose:
++            print(f"  MTL(seed={seed}) epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
++        if va['primary'] > best + 1e-5:
++            best, bad = va['primary'], 0
++            best_state = {kk: vv.detach().clone() for kk, vv in model.state_dict().items()}
++        else:
++            bad += 1
++            if bad >= patience: break
+     model.load_state_dict(best_state)
+     return model
+ 
+@@ -163,12 +268,8 @@
+     scores = scores.astype(np.float64, copy=False)
+     out = np.empty_like(scores, dtype=np.float64)
+     for idx in groups:
+-        s = scores[idx]
+-        sd = s.std()
+-        if sd > 1e-12:
+-            out[idx] = (s - s.mean()) / sd
+-        else:
+-            out[idx] = s - s.mean()
++        s = scores[idx]; sd = s.std()
++        out[idx] = (s - s.mean()) / sd if sd > 1e-12 else s - s.mean()
+     return out
+ 
+ 
+@@ -178,8 +279,7 @@
+     for idx in groups:
+         n = len(idx)
+         if n <= 1:
+-            out[idx] = 0.0
+-            continue
++            out[idx] = 0.0; continue
+         order = np.argsort(scores[idx], kind='mergesort')
+         ranks = np.empty(n, dtype=np.float64)
+         ranks[order] = np.arange(n, dtype=np.float64) / (n - 1.0)
+@@ -187,10 +287,10 @@
+     return out
+ 
+ 
+-def cached_predict(member_name, train_fn, enc, target, member_seed, device, use_cache=True):
++def cached_predict(cache_name, train_fn, enc, target, member_seed, device, use_cache=True):
+     os.makedirs('pred_cache', exist_ok=True)
+     X, _, _ = enc[target]
+-    cache_path = os.path.join('pred_cache', f'006_{member_name}_{target}_seed{member_seed}.npy')
++    cache_path = os.path.join('pred_cache', f'{cache_name}_{target}_seed{member_seed}.npy')
+     if use_cache and os.path.isfile(cache_path):
+         preds = np.load(cache_path)
+         if len(preds) == len(X):
+@@ -200,6 +300,10 @@
+     if use_cache:
+         np.save(cache_path, preds)
+     return preds
++
++
++def cached_predict_013(member_name, train_fn, enc, target, member_seed, device, use_cache=True):
++    return cached_predict(f'006_{member_name}', train_fn, enc, target, member_seed, device, use_cache)
+ 
+ 
+ def node8_seed_score(bce_preds, bpr_preds, groups):
+@@ -225,11 +329,9 @@
+     print(f"loading {a.data_dir} ...")
+     if a.split == 'dev':
+         from devdata import load as load_dev
+-        splits = load_dev(a.data_dir)
+-        target = 'valid'
++        splits = load_dev(a.data_dir); target = 'valid'
+     else:
+-        splits = load(a.data_dir)
+-        target = a.split
++        splits = load(a.data_dir); target = a.split
+     print({kk: len(vv) for kk, vv in splits.items()}, f"fields={FIELDS}")
+ 
+     enc, dim = encode(splits)
+@@ -238,37 +340,43 @@
+     X, y, users = enc[target]
+     groups = user_groups(users)
+ 
++    # Exact node-13 base: unchanged cached node-8 members with seed weights.
+     member_seeds = [0, 1, 2, 3, 4]
+-    # Seeds 3/4 were the new information that lifted node 11 over node 10;
+-    # emphasize them but keep a substantial 0/1/2 anchor.
+     weights = np.asarray([0.12, 0.12, 0.12, 0.32, 0.32], dtype=np.float64)
+     seed_scores = []
+     for ms in member_seeds:
+-        bce_preds = cached_predict(
++        bce_preds = cached_predict_013(
+             'bce',
+             lambda ms=ms: fit_bce(splits, enc, dim, k=a.k, lr=a.lr, epochs=a.epochs,
+                                   seed=ms, device=a.device, verbose=verbose),
+             enc, target, ms, a.device, use_cache=use_cache)
+-        bpr_preds = cached_predict(
++        bpr_preds = cached_predict_013(
+             'bpr_uniform_np3',
+             lambda ms=ms: fit_bpr(splits, enc, dim, k=a.k, lr=a.lr, epochs=a.epochs,
+-                                  neg_per_pos=a.neg_per_pos, seed=ms,
+-                                  device=a.device, verbose=verbose),
++                                  neg_per_pos=a.neg_per_pos, seed=ms, device=a.device,
++                                  verbose=verbose),
+             enc, target, ms, a.device, use_cache=use_cache)
+-        s = node8_seed_score(bce_preds, bpr_preds, groups)
+-        seed_scores.append(per_user_zscore(s, groups))
+-
+-    score_mat = np.vstack(seed_scores)
+-    bag = weights @ score_mat
++        seed_scores.append(per_user_zscore(node8_seed_score(bce_preds, bpr_preds, groups), groups))
++    base = weights @ np.vstack(seed_scores)
+     cur_idx = member_seeds.index(a.seed) if a.seed in member_seeds else (a.seed % len(member_seeds))
+-    # Minimal seed dependence for measured spread, without materially changing the weighted bag.
+-    scores = 0.995 * bag + 0.005 * seed_scores[cur_idx]
++    base = 0.995 * base + 0.005 * seed_scores[cur_idx]
++
++    aux = align_aux_to_splits(splits, a.data_dir)
++    mtl_preds = cached_predict(
++        '022_multitask_fm_aux',
++        lambda: fit_multitask(splits, enc, dim, aux['train'], k=a.k, lr=a.lr,
++                              epochs=a.epochs, seed=a.seed, device=a.device,
++                              verbose=verbose),
++        enc, target, a.seed, a.device, use_cache=use_cache)
++    mtl_score = 0.70 * per_user_zscore(mtl_preds, groups) + 0.30 * per_user_rank01(mtl_preds, groups)
++
++    scores = 0.70 * per_user_zscore(base, groups) + 0.30 * per_user_zscore(mtl_score, groups)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== weighted_seedbag5 (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== multitask_blend (seed={a.seed}, device={a.device}) ===")
+         r = evaluate(users, y, scores)
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

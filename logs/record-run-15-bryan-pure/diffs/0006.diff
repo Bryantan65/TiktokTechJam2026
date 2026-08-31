@@ -1,0 +1,138 @@
+# iteration 6  (parent: 3)
+# hypothesis: improve 3: node 3 is the best mechanism but seed-noisy; average three independently seeded copies of the same 3-negative BPR FM to reduce variance and stabilize the ranking signal above the target.
+# result: GAUC 0.670499 | nDCG@5 0.537341 | primary 0.60392 | verdict KEPT
+
+--- logs/record-run-15-bryan-pure/solutions/003_bpr_3neg_fm.py
++++ logs/record-run-15-bryan-pure/solutions/006_bpr3neg_seedbag_fm.py
+@@ -1,10 +1,9 @@
+-"""FM with same-user BPR, sampling three negatives per positive.
++"""Seed-bagged ensemble of the best 3-negative same-user BPR FM.
+ 
+-Node 2 showed that pairwise same-user BPR helps. This refinement keeps the same
+-model but gives each positive impression three independently sampled negatives
+-from the same user and averages the BPR loss over all three comparisons. More
+-negative coverage should reduce the chance that training spends an epoch on easy
+-or uninformative pairs, especially for nDCG@5.
++Node 3 is strong but has seed spread around 0.0006. This keeps the exact member
++training objective/features from node 3 and averages three independently seeded
++members inside each run. Prediction caching is used per member seed so later
++blend/fusion experiments do not retrain unchanged members.
+ """
+ import argparse
+ import os
+@@ -68,12 +67,12 @@
+     return np.asarray(pos_idx, dtype=np.int64), np.asarray(pos_users, dtype=object), neg_arrays
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=50, bs=8192, patience=5,
+-        seed=0, device='cpu', verbose=True, nneg=3):
+-    enc, dim = encode(splits)
++def train_one_member(enc, dim, k=16, lr=0.001, l2=1e-6, epochs=50, bs=8192,
++                     patience=5, seed=0, device='cpu', verbose=True, nneg=3):
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
++    torch.manual_seed(seed)
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}],
+@@ -82,7 +81,7 @@
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     pos_idx, pos_users, neg_by_u = make_pair_sampler(ytr, utr)
+     if verbose:
+-        print(f"BPR train positives: {len(pos_idx):,d} from {len(neg_by_u):,d} mixed-label users; nneg={nneg}")
++        print(f"member seed={seed}: BPR positives {len(pos_idx):,d} from {len(neg_by_u):,d} mixed-label users; nneg={nneg}")
+     if len(pos_idx) == 0:
+         raise RuntimeError('no same-user positive/negative training pairs found')
+ 
+@@ -98,9 +97,6 @@
+             sel = order[i:i + bs]
+             pidx = pos_idx[sel]
+             nidx = np.empty((len(sel), nneg), dtype=np.int64)
+-            # Keep the same per-positive same-user pairing as node 2, just draw
+-            # several negatives. Users have ragged negative lists, so a compact
+-            # Python loop is clearer and still cheap versus the model pass.
+             for j, uu in enumerate(pos_users[sel]):
+                 ns = neg_by_u[uu]
+                 nidx[j] = ns[rng.integers(len(ns), size=nneg)]
+@@ -117,7 +113,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  member {seed} epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -128,11 +124,42 @@
+             bad += 1
+             if bad >= patience:
+                 if verbose:
+-                    print(f"  early stop at epoch {ep}")
++                    print(f"  member {seed} early stop at epoch {ep}")
+                 break
+ 
+     model.load_state_dict(best_state)
+-    return model, enc
++    return model
++
++
++def cached_member_predictions(enc, dim, target, split_name, k, lr, epochs, seed,
++                              device, verbose):
++    os.makedirs('pred_cache', exist_ok=True)
++    cache_path = os.path.join('pred_cache', f'006_bpr3neg_member_seed{seed}_{split_name}_{target}.npy')
++    if os.path.isfile(cache_path):
++        if verbose:
++            print(f"loading cached member predictions: {cache_path}")
++        return np.load(cache_path)
++
++    model = train_one_member(enc, dim, k=k, lr=lr, epochs=epochs, seed=seed,
++                             device=device, verbose=verbose, nneg=3)
++    X, y, users = enc[target]
++    preds = model.predict(X, device=device).astype(np.float64)
++    np.save(cache_path, preds)
++    if verbose:
++        print(f"saved cached member predictions: {cache_path}")
++    return preds
++
++
++def run_ensemble(splits, target, split_name, k=16, lr=0.001, epochs=50,
++                 seed=0, device='cpu', verbose=True, members=3):
++    enc, dim = encode(splits)
++    # Keep members independent but deterministic from the harness seed.
++    member_seeds = [seed + 1000 * m for m in range(members)]
++    preds = []
++    for ms in member_seeds:
++        preds.append(cached_member_predictions(enc, dim, target, split_name, k, lr,
++                                               epochs, ms, device, verbose))
++    return np.mean(np.vstack(preds), axis=0)
+ 
+ 
+ if __name__ == '__main__':
+@@ -158,21 +185,14 @@
+         target = a.split
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
+-
+-    X, y, users = enc[target]
+-    scores = model.predict(X, device=a.device)
++    scores = run_ensemble(splits, target, a.split, k=a.k, lr=a.lr,
++                          epochs=a.epochs, seed=a.seed, device=a.device,
++                          verbose=a.out is None, members=3)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_3neg_fm (seed={a.seed}, device={a.device}) ===")
+-        for sp in ('valid', 'test'):
+-            if sp in enc:
+-                Xs, ys, us = enc[sp]
+-                r = evaluate(us, ys, model.predict(Xs, device=a.device))
+-                print(f"  {sp:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} "
+-                      f"| primary {r['primary']:.4f}")
++        print(f"\n=== bpr3neg_seedbag_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"produced {len(scores):,d} predictions for split={a.split}")
+ 

@@ -1,0 +1,214 @@
+# iteration 6  (parent: 3)
+# hypothesis: improve 3: keep the 3-negative BPR mechanism but weight each positive's pairs by capped play_time_ms/duration_ms from the raw logs, so longer watched positives drive more ranking updates. This follows the suggested watch-time-as-BPR-weight direction rather than adding another low-weight ensemble member.
+# result: GAUC 0.669646 | nDCG@5 0.536535 | primary 0.60309 | verdict no-op
+
+--- logs/record-run-16-uct/solutions/003_bpr_3neg_fm.py
++++ logs/record-run-16-uct/solutions/006_watch_weighted_bpr3_fm.py
+@@ -1,14 +1,17 @@
+-"""FM trained with within-user BPR pairwise loss, sampling 3 negatives per positive.
+-
+-This refines 002_bpr_fm.py.  The architecture and fields stay identical, but
+-each positive row is compared with three independently sampled negatives from
+-the same user per epoch.  This gives the pairwise objective broader coverage of
+-the user's negative impressions without changing the model.
++"""FM with within-user BPR and watch-time weighted positive pairs.
++
++Refines the 3-negative BPR run.  The extra negatives gave broader coverage but
++made every positive equally important; here each positive's pairwise losses are
++weighted by its raw play_time_ms / duration_ms signal read from the KuaiRand CSVs.
++Weights are normalized inside each minibatch so the learning-rate scale stays
++close to the unweighted BPR objective.
+ """
+ import argparse
++import csv
+ import os
+ import sys
+ import time
++from collections import defaultdict, deque
+ 
+ import numpy as np
+ import torch
+@@ -44,7 +47,81 @@
+         return np.concatenate(out)
+ 
+ 
+-def make_user_pairs(y, users):
++def _to_int(x, default=0):
++    try:
++        return int(x)
++    except Exception:
++        try:
++            return int(float(x))
++        except Exception:
++            return default
++
++
++def _row_key_from_tuple(r):
++    return (_to_int(r[0]), str(r[1]), str(r[2]), str(r[3]), _to_int(r[4]), _to_int(r[5]))
++
++
++def _first_present(d, names):
++    for n in names:
++        if n in d and d[n] != '':
++            return d[n]
++    return None
++
++
++def _candidate_path(data_dir, filename):
++    p = os.path.join(data_dir, filename)
++    if os.path.isfile(p):
++        return p
++    p = os.path.join(data_dir, 'data', filename)
++    if os.path.isfile(p):
++        return p
++    return os.path.join(data_dir, filename)
++
++
++def load_watch_weights(data_dir, rows, alpha=0.5, cap_ratio=2.0):
++    """Return one positive-pair weight per loaded train row.
++
++    The starter data keeps row order from the two standard log CSVs, but split
++    rows are tuples without play_time_ms.  Build queues by the tuple-visible key
++    and pop in split order, which also handles duplicated impressions.
++    """
++    files = [
++        'log_standard_4_08_to_4_21_pure.csv',
++        'log_standard_4_22_to_5_08_pure.csv',
++    ]
++    q = defaultdict(deque)
++    n_raw = 0
++    for fn in files:
++        path = _candidate_path(data_dir, fn)
++        if not os.path.isfile(path):
++            continue
++        with open(path, 'r', newline='', encoding='utf-8') as f:
++            reader = csv.DictReader(f)
++            for rec in reader:
++                date = _to_int(_first_present(rec, ['date', 'upload_date', 'day']))
++                user = str(_first_present(rec, ['user_id', 'userId', 'user']) or '')
++                video = str(_first_present(rec, ['video_id', 'videoId', 'item_id', 'itemId']) or '')
++                author = str(_first_present(rec, ['author_id', 'authorId']) or '')
++                tab = _to_int(_first_present(rec, ['tab']))
++                dur = _to_int(_first_present(rec, ['duration_ms', 'duration', 'video_duration']))
++                play = _to_int(_first_present(rec, ['play_time_ms', 'play_time', 'playtime_ms', 'watch_time_ms']))
++                key = (date, user, video, author, tab, dur)
++                ratio = float(play) / float(max(dur, 1))
++                ratio = max(0.0, min(cap_ratio, ratio))
++                q[key].append(1.0 + alpha * ratio)
++                n_raw += 1
++
++    weights = np.ones(len(rows), dtype=np.float32)
++    matched = 0
++    for i, r in enumerate(rows):
++        key = _row_key_from_tuple(r)
++        if q.get(key):
++            weights[i] = q[key].popleft()
++            matched += 1
++    return weights, matched, n_raw
++
++
++def make_user_pairs(y, users, row_weights):
+     by_user_pos = {}
+     by_user_neg = {}
+     for i, (yy, u) in enumerate(zip(y, users)):
+@@ -54,6 +131,7 @@
+             by_user_neg.setdefault(u, []).append(i)
+ 
+     pos_all = []
++    pos_w = []
+     neg_pools = []
+     for u, pos in by_user_pos.items():
+         neg = by_user_neg.get(u)
+@@ -61,8 +139,13 @@
+             neg_arr = np.asarray(neg, dtype=np.int64)
+             for p in pos:
+                 pos_all.append(p)
++                pos_w.append(row_weights[p])
+                 neg_pools.append(neg_arr)
+-    return np.asarray(pos_all, dtype=np.int64), neg_pools
++    pos_w = np.asarray(pos_w, dtype=np.float32)
++    # Keep the global objective scale equal to unweighted BPR.
++    if len(pos_w) and float(pos_w.mean()) > 0:
++        pos_w = pos_w / float(pos_w.mean())
++    return np.asarray(pos_all, dtype=np.int64), pos_w, neg_pools
+ 
+ 
+ def sample_negatives(neg_pools, rng, n_neg):
+@@ -72,17 +155,22 @@
+     return neg
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        n_neg=3, seed=0, device='cpu', verbose=True):
++def run(splits, data_dir, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192,
++        patience=4, n_neg=3, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+ 
+-    pos_idx, neg_pools = make_user_pairs(ytr, utr)
++    row_weights, matched, n_raw = load_watch_weights(data_dir, splits['train'])
++    pos_idx, pos_weights, neg_pools = make_user_pairs(ytr, utr, row_weights)
+     if len(pos_idx) == 0:
+         raise RuntimeError('no within-user positive/negative pairs in train split')
+     if verbose:
+-        print(f"BPR positives per epoch: {len(pos_idx):,d}; negatives/positive={n_neg}")
++        print(f"watch rows matched: {matched:,d}/{len(splits['train']):,d} train rows "
++              f"from {n_raw:,d} raw rows")
++        print(f"weighted BPR positives: {len(pos_idx):,d}; negatives/positive={n_neg}; "
++              f"weight mean={pos_weights.mean():.3f} std={pos_weights.std():.3f} "
++              f"min={pos_weights.min():.3f} max={pos_weights.max():.3f}")
+ 
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+@@ -90,6 +178,7 @@
+                            lr=lr, betas=(0.9, 0.999), eps=1e-8)
+ 
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
++    W_t = torch.from_numpy(pos_weights.astype(np.float32))
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+ 
+@@ -105,17 +194,19 @@
+             nsel_np = neg_idx[sel].reshape(-1)
+             xp = Xtr_t[torch.from_numpy(psel_np)].to(device)
+             xn = Xtr_t[torch.from_numpy(nsel_np)].to(device)
++            wb = W_t[torch.from_numpy(sel)].to(device).repeat_interleave(n_neg)
+             opt.zero_grad(set_to_none=True)
+             sp = model(xp).repeat_interleave(n_neg)
+             sn = model(xn)
+-            loss = torch.nn.functional.softplus(-(sp - sn)).mean()
++            per_pair = torch.nn.functional.softplus(-(sp - sn))
++            loss = (per_pair * wb).sum() / torch.clamp(wb.sum(), min=1e-6)
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | wbpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -157,8 +248,9 @@
+         target = a.split
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, n_neg=a.n_neg,
+-                     seed=a.seed, device=a.device, verbose=a.out is None)
++    model, enc = run(splits, data_dir=a.data_dir, k=a.k, lr=a.lr,
++                     epochs=a.epochs, n_neg=a.n_neg, seed=a.seed,
++                     device=a.device, verbose=a.out is None)
+     X, y, users = enc[target]
+     scores = model.predict(X, device=a.device)
+ 
+@@ -166,7 +258,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_3neg_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== watch_weighted_bpr3_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

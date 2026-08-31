@@ -1,0 +1,181 @@
+# iteration 33  (parent: 30)
+# hypothesis: draft candidate-context features: change mechanism from more user history to non-label impression-set context counts (duplicate user-video/user-author, tab/duration concentration, occurrence order) trained in a new LightGBM member and fused at 30%. This follows the logged-bandit/propensity intuition that exposure structure matters in recommender logs (LightGBM ranking docs: https://github.com/micr
+# result: GAUC 0.697931 | nDCG@5 0.651816 | primary 0.674874 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/030_rrf_aux_fusion.py
++++ logs-1k/record-run-4/solutions/033_candidate_context_lgbm.py
+@@ -1,12 +1,13 @@
+-"""Cached ensemble with reciprocal-rank fusion for top-k emphasis.
+-
+-This is a lightweight fusion/debug of node 29: use the same available member
+-predictions, but combine per-user ranks (RRF) with the incumbent z-score blend to
+-emphasize top-5 ordering instead of letting the auxiliary member's score scale
+-pull nDCG down.  If caches are absent, fall back to a minimal LightGBM so the
+-script still writes predictions standalone.
++"""Candidate-set context member fused with node-30 cached ensemble.
++
++This changes mechanism from more history modelling to transductive within-split
++candidate-context features: repeat counts and concentration of the same
++(user, video), (user, author), tab, and duration bucket inside the impression
++set being ranked.  No target labels or raw feedback are used for these features;
++the same count construction is applied to train/valid/test rows.
+ """
+-import argparse, os, sys
++import argparse, os, sys, math
++from collections import defaultdict
+ import numpy as np
+ import lightgbm as lgb
+ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'kuairand-starter-kit'))
+@@ -15,6 +16,17 @@
+ 
+ def duration_array(rows):
+     return np.asarray([float(r[5]) for r in rows], dtype=np.float32)
++
++
++def dur_bucket_ms(x):
++    try: v=float(x)
++    except Exception: v=0.0
++    if v < 5000: return 0
++    if v < 10000: return 1
++    if v < 30000: return 2
++    if v < 60000: return 3
++    if v < 120000: return 4
++    return 5
+ 
+ 
+ def factorize_cols(Xtr, Xva, Xt, target_is_valid):
+@@ -30,6 +42,47 @@
+     return np.column_stack(trs).astype(np.int32),np.column_stack(vas).astype(np.int32),np.column_stack(tes).astype(np.int32)
+ 
+ 
++def candidate_count_features(rows):
++    """Features available from the candidate/impression set itself, no labels."""
++    n=len(rows)
++    cu=defaultdict(int); cv=defaultdict(int); ca=defaultdict(int); ctab=defaultdict(int); cdb=defaultdict(int)
++    cuv=defaultdict(int); cua=defaultdict(int); cut=defaultdict(int); cud=defaultdict(int); cvt=defaultdict(int); cat=defaultdict(int)
++    for r in rows:
++        u,v,a,tab,db=r[1],r[2],r[3],r[4],dur_bucket_ms(r[5])
++        cu[u]+=1; cv[v]+=1; ca[a]+=1; ctab[tab]+=1; cdb[db]+=1
++        cuv[(u,v)]+=1; cua[(u,a)]+=1; cut[(u,tab)]+=1; cud[(u,db)]+=1; cvt[(v,tab)]+=1; cat[(a,tab)]+=1
++    # ordinal occurrence is also non-label candidate context; centered ordinal lets
++    # GBDT learn whether early/late repeats differ without using future labels.
++    seen_uv=defaultdict(int); seen_ua=defaultdict(int)
++    F=np.empty((n,18),dtype=np.float32)
++    for i,r in enumerate(rows):
++        u,v,a,tab,db=r[1],r[2],r[3],r[4],dur_bucket_ms(r[5])
++        uv=cuv[(u,v)]; ua=cua[(u,a)]; ut=cut[(u,tab)]; ud=cud[(u,db)]
++        denom=max(cu[u],1)
++        seen_uv[(u,v)]+=1; seen_ua[(u,a)]+=1
++        ou=seen_uv[(u,v)]; oa=seen_ua[(u,a)]
++        F[i,0]=math.log1p(uv);       F[i,1]=uv/denom
++        F[i,2]=math.log1p(ua);       F[i,3]=ua/denom
++        F[i,4]=math.log1p(ut);       F[i,5]=ut/denom
++        F[i,6]=math.log1p(ud);       F[i,7]=ud/denom
++        F[i,8]=math.log1p(cv[v]);    F[i,9]=math.log1p(ca[a])
++        F[i,10]=math.log1p(ctab[tab]); F[i,11]=math.log1p(cdb[db])
++        F[i,12]=math.log1p(cvt[(v,tab)]); F[i,13]=math.log1p(cat[(a,tab)])
++        F[i,14]=ou/max(uv,1);        F[i,15]=oa/max(ua,1)
++        F[i,16]=(uv-1.0)/denom;      F[i,17]=(ua-1.0)/denom
++    return F
++
++
++def base_feature_mats(splits,target):
++    enc,_=encode(splits); Xtr0,ytr,_=enc['train']; Xva0,yva,_=enc['valid']; Xt0,_,_=enc[target]
++    Xtr,Xva,Xt=factorize_cols(Xtr0,Xva0,Xt0,target=='valid')
++    dtr=duration_array(splits['train']); dva=duration_array(splits['valid']); dt=dva if target=='valid' else duration_array(splits[target])
++    Ftr=np.column_stack([Xtr.astype(np.float32),np.log1p(np.maximum(dtr,0))[:,None],(dtr/100000.0)[:,None],candidate_count_features(splits['train'])]).astype(np.float32)
++    Fva=np.column_stack([Xva.astype(np.float32),np.log1p(np.maximum(dva,0))[:,None],(dva/100000.0)[:,None],candidate_count_features(splits['valid'])]).astype(np.float32)
++    Ft=np.column_stack([Xt.astype(np.float32),np.log1p(np.maximum(dt,0))[:,None],(dt/100000.0)[:,None],candidate_count_features(splits[target])]).astype(np.float32)
++    return Ftr,ytr,Fva,yva,Ft,enc
++
++
+ def train_minimal(splits,target,split_name,seed=0):
+     os.makedirs('pred_cache',exist_ok=True)
+     enc,_=encode(splits); Xtr0,ytr,_=enc['train']; Xva0,yva,_=enc['valid']; Xt0,_,_=enc[target]
+@@ -38,10 +91,30 @@
+     Ftr=np.column_stack([Xtr.astype(np.float32),np.log1p(np.maximum(dtr,0))[:,None],(dtr/100000.0)[:,None]]).astype(np.float32)
+     Fva=np.column_stack([Xva.astype(np.float32),np.log1p(np.maximum(dva,0))[:,None],(dva/100000.0)[:,None]]).astype(np.float32)
+     Ft=np.column_stack([Xt.astype(np.float32),np.log1p(np.maximum(dt,0))[:,None],(dt/100000.0)[:,None]]).astype(np.float32)
+-    clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=260,learning_rate=0.05,num_leaves=63,min_child_samples=500,subsample=0.85,subsample_freq=1,colsample_bytree=0.9,reg_alpha=0.1,reg_lambda=2.0,random_state=int(seed),n_jobs=-1,verbose=-1,force_col_wise=True)
+-    clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=[lgb.early_stopping(25,first_metric_only=True,verbose=False)])
++    clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=220,learning_rate=0.05,num_leaves=63,min_child_samples=500,subsample=0.85,subsample_freq=1,colsample_bytree=0.9,reg_alpha=0.1,reg_lambda=2.0,random_state=int(seed),n_jobs=-1,verbose=-1,force_col_wise=True)
++    clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=[lgb.early_stopping(20,first_metric_only=True,verbose=False)])
+     p=clf.predict(Ft,num_iteration=clf.best_iteration_,raw_score=True).astype(np.float32)
+-    np.save(f'pred_cache/030_fallback_minimal_split{split_name}_seed{seed}.npy',p)
++    np.save(f'pred_cache/033_fallback_minimal_split{split_name}_seed{seed}.npy',p)
++    return p
++
++
++def train_candidate_member(splits,target,split_name,seed):
++    os.makedirs('pred_cache',exist_ok=True)
++    path=os.path.join('pred_cache',f'033_candidate_context_split{split_name}_seed{seed}.npy')
++    if os.path.isfile(path):
++        p=np.load(path)
++        if len(p)==len(splits[target]): return p.astype(np.float32,copy=False)
++    Ftr,ytr,Fva,yva,Ft,_=base_feature_mats(splits,target)
++    clf=lgb.LGBMClassifier(
++        objective='binary', metric='binary_logloss', boosting_type='gbdt',
++        n_estimators=320, learning_rate=0.045, num_leaves=95, max_depth=-1,
++        min_child_samples=700, subsample=0.82, subsample_freq=1,
++        colsample_bytree=0.86, reg_alpha=0.2, reg_lambda=3.0,
++        random_state=int(seed)+12013, n_jobs=-1, verbose=-1, force_col_wise=True)
++    clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),
++            callbacks=[lgb.early_stopping(28,first_metric_only=True,verbose=False)])
++    p=clf.predict(Ft,num_iteration=clf.best_iteration_,raw_score=True).astype(np.float32)
++    np.save(path,p)
+     return p
+ 
+ 
+@@ -87,6 +160,13 @@
+ def node24(exact0,exact2,fast,users):
+     zexact=z_per_user_blend([exact0,exact2],[0.5,0.5],users)
+     return z_per_user_blend([zexact,fast],[0.77,0.23],users)
++
++
++def node30_score(exact0,exact2,fast,stat,seq,aux,users):
++    inc=node24(exact0,exact2,fast,users)
++    zmain=z_per_user_blend([inc,stat,seq,aux],[0.38,0.10,0.22,0.30],users)
++    rrf=rrf_per_user([inc,stat,seq,aux],[0.38,0.10,0.22,0.30],users,k=60.0)
++    return z_per_user_blend([zmain,rrf],[0.70,0.30],users)
+ 
+ 
+ if __name__=='__main__':
+@@ -105,18 +185,27 @@
+     stat=load_first([f'{p}_oof_target_stats_split{sp}_mseed6.npy' for p in ['025','028','029']],n)
+     seq=load_first([f'{p}_user_history_seq_split{sp}_mseed8.npy' for p in ['026','028','029']],n)
+     aux=load_first([f'029_aux_soft_seq_split{sp}_mseed10.npy'],n)
+-    # Standalone fallback: with no cache, produce a valid model rather than fail.
+-    if exact0 is None: exact0=train_minimal(splits,target,sp,0)
+-    if exact2 is None: exact2=train_minimal(splits,target,sp,2)
+-    if fast is None: fast=train_minimal(splits,target,sp,4)
+-    if stat is None: stat=train_minimal(splits,target,sp,6)
+-    if seq is None: seq=train_minimal(splits,target,sp,8)
+-    if aux is None: aux=train_minimal(splits,target,sp,10)
++    fallback=None
++    def fb(seed=0):
++        global fallback
++        if fallback is None: fallback=train_minimal(splits,target,sp,seed)
++        return fallback
++    if exact0 is None: exact0=fb(0)
++    if exact2 is None: exact2=fb(2)
++    if fast is None: fast=fb(4)
++    if stat is None: stat=fb(6)
++    if seq is None: seq=fb(8)
++    if aux is None: aux=fb(10)
++    cand=train_candidate_member(splits,target,sp,a.seed)
++    base=node30_score(exact0,exact2,fast,stat,seq,aux,users)
+     inc=node24(exact0,exact2,fast,users)
+-    zmain=z_per_user_blend([inc,stat,seq,aux],[0.38,0.10,0.22,0.30],users)
+-    rrf=rrf_per_user([inc,stat,seq,aux],[0.38,0.10,0.22,0.30],users,k=60.0)
+-    # RRF is very top-heavy; z-normalize both per user before final hybrid.
+-    scores=z_per_user_blend([zmain,rrf],[0.70,0.30],users).astype(np.float64)
++    # Candidate-context member gets a readable 30% share.  Keep both calibrated
++    # z-score and top-heavy RRF views, as node 30 showed RRF helps nDCG.
++    arrs=[inc,stat,seq,aux,cand]
++    weights=[0.28,0.08,0.16,0.18,0.30]
++    zmain=z_per_user_blend(arrs,weights,users)
++    rrf=rrf_per_user(arrs,weights,users,k=55.0)
++    scores=z_per_user_blend([base,zmain,rrf],[0.20,0.50,0.30],users).astype(np.float64)
+     if a.out:
+         np.save(a.out,scores); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else:

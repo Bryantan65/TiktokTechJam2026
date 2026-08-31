@@ -1,0 +1,99 @@
+# iteration 8  (parent: 7)
+# hypothesis: improve 7: fuse unchanged BPR seed-bag members with 70% per-user z-score averaging and 30% reciprocal-rank fusion, hoping rank consensus improves top-5 nDCG without sacrificing much GAUC.
+# result: GAUC 0.670363 | nDCG@5 0.537316 | primary 0.603839 | verdict KEPT
+
+--- logs/record-run-15-bryan-pure/solutions/007_bpr3neg_user_z_fusion.py
++++ logs/record-run-15-bryan-pure/solutions/008_bpr3neg_rrf_blend.py
+@@ -1,9 +1,9 @@
+-"""Per-user z-normalized fusion of cached 3-negative BPR FM members.
+-
+-This keeps the node-6 members unchanged (same training code/cache names) but changes
+-only the fusion: normalize each member's scores within each target user before
+-averaging. Within-user monotone normalization leaves any single member's ranking
+-unchanged, but prevents one seed's larger score scale from dominating another.
++"""Blend node-7 per-user z-score seed bag with reciprocal-rank fusion.
++
++Member training is unchanged from nodes 6/7, so cached predictions under the node-6
++member name are reused.  The only tested change is the within-user fusion rule:
++70% z-score score averaging plus 30% RRF, to give top-5 consensus more weight
++without discarding score information useful for GAUC.
+ """
+ import argparse
+ import os
+@@ -119,7 +119,7 @@
+ 
+ def cached_member_predictions(enc, dim, target, split_name, k, lr, epochs, seed, device, verbose):
+     os.makedirs('pred_cache', exist_ok=True)
+-    # Intentionally reuse node-6 cache: member code/loss/features/hyperparams are unchanged.
++    # Reuse node-6 cache because the member model/loss/features/hyperparameters are unchanged.
+     cache_path = os.path.join('pred_cache', f'006_bpr3neg_member_seed{seed}_{split_name}_{target}.npy')
+     if os.path.isfile(cache_path):
+         if verbose:
+@@ -135,13 +135,16 @@
+     return preds
+ 
+ 
+-def per_user_zscore(scores, users):
+-    scores = scores.astype(np.float64, copy=True)
++def user_groups(users):
+     groups = defaultdict(list)
+     for i, u in enumerate(users):
+         groups[u].append(i)
+-    for idxs in groups.values():
+-        idx = np.asarray(idxs, dtype=np.int64)
++    return [np.asarray(v, dtype=np.int64) for v in groups.values()]
++
++
++def per_user_zscore(scores, groups):
++    scores = scores.astype(np.float64, copy=True)
++    for idx in groups:
+         vals = scores[idx]
+         sd = vals.std()
+         if sd > 1e-12:
+@@ -151,16 +154,34 @@
+     return scores
+ 
+ 
++def reciprocal_rank_fusion(member_preds, groups, k_rrf=60.0):
++    n = len(member_preds[0])
++    fused = np.zeros(n, dtype=np.float64)
++    for p in member_preds:
++        p = np.asarray(p)
++        for idx in groups:
++            vals = p[idx]
++            order = np.argsort(-vals, kind='mergesort')
++            ranks = np.empty(len(idx), dtype=np.float64)
++            ranks[order] = np.arange(1, len(idx) + 1, dtype=np.float64)
++            fused[idx] += 1.0 / (k_rrf + ranks)
++    return fused / float(len(member_preds))
++
++
+ def run_ensemble(splits, target, split_name, k=16, lr=0.001, epochs=50,
+                  seed=0, device='cpu', verbose=True, members=3):
+     enc, dim = encode(splits)
+     X, y, users = enc[target]
++    groups = user_groups(users)
+     member_seeds = [seed + 1000 * m for m in range(members)]
+-    fused = []
++    preds = []
+     for ms in member_seeds:
+-        p = cached_member_predictions(enc, dim, target, split_name, k, lr, epochs, ms, device, verbose)
+-        fused.append(per_user_zscore(p, users))
+-    return np.mean(np.vstack(fused), axis=0)
++        preds.append(cached_member_predictions(enc, dim, target, split_name, k, lr, epochs, ms, device, verbose))
++
++    z_members = [per_user_zscore(p, groups) for p in preds]
++    z_avg = np.mean(np.vstack(z_members), axis=0)
++    rrf = per_user_zscore(reciprocal_rank_fusion(preds, groups, k_rrf=60.0), groups)
++    return 0.70 * z_avg + 0.30 * rrf
+ 
+ 
+ if __name__ == '__main__':
+@@ -193,6 +214,6 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr3neg_user_z_fusion (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr3neg_rrf_blend (seed={a.seed}, device={a.device}) ===")
+         print(f"produced {len(scores):,d} predictions for split={a.split}")
+ 

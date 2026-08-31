@@ -1,0 +1,251 @@
+# iteration 30  (parent: 29)
+# hypothesis: debug 29: the time-feature draft timed out in the raw CSV hourmin join, so keep the time hypothesis but replace it with cheap tuple-only weekday/date-trend residuals blended at 3% on node 024; this tests whether calendar time carries signal before attempting a faster hourmin join.
+# result: GAUC 0.671342 | nDCG@5 0.537941 | primary 0.604641 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/029_time_residual.py
++++ logs/record-run-16-uct/solutions/030_debug_time_date.py
+@@ -1,16 +1,15 @@
+-"""Node 024 ensemble plus a small TRAIN-only time residual.
+-
+-This drafts a time-feature branch from the current best: raw CSV hourmin is not
+-present in data.load() tuples, so we join it back by the six tuple fields and
+-add smoothed user-hour / user-weekday / tab-hour residuals at low weight.
++"""Debug node 029: cheap tuple-only calendar residual on top of node 024.
++
++Node 029 timed out while joining raw CSV hourmin.  This keeps the same time-feature
++hypothesis but removes the expensive/raw join: use date already present in the
++loader tuples (weekday and train-window date trend) to build a small TRAIN-only
++calendar residual, then blend it lightly with the cached node-024 ensemble.
+ """
+ import argparse
+-import csv
+ import datetime as _dt
+ import os
+ import sys
+ import time
+-from collections import defaultdict, deque
+ 
+ import numpy as np
+ import torch
+@@ -173,10 +172,7 @@
+     for idx in groups:
+         vals = pred[idx]
+         sd = vals.std()
+-        if sd > 1e-12:
+-            out[idx] = (vals - vals.mean()) / sd
+-        else:
+-            out[idx] = 0.0
++        out[idx] = (vals - vals.mean()) / sd if sd > 1e-12 else 0.0
+     return out
+ 
+ 
+@@ -192,9 +188,7 @@
+         ranks = np.empty(n, dtype=np.float64)
+         ranks[order] = np.arange(n, dtype=np.float64)
+         pct = ranks / (n - 1.0)
+-        if power != 1.0:
+-            pct = pct ** power
+-        out[idx] = pct
++        out[idx] = pct ** power if power != 1.0 else pct
+     return out
+ 
+ 
+@@ -207,8 +201,7 @@
+     s, c = dct.get(key, (0.0, 0))
+     if c <= 0:
+         return 0.0
+-    rate = (s + alpha * base) / (c + alpha)
+-    return rate - base
++    return (s + alpha * base) / (c + alpha) - base
+ 
+ 
+ def build_history_signal(splits, target):
+@@ -237,45 +230,7 @@
+     return out
+ 
+ 
+-def _norm_num(x):
+-    try:
+-        return str(int(float(x)))
+-    except Exception:
+-        return str(x)
+-
+-
+-def _row_key(row):
+-    return (str(row[0]), str(row[1]), str(row[2]), str(row[3]), str(row[4]), _norm_num(row[5]))
+-
+-
+-def _csv_key(rec):
+-    def get(*names):
+-        for n in names:
+-            if n in rec:
+-                return rec[n]
+-        return ''
+-    return (str(get('date')), str(get('user_id', 'user')), str(get('video_id', 'photo_id', 'item_id')),
+-            str(get('author_id')), str(get('tab')), _norm_num(get('duration_ms', 'duration')))
+-
+-
+-def _parse_hour(x):
+-    if x is None:
+-        return -1
+-    s = str(x).strip()
+-    if not s:
+-        return -1
+-    try:
+-        if ':' in s:
+-            return int(s.split(':')[0]) % 24
+-        v = int(float(s))
+-        if v >= 100:
+-            return (v // 100) % 24
+-        return v % 24
+-    except Exception:
+-        return -1
+-
+-
+-def _weekday(date_val):
++def weekday(date_val):
+     try:
+         s = str(int(date_val))
+         return _dt.datetime.strptime(s, '%Y%m%d').weekday()
+@@ -283,72 +238,73 @@
+         return -1
+ 
+ 
+-def load_time_extras(data_dir, splits):
+-    """Return {(split,row_index): (hour_bucket, weekday)} by joining raw CSV rows."""
+-    files = ['log_standard_4_08_to_4_21_pure.csv', 'log_standard_4_22_to_5_08_pure.csv']
+-    q = defaultdict(deque)
+-    for fn in files:
+-        path = os.path.join(data_dir, fn)
+-        if not os.path.isfile(path):
+-            continue
+-        try:
+-            with open(path, newline='', encoding='utf-8') as f:
+-                rd = csv.DictReader(f)
+-                for rec in rd:
+-                    hm = rec.get('hourmin', rec.get('hour_min', rec.get('time', '')))
+-                    h = _parse_hour(hm)
+-                    hb = h // 4 if h >= 0 else -1
+-                    d = rec.get('date', '')
+-                    q[_csv_key(rec)].append((hb, _weekday(d)))
+-        except Exception:
+-            continue
+-    extras = {}
+-    for sp, rows in splits.items():
+-        arr = []
+-        for row in rows:
+-            dq = q.get(_row_key(row))
+-            if dq and len(dq):
+-                arr.append(dq.popleft())
+-            else:
+-                arr.append((-1, _weekday(row[0])))
+-        extras[sp] = arr
+-    return extras
+-
+-
+-def build_time_signal(splits, target, extras):
++def date_ord(date_val):
++    try:
++        s = str(int(date_val))
++        return _dt.datetime.strptime(s, '%Y%m%d').toordinal()
++    except Exception:
++        return 0
++
++
++def build_calendar_signal(splits, target):
+     user_stat, tab_stat = {}, {}
+-    uh_stat, uw_stat, uth_stat, th_stat = {}, {}, {}, {}
++    uw_stat, utw_stat, tw_stat, gw_stat = {}, {}, {}, {}
++    # simple smoothed linear label trend by tab and globally from TRAIN dates
++    rows_for_slope = []
++    by_tab_slope = {}
++    tab_rows = {}
+     gsum, gcnt = 0.0, 0
+-    for i, row in enumerate(splits['train']):
+-        u, tab, y = row[1], row[4], float(row[6])
+-        hb, wd = extras.get('train', [(-1, -1)] * len(splits['train']))[i]
++    for row in splits['train']:
++        d, u, tab, y = row[0], row[1], row[4], float(row[6])
++        w = weekday(d)
++        od = date_ord(d)
+         add_stat(user_stat, u, y)
+         add_stat(tab_stat, tab, y)
+-        if hb >= 0:
+-            add_stat(uh_stat, (u, hb), y)
+-            add_stat(uth_stat, (u, tab, hb), y)
+-            add_stat(th_stat, (tab, hb), y)
+-        if wd >= 0:
+-            add_stat(uw_stat, (u, wd), y)
++        if w >= 0:
++            add_stat(uw_stat, (u, w), y)
++            add_stat(utw_stat, (u, tab, w), y)
++            add_stat(tw_stat, (tab, w), y)
++            add_stat(gw_stat, w, y)
++        if od > 0:
++            rows_for_slope.append((od, y))
++            tab_rows.setdefault(tab, []).append((od, y))
+         gsum += y
+         gcnt += 1
+     gm = gsum / max(1, gcnt)
++
++    def slope(pairs):
++        if len(pairs) < 20:
++            return 0.0
++        x = np.asarray([p[0] for p in pairs], dtype=np.float64)
++        y = np.asarray([p[1] for p in pairs], dtype=np.float64)
++        x = x - x.mean()
++        den = float((x * x).sum())
++        return float((x * (y - y.mean())).sum() / den) if den > 1e-12 else 0.0
++
++    gslope = slope(rows_for_slope)
++    for tab, pairs in tab_rows.items():
++        by_tab_slope[tab] = slope(pairs)
++    train_ords = [p[0] for p in rows_for_slope]
++    ref_ord = max(train_ords) if train_ords else 0
++
+     out = np.zeros(len(splits[target]), dtype=np.float64)
+-    targ_extra = extras.get(target, [(-1, -1)] * len(splits[target]))
+     for i, row in enumerate(splits[target]):
+-        u, tab = row[1], row[4]
+-        hb, wd = targ_extra[i]
++        d, u, tab = row[0], row[1], row[4]
++        w = weekday(d)
++        od = date_ord(d)
+         us, uc = user_stat.get(u, (gm, 0))
+         ub = us / uc if uc > 0 else gm
+         ts, tc = tab_stat.get(tab, (gm, 0))
+         tb = ts / tc if tc > 0 else gm
+         val = 0.0
+-        if hb >= 0:
+-            val += 0.55 * smoothed_dev(uh_stat, (u, hb), ub, alpha=8.0)
+-            val += 0.25 * smoothed_dev(uth_stat, (u, tab, hb), ub, alpha=12.0)
+-            val += 0.18 * smoothed_dev(th_stat, (tab, hb), tb, alpha=80.0)
+-        if wd >= 0:
+-            val += 0.25 * smoothed_dev(uw_stat, (u, wd), ub, alpha=12.0)
++        if w >= 0:
++            val += 0.55 * smoothed_dev(uw_stat, (u, w), ub, alpha=8.0)
++            val += 0.25 * smoothed_dev(utw_stat, (u, tab, w), ub, alpha=12.0)
++            val += 0.18 * smoothed_dev(tw_stat, (tab, w), tb, alpha=80.0)
++            val += 0.10 * smoothed_dev(gw_stat, w, gm, alpha=200.0)
++        if od > 0 and ref_ord > 0:
++            days = max(-14.0, min(21.0, float(od - ref_ord)))
++            val += 0.20 * days * gslope + 0.18 * days * by_tab_slope.get(tab, 0.0)
+         out[i] = val
+     return out
+ 
+@@ -397,11 +353,10 @@
+     ensemble = 0.40 * score_z + 0.60 * score_rank
+ 
+     hist = per_user_z(build_history_signal(splits, target), groups)
+-    best = 0.90 * ensemble + 0.10 * hist
+-
+-    extras = load_time_extras(a.data_dir, splits)
+-    tm = per_user_z(build_time_signal(splits, target, extras), groups)
+-    scores = 0.95 * best + 0.05 * tm
++    base = 0.90 * ensemble + 0.10 * hist
++
++    cal = per_user_z(build_calendar_signal(splits, target), groups)
++    scores = 0.97 * base + 0.03 * cal
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

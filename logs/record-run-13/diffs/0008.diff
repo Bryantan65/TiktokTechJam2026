@@ -1,0 +1,126 @@
+# iteration 8  (parent: 7)
+# hypothesis: improve 7: keep the same cached BCE/BPR members but add a 30% per-user rank-percentile fusion term on top of the 65% BPR z-score blend; rank fusion may improve top-5 ordering without retraining.
+# result: GAUC 0.670119 | nDCG@5 0.536821 | primary 0.60347 | verdict noise
+
+--- logs/record-run-13/solutions/007_bpr_heavy_zblend.py
++++ logs/record-run-13/solutions/008_bpr_rank_zblend.py
+@@ -1,9 +1,9 @@
+-"""BCE + uniform-BPR FM ensemble with BPR-heavy per-user z-score blending.
+-
+-Node 6 showed that BCE and BPR complement each other after per-user scale
+-alignment.  This keeps the same cached member predictions/training code but
+-leans the final ranking toward the stronger standalone BPR member (65%) while
+-retaining BCE's stabilising signal (35%).
++"""BCE + uniform-BPR FM ensemble using cached node-6 members.
++
++This is a cheap fusion-only refinement of node 7.  It keeps the same trained
++members/cache keys, but blends both per-user z-scored logits and per-user rank
++percentiles.  The rank term should emphasize top-of-user ordering for nDCG@5
++while the z term preserves score gaps that helped GAUC.
+ """
+ import argparse
+ import os
+@@ -24,8 +24,7 @@
+     def __init__(self, dim, k=16, seed=0):
+         super().__init__()
+         rng = np.random.default_rng(seed)
+-        V0 = rng.normal(0, 0.01, (dim, k)).astype(np.float32)
+-        self.V = torch.nn.Parameter(torch.from_numpy(V0))
++        self.V = torch.nn.Parameter(torch.from_numpy(rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+ 
+@@ -51,8 +50,7 @@
+     Xva, yva, uva = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+-                            {'params': [model.b], 'weight_decay': 0.0}],
+-                           lr=lr, betas=(0.9, 0.999), eps=1e-8)
++                            {'params': [model.b], 'weight_decay': 0.0}], lr=lr)
+     lossfn = torch.nn.BCEWithLogitsLoss()
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     ytr_t = torch.from_numpy(ytr)
+@@ -122,12 +120,9 @@
+     Xva, yva, uva = enc['valid']
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+-                            {'params': [model.b], 'weight_decay': 0.0}],
+-                           lr=lr, betas=(0.9, 0.999), eps=1e-8)
++                            {'params': [model.b], 'weight_decay': 0.0}], lr=lr)
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     pos_idx, neg_pools = make_user_pair_sources(ytr, utr)
+-    if len(pos_idx) == 0:
+-        raise RuntimeError('No same-user positive/negative pairs for BPR')
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+     for ep in range(1, epochs + 1):
+@@ -157,14 +152,17 @@
+     return model
+ 
+ 
+-def per_user_zscore(scores, users):
+-    scores = scores.astype(np.float64, copy=False)
+-    out = np.empty_like(scores, dtype=np.float64)
++def user_groups(users):
+     groups = defaultdict(list)
+     for i, u in enumerate(users):
+         groups[u].append(i)
+-    for idxs in groups.values():
+-        idx = np.asarray(idxs, dtype=np.int64)
++    return [np.asarray(v, dtype=np.int64) for v in groups.values()]
++
++
++def per_user_zscore(scores, groups):
++    scores = scores.astype(np.float64, copy=False)
++    out = np.empty_like(scores, dtype=np.float64)
++    for idx in groups:
+         s = scores[idx]
+         sd = s.std()
+         if sd > 1e-12:
+@@ -174,10 +172,25 @@
+     return out
+ 
+ 
++def per_user_rank01(scores, groups):
++    scores = scores.astype(np.float64, copy=False)
++    out = np.empty_like(scores, dtype=np.float64)
++    for idx in groups:
++        n = len(idx)
++        if n <= 1:
++            out[idx] = 0.0
++            continue
++        order = np.argsort(scores[idx], kind='mergesort')
++        ranks = np.empty(n, dtype=np.float64)
++        ranks[order] = np.arange(n, dtype=np.float64) / (n - 1.0)
++        out[idx] = ranks
++    return out
++
++
+ def cached_predict(member_name, train_fn, enc, target, seed, device, use_cache=True):
+     os.makedirs('pred_cache', exist_ok=True)
+-    X, y, users = enc[target]
+-    # Reuse node-6 member names because member training code is intentionally unchanged.
++    X, _, _ = enc[target]
++    # Reuse node-6 cache keys because member training code is intentionally unchanged.
+     cache_path = os.path.join('pred_cache', f'006_{member_name}_{target}_seed{seed}.npy')
+     if use_cache and os.path.isfile(cache_path):
+         preds = np.load(cache_path)
+@@ -231,13 +244,16 @@
+         enc, target, a.seed, a.device, use_cache=use_cache)
+ 
+     X, y, users = enc[target]
+-    scores = 0.35 * per_user_zscore(bce_preds, users) + 0.65 * per_user_zscore(bpr_preds, users)
++    groups = user_groups(users)
++    zblend = 0.35 * per_user_zscore(bce_preds, groups) + 0.65 * per_user_zscore(bpr_preds, groups)
++    rblend = 0.35 * per_user_rank01(bce_preds, groups) + 0.65 * per_user_rank01(bpr_preds, groups)
++    scores = 0.70 * zblend + 0.30 * rblend
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_heavy_zblend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_rank_zblend (seed={a.seed}, device={a.device}) ===")
+         r = evaluate(users, y, scores)
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

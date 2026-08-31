@@ -1,0 +1,174 @@
+# iteration 25  (parent: 22)
+# hypothesis: improve 22: the learned sequence member helped while time members helped separately; add a readable 30% time-aware sequence BPR member with hour/tab-hour context and prior per-user hour buckets, keeping node20 and node22 cached members unchanged.
+# result: GAUC 0.672139 | nDCG@5 0.538359 | primary 0.605249 | verdict KEPT
+
+--- logs/record-run-15-bryan-pure/solutions/022_seq_context_fm.py
++++ logs/record-run-15-bryan-pure/solutions/025_time_seq_context.py
+@@ -1,9 +1,10 @@
+-"""Debug node 21: learn the sequence/history signal instead of hard-coding it.
++"""Improve node 22: make the learned sequence-context member time-aware.
+ 
+-Node 21 blended a hand-weighted history-overlap score and dropped badly.  This
+-keeps node 20 unchanged, builds leakage-safe online prior-history buckets for
+-train and train-history buckets for valid/test, trains a same-user BPR FM member
+-on those sequence context fields, and blends it at a readable 30% weight.
++Node 22's sequence BPR member helped, but it only learned prior user context on
++item/author/tab/duration while node20's time signal lives in separate members.
++This keeps node20 and the node22 member unchanged via caches and adds a 30%
++readable blend member whose history buckets also include hour/dow/tab-hour and
++per-user prior positives/negatives in the current hour bucket.
+ """
+ import argparse, os, sys
+ from collections import defaultdict
+@@ -13,8 +14,9 @@
+ sys.path.insert(0, HERE)
+ sys.path.insert(0, os.path.join(HERE, '..', 'kuairand-starter-kit'))
+ import importlib.util
+-spec = importlib.util.spec_from_file_location('node20', os.path.join(HERE, '020_dual_time_blend40.py'))
+-node20 = importlib.util.module_from_spec(spec); spec.loader.exec_module(node20)
++spec22 = importlib.util.spec_from_file_location('node22', os.path.join(HERE, '022_seq_context_fm.py'))
++node22 = importlib.util.module_from_spec(spec22); spec22.loader.exec_module(node22)
++node20 = node22.node20
+ from data import load, encode
+ 
+ 
+@@ -51,55 +53,71 @@
+ def empty_hist():
+     return {'pv':defaultdict(int),'nv':defaultdict(int),'pa':defaultdict(int),'na':defaultdict(int),
+             'pt':defaultdict(int),'nt':defaultdict(int),'pd':defaultdict(int),'nd':defaultdict(int),
+-            'lv':{},'la':{},'cnt':0,'pos':0,'neg':0}
++            'ph':defaultdict(int),'nh':defaultdict(int),'pth':defaultdict(int),'nth':defaultdict(int),
++            'lv':{},'la':{},'lh':{},'cnt':0,'pos':0,'neg':0}
+ 
+ 
+-def hist_vals(h, r):
+-    v, a, t, d = str(r[2]), str(r[3]), str(r[4]), str(dur_bucket(r[5]))
++def h4_of(hour):
++    h = int(hour)
++    return 'miss' if h >= 24 else str(h // 4)
++
++
++def hist_vals(h, r, hour):
++    v, a, t, d, hb = str(r[2]), str(r[3]), str(r[4]), str(dur_bucket(r[5])), h4_of(hour)
++    th = t + '_' + hb
+     c = h['cnt']
+     return (
+         cb(h['pv'].get(v,0)), cb(h['nv'].get(v,0)),
+         cb(h['pa'].get(a,0)), cb(h['na'].get(a,0)),
+         cb(h['pt'].get(t,0)), cb(h['nt'].get(t,0)),
+         cb(h['pd'].get(d,0)), cb(h['nd'].get(d,0)),
++        cb(h['ph'].get(hb,0)), cb(h['nh'].get(hb,0)),
++        cb(h['pth'].get(th,0)), cb(h['nth'].get(th,0)),
+         rb(None if v not in h['lv'] else c - h['lv'][v]),
+         rb(None if a not in h['la'] else c - h['la'][a]),
++        rb(None if hb not in h['lh'] else c - h['lh'][hb]),
+         cb(h['pos']), cb(h['neg'])
+     )
+ 
+ 
+-def add_hist(h, r):
+-    v, a, t, d, y = str(r[2]), str(r[3]), str(r[4]), str(dur_bucket(r[5])), int(r[6])
++def add_hist(h, r, hour):
++    v, a, t, d, hb, y = str(r[2]), str(r[3]), str(r[4]), str(dur_bucket(r[5])), h4_of(hour), int(r[6])
++    th = t + '_' + hb
+     h['cnt'] += 1; c = h['cnt']
+     if y > 0:
+         h['pv'][v] += 1; h['pa'][a] += 1; h['pt'][t] += 1; h['pd'][d] += 1
+-        h['lv'][v] = c; h['la'][a] = c; h['pos'] += 1
++        h['ph'][hb] += 1; h['pth'][th] += 1
++        h['lv'][v] = c; h['la'][a] = c; h['lh'][hb] = c; h['pos'] += 1
+     else:
+-        h['nv'][v] += 1; h['na'][a] += 1; h['nt'][t] += 1; h['nd'][d] += 1; h['neg'] += 1
++        h['nv'][v] += 1; h['na'][a] += 1; h['nt'][t] += 1; h['nd'][d] += 1
++        h['nh'][hb] += 1; h['nth'][th] += 1; h['neg'] += 1
+ 
+ 
+-def build_seq_rows(splits):
++def build_time_seq_rows(splits, hours):
+     vals_by = {}
+-    maps = [dict() for _ in range(17)]
+-    # Train features use only preceding rows for that user.
++    maps = None
++    # base: user, video, author, tab, dur, hour4, dow, tab_hour + 17 history fields
++    nfields = 25
++    maps = [dict() for _ in range(nfields)]
+     hist = defaultdict(empty_hist); vals = []
+-    for r in splits['train']:
+-        ubase = (str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(dur_bucket(r[5])))
+-        u = str(r[1]); vr = ubase + hist_vals(hist[u], r)
+-        vals.append(vr); add_hist(hist[u], r)
++    htrain = hours.get('train', np.full(len(splits['train']), 24, dtype=np.int64))
++    for i, r in enumerate(splits['train']):
++        hb = h4_of(htrain[i]); dow = str(node20.day_of_week(r[0])); tab = str(r[4])
++        ubase = (str(r[1]), str(r[2]), str(r[3]), tab, str(dur_bucket(r[5])), hb, dow, tab + '_' + hb)
++        u = str(r[1]); vr = ubase + hist_vals(hist[u], r, htrain[i])
++        vals.append(vr); add_hist(hist[u], r, htrain[i])
+     vals_by['train'] = vals
+     for vr in vals:
+         for j, v in enumerate(vr):
+             if v not in maps[j]: maps[j][v] = len(maps[j])
+-    # Valid/test features use full train history only, avoiding target self-label leakage.
+     base_hist = hist
+     for sp in splits:
+         if sp == 'train': continue
+-        vals = []
+-        for r in splits[sp]:
+-            ubase = (str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(dur_bucket(r[5])))
+-            u = str(r[1]); vr = ubase + hist_vals(base_hist[u], r)
+-            vals.append(vr)
++        vals = []; hs = hours.get(sp, np.full(len(splits[sp]), 24, dtype=np.int64))
++        for i, r in enumerate(splits[sp]):
++            hb = h4_of(hs[i]); dow = str(node20.day_of_week(r[0])); tab = str(r[4])
++            ubase = (str(r[1]), str(r[2]), str(r[3]), tab, str(dur_bucket(r[5])), hb, dow, tab + '_' + hb)
++            u = str(r[1]); vals.append(ubase + hist_vals(base_hist[u], r, hs[i]))
+         vals_by[sp] = vals
+         for vr in vals:
+             for j, v in enumerate(vr):
+@@ -117,12 +135,7 @@
+ 
+ 
+ def per_user_zscore(scores, users):
+-    scores = scores.astype(np.float64, copy=True); groups = defaultdict(list)
+-    for i, u in enumerate(users): groups[u].append(i)
+-    for idxs in groups.values():
+-        idx = np.asarray(idxs, dtype=np.int64); vals = scores[idx]; sd = vals.std()
+-        scores[idx] = (vals - vals.mean()) / sd if sd > 1e-12 else 0.0
+-    return scores
++    return node22.per_user_zscore(scores, users)
+ 
+ 
+ def main():
+@@ -140,10 +153,12 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k: len(v) for k, v in splits.items()}, 'fields=node20+learned_seq_context')
++    print({k: len(v) for k, v in splits.items()}, 'fields=node22+time_seq_context')
++
++    # Reconstruct node22 incumbent exactly (node20 base + node22 sequence member).
+     base = node20.run_solution(splits, target, a.split, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     enc0, _ = encode(splits); users = enc0[target][2]
+-    senc, sdim = build_seq_rows(splits)
++    senc, sdim = node22.build_seq_rows(splits)
+     member_seeds = [a.seed + 1000 * m for m in range(3)]
+     seq_members = []
+     for ms in member_seeds:
+@@ -151,7 +166,17 @@
+                                       '022_seq_context_bpr_member', 'bpr', None, 3, a.k, a.lr, a.epochs)
+         seq_members.append(per_user_zscore(p, users))
+     seq = per_user_zscore(np.mean(np.vstack(seq_members), axis=0), users)
+-    scores = 0.70 * per_user_zscore(base, users) + 0.30 * seq
++    incumbent = 0.70 * per_user_zscore(base, users) + 0.30 * seq
++
++    hours = node20.load_hours(a.data_dir, splits, verbose=a.out is None)
++    tsenc, tsdim = build_time_seq_rows(splits, hours)
++    tseq_members = []
++    for ms in member_seeds:
++        p = node20.cached_predictions(tsenc, tsdim, target, a.split, ms, a.device, a.out is None,
++                                      '025_time_seq_context_bpr_member', 'bpr', None, 3, a.k, a.lr, a.epochs)
++        tseq_members.append(per_user_zscore(p, users))
++    tseq = per_user_zscore(np.mean(np.vstack(tseq_members), axis=0), users)
++    scores = 0.70 * per_user_zscore(incumbent, users) + 0.30 * tseq
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else:

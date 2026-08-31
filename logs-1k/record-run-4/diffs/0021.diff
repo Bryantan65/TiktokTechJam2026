@@ -1,0 +1,76 @@
+# iteration 21  (parent: 20)
+# hypothesis: improve 20: test another cheap fusion on the same cached LightGBM members by averaging within-user percentile ranks rather than z-scored margins, directly matching the within-user nature of GAUC and nDCG.
+# result: GAUC 0.678495 | nDCG@5 0.623514 | primary 0.651005 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/020_lgbm_seedbag2_userz.py
++++ logs-1k/record-run-4/solutions/021_lgbm_seedbag2_rankavg.py
+@@ -1,10 +1,10 @@
+-"""Node 19 with per-user z-score fusion of the two LightGBM members.
+-
+-The two cached node-11 LightGBM members are strong, but raw margins can have
+-slightly different per-user scales.  Since both official metrics rank only
+-within user, normalize each member's target scores inside each user before
+-averaging.  If caches are absent this remains standalone and trains the same two
+-members as node 19 before fusing them.
++"""Two-member LightGBM seed bag with per-user rank-percentile fusion.
++
++This is the same member mechanism as nodes 19/20.  Instead of averaging raw
++margins or per-user z-scores, convert each member's predictions to within-user
++percentile ranks and average those ranks.  Both official metrics are within-user
++ranking metrics, so this tests whether rank-scale fusion is more robust than
++score-scale fusion.
+ """
+ import argparse
+ import os
+@@ -106,7 +106,7 @@
+     return clf.predict(Ft, num_iteration=clf.best_iteration_, raw_score=True).astype(np.float32)
+ 
+ 
+-def per_user_z_fuse(member_preds, users):
++def per_user_rankavg_fuse(member_preds, users):
+     P = np.vstack([p.astype(np.float32, copy=False) for p in member_preds])
+     users = np.asarray(users)
+     out = np.zeros(P.shape[1], dtype=np.float32)
+@@ -115,11 +115,20 @@
+     starts = np.r_[0, np.flatnonzero(us[1:] != us[:-1]) + 1, len(us)]
+     for a, b in zip(starts[:-1], starts[1:]):
+         idx = order[a:b]
+-        block = P[:, idx]
+-        mu = block.mean(axis=1, keepdims=True)
+-        sd = block.std(axis=1, keepdims=True)
+-        z = (block - mu) / np.maximum(sd, 1e-6)
+-        out[idx] = z.mean(axis=0)
++        n = b - a
++        if n <= 1:
++            out[idx] = 0.0
++            continue
++        acc = np.zeros(n, dtype=np.float32)
++        denom = float(n - 1)
++        for m in range(P.shape[0]):
++            vals = P[m, idx]
++            # stable descending order; best item receives percentile 1.0.
++            local_order = np.argsort(-vals, kind='mergesort')
++            ranks = np.empty(n, dtype=np.float32)
++            ranks[local_order] = np.arange(n, dtype=np.float32)
++            acc += 1.0 - ranks / denom
++        out[idx] = acc / float(P.shape[0])
+     return out.astype(np.float64)
+ 
+ 
+@@ -134,6 +143,7 @@
+             os.path.join('pred_cache', f'018_node11_raw_split{split_name}_mseed{ms}.npy'),
+             os.path.join('pred_cache', f'019_node11_raw_split{split_name}_mseed{ms}.npy'),
+             os.path.join('pred_cache', f'020_node11_raw_split{split_name}_mseed{ms}.npy'),
++            os.path.join('pred_cache', f'021_node11_raw_split{split_name}_mseed{ms}.npy'),
+         ]
+         loaded = False
+         for path in paths:
+@@ -191,7 +201,7 @@
+ 
+     members = train_seed_bag_members(splits, target=target, split_name=a.split, verbose=a.out is None)
+     users = get_target_users(splits, target)
+-    scores = per_user_z_fuse(members, users)
++    scores = per_user_rankavg_fuse(members, users)
+     if a.out:
+         np.save(a.out, scores)
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")

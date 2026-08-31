@@ -1,0 +1,174 @@
+# iteration 21  (parent: 16)
+# hypothesis: improve 16: expand the untouched OOF LambdaRank stacker by training/applying it on the stronger node-019 feature set, including the 50/50 rank fusion and 10% user-context history prior, with a conservative 20% meta blend.
+# result: GAUC 0.671115 | nDCG@5 0.537898 | primary 0.604506 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/016_oof_lgbm_stack.py
++++ logs/record-run-16-uct/solutions/021_oof_stack_base19.py
+@@ -1,10 +1,9 @@
+-"""OOF-ish LambdaMART stacking over the cached node-012 ensemble.
+-
+-Node 014 trained the LightGBM combiner on in-sample TRAIN predictions from the
+-same FM members, which can teach the stacker artefacts of memorisation.  This
+-variant trains the combiner on a chronological holdout from TRAIN: base FM
+-members are fit on earlier train rows and predict the last train dates, then the
+-learned combiner is applied to the full-train members used by node 012.
++"""OOF LambdaRank residual on the best hand-built node-019 fusion.
++
++Refines node 016: keep its chronological TRAIN-only meta-training protocol, but
++train/apply the ranker on the stronger node-019 feature set (50/50 score-rank
++fusion plus the small user-context historical prior).  The meta model is blended
++at 20% so its signal is readable but the robust hand fusion remains dominant.
+ """
+ import argparse
+ import os
+@@ -179,7 +178,42 @@
+     return out
+ 
+ 
+-def build_features(preds_bpr, preds_soft, groups):
++def add_stat(dct, key, y):
++    s, c = dct.get(key, (0.0, 0))
++    dct[key] = (s + float(y), c + 1)
++
++
++def smoothed_dev(dct, key, base, alpha):
++    s, c = dct.get(key, (0.0, 0))
++    if c <= 0:
++        return 0.0
++    return (s + alpha * base) / (c + alpha) - base
++
++
++def build_history_signal(train_rows, target_rows):
++    user_stat, uv_stat, ua_stat, ut_stat = {}, {}, {}, {}
++    global_sum, global_cnt = 0.0, 0
++    for row in train_rows:
++        u, v, au, tab, y = row[1], row[2], row[3], row[4], row[6]
++        yy = float(y)
++        add_stat(user_stat, u, yy)
++        add_stat(uv_stat, (u, v), yy)
++        add_stat(ua_stat, (u, au), yy)
++        add_stat(ut_stat, (u, tab), yy)
++        global_sum += yy; global_cnt += 1
++    global_mean = global_sum / max(1, global_cnt)
++    out = np.zeros(len(target_rows), dtype=np.float64)
++    for i, row in enumerate(target_rows):
++        u, v, au, tab = row[1], row[2], row[3], row[4]
++        us, uc = user_stat.get(u, (global_mean, 0))
++        base = us / uc if uc > 0 else global_mean
++        out[i] = (1.00 * smoothed_dev(uv_stat, (u, v), base, alpha=1.0) +
++                  0.45 * smoothed_dev(ua_stat, (u, au), base, alpha=5.0) +
++                  0.20 * smoothed_dev(ut_stat, (u, tab), base, alpha=10.0))
++    return out
++
++
++def build_features(preds_bpr, preds_soft, groups, hist_signal=None):
+     z_bpr = [per_user_z(p, groups) for p in preds_bpr]
+     z_soft = [per_user_z(p, groups) for p in preds_soft]
+     r_bpr = [per_user_rank_percentile(p, groups) for p in preds_bpr]
+@@ -191,14 +225,20 @@
+     score_z = 0.60 * mean_z_bpr + 0.40 * mean_z_soft
+     score_rank_raw = 0.60 * mean_r_bpr + 0.40 * mean_r_soft
+     score_rank = per_user_z(score_rank_raw, groups)
+-    parent_score = 0.70 * score_z + 0.30 * score_rank
++    ensemble_503 = 0.50 * score_z + 0.50 * score_rank
++    if hist_signal is None:
++        hist_z = np.zeros_like(ensemble_503)
++    else:
++        hist_z = per_user_z(hist_signal, groups)
++    base19 = 0.90 * ensemble_503 + 0.10 * hist_z
+     disagreement = np.abs(mean_z_bpr - mean_z_soft)
+     rank_disagreement = np.abs(mean_r_bpr - mean_r_soft)
+     cols = []
+     cols.extend(z_bpr); cols.extend(z_soft); cols.extend(r_bpr); cols.extend(r_soft)
+     cols.extend([mean_z_bpr, mean_z_soft, mean_r_bpr, mean_r_soft,
+-                 score_z, score_rank, parent_score, disagreement, rank_disagreement])
+-    return np.vstack(cols).T.astype(np.float32), parent_score
++                 score_z, score_rank, ensemble_503, hist_z, base19,
++                 disagreement, rank_disagreement])
++    return np.vstack(cols).T.astype(np.float32), base19
+ 
+ 
+ def sorted_group_info(users):
+@@ -214,10 +254,7 @@
+ 
+ def chronological_train_holdout(train_rows, holdout_days=3):
+     dates = sorted(set(int(r[0]) for r in train_rows))
+-    if len(dates) <= holdout_days:
+-        cut_dates = set(dates[-1:])
+-    else:
+-        cut_dates = set(dates[-holdout_days:])
++    cut_dates = set(dates[-holdout_days:]) if len(dates) > holdout_days else set(dates[-1:])
+     early = [r for r in train_rows if int(r[0]) not in cut_dates]
+     hold = [r for r in train_rows if int(r[0]) in cut_dates]
+     return early, hold
+@@ -243,7 +280,6 @@
+     if a.out is None:
+         print({k: len(v) for k, v in splits.items()}, f'fields={FIELDS}')
+ 
+-    # Full-train member predictions for the requested target: identical members to node 012.
+     enc_full, dim_full = encode(splits)
+     _, _, utar = enc_full[target]
+     groups_tar = user_groups(utar)
+@@ -254,38 +290,39 @@
+                                         a.device, verbose=(a.out is None), prefix='010'))
+         tar_soft.append(get_member_preds('soft5_tau1', enc_full, dim_full, target, target_cache, s,
+                                          a.device, verbose=(a.out is None), prefix='010'))
+-    X_meta_tar, parent_tar = build_features(tar_bpr, tar_soft, groups_tar)
+-
+-    # Chronological OOF-ish meta training from TRAIN only.
++    hist_tar = build_history_signal(splits['train'], splits[target])
++    X_meta_tar, base_tar = build_features(tar_bpr, tar_soft, groups_tar, hist_tar)
++
++    # TRAIN-only chronological meta data; history is built from early rows only.
+     early_rows, hold_rows = chronological_train_holdout(splits['train'], holdout_days=3)
+     meta_splits = {'train': early_rows, 'valid': hold_rows}
+     enc_meta, dim_meta = encode(meta_splits)
+     _, y_hold, u_hold = enc_meta['valid']
+     groups_hold = user_groups(u_hold)
+     hold_bpr, hold_soft = [], []
+-    # Include split sizes in cache key to avoid stale reuse across dev/valid loaders.
+     meta_tag = f'oof{len(early_rows)}_{len(hold_rows)}'
+     for s in bag_seeds:
+         hold_bpr.append(get_member_preds('bpr1', enc_meta, dim_meta, 'valid', meta_tag, s,
+                                          a.device, verbose=(a.out is None), prefix='016'))
+         hold_soft.append(get_member_preds('soft5_tau1', enc_meta, dim_meta, 'valid', meta_tag, s,
+                                           a.device, verbose=(a.out is None), prefix='016'))
+-    X_meta_hold, _ = build_features(hold_bpr, hold_soft, groups_hold)
++    hist_hold = build_history_signal(early_rows, hold_rows)
++    X_meta_hold, _ = build_features(hold_bpr, hold_soft, groups_hold, hist_hold)
+ 
+     order, group = sorted_group_info(u_hold)
+     ranker = lgb.LGBMRanker(
+         objective='lambdarank',
+         metric='ndcg',
+-        n_estimators=60,
+-        learning_rate=0.04,
+-        num_leaves=7,
++        n_estimators=40,
++        learning_rate=0.035,
++        num_leaves=5,
+         max_depth=3,
+-        min_child_samples=40,
++        min_child_samples=60,
+         subsample=0.90,
+         colsample_bytree=0.90,
+-        reg_alpha=0.2,
+-        reg_lambda=5.0,
+-        random_state=2028,
++        reg_alpha=0.5,
++        reg_lambda=8.0,
++        random_state=2031,
+         n_jobs=2,
+         verbosity=-1,
+     )
+@@ -293,9 +330,7 @@
+     meta_tar = ranker.predict(X_meta_tar).astype(np.float64)
+     meta_tar = per_user_z(meta_tar, groups_tar)
+ 
+-    # Still a readable stacker test (>=20%), but less than node 014 because the
+-    # OOF holdout is smaller and noisier than the full TRAIN set.
+-    scores = 0.75 * parent_tar + 0.25 * meta_tar
++    scores = 0.80 * base_tar + 0.20 * meta_tar
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

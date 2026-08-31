@@ -1,0 +1,35 @@
+# iteration 25  (parent: 24)
+# hypothesis: improve 24: p^2 rank fusion improved node 022 by top-emphasizing ranks; increase the rank-percentile power to p^3 while keeping the 60% rank blend and 10% history prior fixed to test whether sharper nDCG@5 focus helps further.
+# result: GAUC 0.671275 | nDCG@5 0.537826 | primary 0.60455 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/024_rank60_power_rank.py
++++ logs/record-run-16-uct/solutions/025_rank60_power3.py
+@@ -1,10 +1,10 @@
+-"""Cached FM ensemble with top-emphasized rank fusion and history prior.
+-
+-Refines node 022: keep its 60% rank / 40% score fusion and 10% train-only
+-history prior, but transform per-member rank percentiles with p^2 before
+-averaging.  The raw 60% rank blend likely over-weighted mid-list order; p^2
+-keeps the rank signal monotone while emphasizing the top of each user's list,
+-which is where nDCG@5 is measured.
++"""Cached FM ensemble with stronger top-emphasized rank fusion and history prior.
++
++Refines node 024: keep the same six cached BPR/soft-hard FM members, 60% rank
++/ 40% score fusion, and 10% train-only history prior, but increase the
++per-member rank-percentile transform from p^2 to p^3.  If node 024 worked
++because the nonlinear rank signal de-emphasized irrelevant mid-list swaps, a
++slightly sharper top-focused transform should help nDCG@5 without retraining.
+ """
+ import argparse
+ import os
+@@ -272,8 +272,8 @@
+                               verbose=(a.out is None))
+         z_bpr.append(per_user_z(pb, groups))
+         z_soft.append(per_user_z(ps, groups))
+-        r_bpr.append(per_user_rank_percentile(pb, groups, power=2.0))
+-        r_soft.append(per_user_rank_percentile(ps, groups, power=2.0))
++        r_bpr.append(per_user_rank_percentile(pb, groups, power=3.0))
++        r_soft.append(per_user_rank_percentile(ps, groups, power=3.0))
+ 
+     score_z = 0.60 * np.mean(z_bpr, axis=0) + 0.40 * np.mean(z_soft, axis=0)
+     score_rank = 0.60 * np.mean(r_bpr, axis=0) + 0.40 * np.mean(r_soft, axis=0)

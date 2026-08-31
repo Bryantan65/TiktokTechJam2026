@@ -1,0 +1,50 @@
+# iteration 37  (parent: 35)
+# hypothesis: improve 35: node 36 showed 90% candidate-context is too high, so test the intermediate 80% candidate-context blend while keeping the same cached members and fusion recipe.
+# result: GAUC 0.702095 | nDCG@5 0.66127 | primary 0.681683 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/035_candidate_dominant_fusion.py
++++ logs-1k/record-run-4/solutions/037_candidate_80pct.py
+@@ -1,9 +1,8 @@
+-"""Candidate-dominant fusion after node 34.
+-
+-Keeps the candidate-context LightGBM member and all older cached members unchanged,
+-but raises the candidate-context member from the plurality vote in node 34 to a
+-clear majority.  This tests whether the candidate/impression-set context signal
+-is now the main model rather than just an ensemble correction.
++"""80% candidate-context fusion.
++
++Node 35 (about 70% candidate-context) beat the older ensemble, while node 36
++(90% candidate-context) backed off.  This tests the midpoint using the same
++cached members and candidate model code, so the signal is the blend weight.
+ """
+ import argparse, os, sys, math
+ from collections import defaultdict
+@@ -90,7 +89,7 @@
+     clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=220,learning_rate=0.05,num_leaves=63,min_child_samples=500,subsample=0.85,subsample_freq=1,colsample_bytree=0.9,reg_alpha=0.1,reg_lambda=2.0,random_state=int(seed),n_jobs=-1,verbose=-1,force_col_wise=True)
+     clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=[lgb.early_stopping(20,first_metric_only=True,verbose=False)])
+     p=clf.predict(Ft,num_iteration=clf.best_iteration_,raw_score=True).astype(np.float32)
+-    np.save(f'pred_cache/035_fallback_minimal_split{split_name}_seed{seed}.npy',p)
++    np.save(f'pred_cache/037_fallback_minimal_split{split_name}_seed{seed}.npy',p)
+     return p
+ 
+ 
+@@ -196,14 +195,14 @@
+     base=node30_score(exact0,exact2,fast,stat,seq,aux,users)
+     inc=node24(exact0,exact2,fast,users)
+ 
+-    # Candidate-dominant version of node 34.  The older members are retained for
+-    # diversification, but the candidate-context member supplies most of both the
+-    # z-score and rank-fusion signals.
++    # Midpoint between node 35's candidate-majority setting and node 36's
++    # near-solo setting.  Keep small non-candidate diversity but let the
++    # candidate-context member dominate both z-score and rank fusion.
+     arrs=[inc,stat,seq,aux,cand]
+-    weights=[0.10,0.03,0.07,0.10,0.70]
++    weights=[0.06,0.02,0.06,0.06,0.80]
+     zmain=z_per_user_blend(arrs,weights,users)
+     rrf=rrf_per_user(arrs,weights,users,k=45.0)
+-    scores=z_per_user_blend([base,zmain,rrf],[0.05,0.55,0.40],users).astype(np.float64)
++    scores=z_per_user_blend([base,zmain,rrf],[0.04,0.56,0.40],users).astype(np.float64)
+     if a.out:
+         np.save(a.out,scores); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else:

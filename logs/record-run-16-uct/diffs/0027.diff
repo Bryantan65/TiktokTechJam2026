@@ -1,0 +1,142 @@
+# iteration 27  (parent: 24)
+# hypothesis: draft item-CF: change mechanism rather than another near-tie blend tweak; following item-based CF/top-N recommendation work (DeepICF DOI https://doi.org/10.1145/3314578), blend node 024 with a readable 20% author-author cosine co-occurrence score from each user's positive TRAIN history.
+# result: GAUC 0.669089 | nDCG@5 0.537283 | primary 0.603186 | verdict noise
+
+--- logs/record-run-16-uct/solutions/024_rank60_power_rank.py
++++ logs/record-run-16-uct/solutions/027_author_itemcf.py
+@@ -1,10 +1,9 @@
+-"""Cached FM ensemble with top-emphasized rank fusion and history prior.
+-
+-Refines node 022: keep its 60% rank / 40% score fusion and 10% train-only
+-history prior, but transform per-member rank percentiles with p^2 before
+-averaging.  The raw 60% rank blend likely over-weighted mid-list order; p^2
+-keeps the rank signal monotone while emphasizing the top of each user's list,
+-which is where nDCG@5 is measured.
++"""Cached FM ensemble plus author item-CF from user positive history.
++
++Starts a different mechanism from node 024: keep the best cached six-member
++BPR/soft-hard FM ensemble, but blend in an item-based collaborative filtering
++signal.  The CF score ranks a candidate author by cosine co-occurrence with the
++authors that the same user previously watched positively in TRAIN only.
+ """
+ import argparse
+ import os
+@@ -13,6 +12,7 @@
+ 
+ import numpy as np
+ import torch
++from scipy.sparse import csr_matrix
+ 
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 '..', 'kuairand-starter-kit'))
+@@ -237,6 +237,98 @@
+     return out
+ 
+ 
++def build_author_itemcf_signal(splits, target, topk=80):
++    """Author-author itemCF using positive TRAIN histories only."""
++    user_to_idx, author_to_idx = {}, {}
++    user_pos_authors = {}
++
++    def uid(x):
++        if x not in user_to_idx:
++            user_to_idx[x] = len(user_to_idx)
++        return user_to_idx[x]
++
++    def aid(x):
++        if x not in author_to_idx:
++            author_to_idx[x] = len(author_to_idx)
++        return author_to_idx[x]
++
++    # Include target authors in the index so scoring can address every row.
++    for row in splits[target]:
++        aid(row[3])
++    for row in splits['train']:
++        u, au, y = row[1], row[3], row[6]
++        ui = uid(u)
++        ai = aid(au)
++        if float(y) > 0.5:
++            user_pos_authors.setdefault(ui, set()).add(ai)
++
++    rows, cols, vals = [], [], []
++    for ui, aset in user_pos_authors.items():
++        if not aset:
++            continue
++        # Down-weight very broad users so they do not dominate co-occurrence.
++        w = 1.0 / np.sqrt(float(len(aset)))
++        for ai in aset:
++            rows.append(ui)
++            cols.append(ai)
++            vals.append(w)
++    n_users = max(1, len(user_to_idx))
++    n_auth = max(1, len(author_to_idx))
++    if not rows:
++        return np.zeros(len(splits[target]), dtype=np.float64)
++
++    M = csr_matrix((np.asarray(vals, dtype=np.float32),
++                    (np.asarray(rows, dtype=np.int32), np.asarray(cols, dtype=np.int32))),
++                   shape=(n_users, n_auth), dtype=np.float32)
++    C = (M.T @ M).tocsr()
++    diag = np.asarray(C.diagonal(), dtype=np.float64)
++    inv = np.zeros_like(diag)
++    nz = diag > 1e-12
++    inv[nz] = 1.0 / np.sqrt(diag[nz])
++
++    neigh_cols = [None] * n_auth
++    neigh_vals = [None] * n_auth
++    for a in range(n_auth):
++        start, end = C.indptr[a], C.indptr[a + 1]
++        idx = C.indices[start:end]
++        dat = C.data[start:end].astype(np.float64, copy=False)
++        if len(idx) == 0 or inv[a] == 0.0:
++            neigh_cols[a] = np.empty(0, dtype=np.int32)
++            neigh_vals[a] = np.empty(0, dtype=np.float64)
++            continue
++        sim = dat * inv[a] * inv[idx]
++        keep = (idx != a) & (sim > 0)
++        idx = idx[keep]
++        sim = sim[keep]
++        if len(idx) > topk:
++            part = np.argpartition(sim, -topk)[-topk:]
++            idx = idx[part]
++            sim = sim[part]
++        neigh_cols[a] = idx.astype(np.int32, copy=False)
++        neigh_vals[a] = sim.astype(np.float64, copy=False)
++
++    out = np.zeros(len(splits[target]), dtype=np.float64)
++    for i, row in enumerate(splits[target]):
++        u, au = row[1], row[3]
++        ui = user_to_idx.get(u)
++        ai = author_to_idx.get(au)
++        if ui is None or ai is None:
++            continue
++        hist = user_pos_authors.get(ui)
++        if not hist:
++            continue
++        idx = neigh_cols[ai]
++        dat = neigh_vals[ai]
++        if idx is None or len(idx) == 0:
++            continue
++        s = 0.0
++        for j, h in enumerate(idx):
++            if int(h) in hist:
++                s += dat[j]
++        out[i] = s
++    return out
++
++
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser()
+     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+@@ -281,7 +373,10 @@
+     ensemble = 0.40 * score_z + 0.60 * score_rank
+ 
+     hist = per_user_z(build_history_signal(splits, target), groups)
+-    scores = 0.90 * ensemble + 0.10 * hist
++    best_score = 0.90 * ensemble + 0.10 * hist
++
++    itemcf = per_user_z(build_author_itemcf_signal(splits, target, topk=80), groups)
++    scores = 0.80 * best_score + 0.20 * itemcf
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

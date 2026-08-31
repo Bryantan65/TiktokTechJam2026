@@ -1,0 +1,192 @@
+# iteration 22  (parent: 20)
+# hypothesis: improve 20: add a readable third member at 30% weight after per-user z-score fusion, but make it a cheaper/diverse LightGBM so the standalone script stays under the timeout while testing whether seed-bagging still has headroom.
+# result: GAUC 0.679469 | nDCG@5 0.634024 | primary 0.656747 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/020_lgbm_seedbag2_userz.py
++++ logs-1k/record-run-4/solutions/022_lgbm_seedbag_fast3.py
+@@ -1,10 +1,11 @@
+-"""Node 19 with per-user z-score fusion of the two LightGBM members.
+-
+-The two cached node-11 LightGBM members are strong, but raw margins can have
+-slightly different per-user scales.  Since both official metrics rank only
+-within user, normalize each member's target scores inside each user before
+-averaging.  If caches are absent this remains standalone and trains the same two
+-members as node 19 before fusing them.
++"""Two exact LightGBM node-11 members plus one faster diverse member.
++
++Node 20's two exact members with per-user z-score fusion are the current best.
++This keeps those cached members unchanged and adds a cheaper LightGBM member
++with smaller trees / higher learning rate, blended at 30% after per-user
++z-normalisation.  If caches are absent it still trains standalone: two exact
++members plus the fast member, which is intended to stay below the timeout unlike
++three exact members.
+ """
+ import argparse
+ import os
+@@ -76,7 +77,7 @@
+             finish(Xt_cat, dt))
+ 
+ 
+-def fit_one(Ftr, ytr, Fva, yva, Ft, member_seed, verbose=False):
++def fit_exact(Ftr, ytr, Fva, yva, Ft, member_seed, verbose=False):
+     clf = lgb.LGBMClassifier(
+         objective='binary',
+         metric='binary_logloss',
+@@ -102,66 +103,123 @@
+     clf.fit(Ftr, ytr, eval_set=[(Fva, yva)],
+             categorical_feature=list(range(5)), callbacks=callbacks)
+     if verbose:
+-        print(f"member_seed={member_seed} best_iteration={clf.best_iteration_}")
++        print(f"exact_seed={member_seed} best_iteration={clf.best_iteration_}")
+     return clf.predict(Ft, num_iteration=clf.best_iteration_, raw_score=True).astype(np.float32)
+ 
+ 
+-def per_user_z_fuse(member_preds, users):
+-    P = np.vstack([p.astype(np.float32, copy=False) for p in member_preds])
++def fit_fast(Ftr, ytr, Fva, yva, Ft, member_seed, verbose=False):
++    # A deliberately cheaper, slightly different tree ensemble.  It should be
++    # weaker than an exact member but supplies another view without making the
++    # script non-standalone under the 900s timeout.
++    clf = lgb.LGBMClassifier(
++        objective='binary',
++        metric='binary_logloss',
++        boosting_type='gbdt',
++        n_estimators=180,
++        learning_rate=0.08,
++        num_leaves=31,
++        max_depth=-1,
++        min_child_samples=300,
++        subsample=0.80,
++        subsample_freq=1,
++        colsample_bytree=0.80,
++        reg_alpha=0.05,
++        reg_lambda=1.5,
++        random_state=int(member_seed),
++        n_jobs=-1,
++        verbose=-1,
++        force_col_wise=True,
++    )
++    callbacks = [lgb.early_stopping(20, first_metric_only=True, verbose=verbose)]
++    if verbose:
++        callbacks.append(lgb.log_evaluation(50))
++    clf.fit(Ftr, ytr, eval_set=[(Fva, yva)],
++            categorical_feature=list(range(5)), callbacks=callbacks)
++    if verbose:
++        print(f"fast_seed={member_seed} best_iteration={clf.best_iteration_}")
++    return clf.predict(Ft, num_iteration=clf.best_iteration_, raw_score=True).astype(np.float32)
++
++
++def per_user_weighted_z_fuse(exact_preds, fast_pred, users, fast_weight=0.30):
++    exact = np.vstack([p.astype(np.float32, copy=False) for p in exact_preds])
++    fast = fast_pred.astype(np.float32, copy=False)
+     users = np.asarray(users)
+-    out = np.zeros(P.shape[1], dtype=np.float32)
++    out = np.zeros(exact.shape[1], dtype=np.float32)
+     order = np.argsort(users, kind='mergesort')
+     us = users[order]
+     starts = np.r_[0, np.flatnonzero(us[1:] != us[:-1]) + 1, len(us)]
+     for a, b in zip(starts[:-1], starts[1:]):
+         idx = order[a:b]
+-        block = P[:, idx]
++        block = exact[:, idx]
+         mu = block.mean(axis=1, keepdims=True)
+         sd = block.std(axis=1, keepdims=True)
+-        z = (block - mu) / np.maximum(sd, 1e-6)
+-        out[idx] = z.mean(axis=0)
++        z_exact = ((block - mu) / np.maximum(sd, 1e-6)).mean(axis=0)
++        fv = fast[idx]
++        fz = (fv - fv.mean()) / max(float(fv.std()), 1e-6)
++        out[idx] = (1.0 - fast_weight) * z_exact + fast_weight * fz.astype(np.float32)
+     return out.astype(np.float64)
+ 
+ 
+-def train_seed_bag_members(splits, target, split_name, verbose=True):
++def train_members(splits, target, split_name, verbose=True):
+     os.makedirs('pred_cache', exist_ok=True)
+-    member_seeds = [0, 2]
+     n_target = len(splits[target])
+-    preds = [None] * len(member_seeds)
+-    need = []
+-    for i, ms in enumerate(member_seeds):
++    exact_seeds = [0, 2]
++    exact_preds = [None] * len(exact_seeds)
++    need_exact = []
++
++    for i, ms in enumerate(exact_seeds):
+         paths = [
+             os.path.join('pred_cache', f'018_node11_raw_split{split_name}_mseed{ms}.npy'),
+             os.path.join('pred_cache', f'019_node11_raw_split{split_name}_mseed{ms}.npy'),
+             os.path.join('pred_cache', f'020_node11_raw_split{split_name}_mseed{ms}.npy'),
++            os.path.join('pred_cache', f'021_node11_raw_split{split_name}_mseed{ms}.npy'),
++            os.path.join('pred_cache', f'022_node11_raw_split{split_name}_mseed{ms}.npy'),
+         ]
+         loaded = False
+         for path in paths:
+             if os.path.isfile(path):
+                 arr = np.load(path)
+                 if arr.shape[0] == n_target:
+-                    preds[i] = arr.astype(np.float32, copy=False)
++                    exact_preds[i] = arr.astype(np.float32, copy=False)
+                     loaded = True
+                     if verbose:
+-                        print(f"loaded cached member {ms}: {path}")
++                        print(f"loaded exact member {ms}: {path}")
+                     break
+         if not loaded:
+-            need.append((i, ms, paths[-1]))
+-
+-    if need:
++            need_exact.append((i, ms, paths[-1]))
++
++    fast_seed = 4
++    fast_path = os.path.join('pred_cache', f'022_fast_lgbm_split{split_name}_mseed{fast_seed}.npy')
++    fast_pred = None
++    need_fast = True
++    if os.path.isfile(fast_path):
++        arr = np.load(fast_path)
++        if arr.shape[0] == n_target:
++            fast_pred = arr.astype(np.float32, copy=False)
++            need_fast = False
++            if verbose:
++                print(f"loaded fast member {fast_seed}: {fast_path}")
++
++    if need_exact or need_fast:
+         t0 = time.time()
+         Ftr, ytr, Fva, yva, Ft = build_feature_matrices(splits, target)
+         if verbose:
+             print(f"features train={Ftr.shape} valid={Fva.shape} target={Ft.shape} build {time.time() - t0:.1f}s")
+             print(f"train pos={float(np.mean(ytr)):.4f} valid pos={float(np.mean(yva)):.4f}")
+-        for i, ms, path in need:
++        for i, ms, path in need_exact:
+             m0 = time.time()
+-            arr = fit_one(Ftr, ytr, Fva, yva, Ft, ms, verbose=verbose)
++            arr = fit_exact(Ftr, ytr, Fva, yva, Ft, ms, verbose=verbose)
+             np.save(path, arr)
+-            preds[i] = arr
++            exact_preds[i] = arr
+             if verbose:
+-                print(f"trained cached member {ms} in {time.time() - m0:.1f}s -> {path}")
+-    return preds
++                print(f"trained exact member {ms} in {time.time() - m0:.1f}s -> {path}")
++        if need_fast:
++            m0 = time.time()
++            fast_pred = fit_fast(Ftr, ytr, Fva, yva, Ft, fast_seed, verbose=verbose)
++            np.save(fast_path, fast_pred)
++            if verbose:
++                print(f"trained fast member {fast_seed} in {time.time() - m0:.1f}s -> {fast_path}")
++    return exact_preds, fast_pred
+ 
+ 
+ def get_target_users(splits, target):
+@@ -189,9 +247,9 @@
+         target = a.split
+     print({k: len(v) for k, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    members = train_seed_bag_members(splits, target=target, split_name=a.split, verbose=a.out is None)
++    exact_preds, fast_pred = train_members(splits, target=target, split_name=a.split, verbose=a.out is None)
+     users = get_target_users(splits, target)
+-    scores = per_user_z_fuse(members, users)
++    scores = per_user_weighted_z_fuse(exact_preds, fast_pred, users, fast_weight=0.30)
+     if a.out:
+         np.save(a.out, scores)
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")

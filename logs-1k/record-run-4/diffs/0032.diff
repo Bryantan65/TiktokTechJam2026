@@ -1,0 +1,187 @@
+# iteration 32  (parent: 31)
+# hypothesis: debug 31: the explicit history-affinity member caused a large nDCG drop, so test whether it is a systematic anti-signal by subtracting its per-user z-score residual from the unchanged node-30 ensemble. If this recovers or improves top-5, the bug is sign/miscalibration of the heuristic rather than the history signal being useless.
+# result: GAUC 0.679056 | nDCG@5 0.630667 | primary 0.654861 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/031_history_affinity_rrf.py
++++ logs-1k/record-run-4/solutions/032_negative_history_debug.py
+@@ -1,10 +1,10 @@
+-"""Cached node-30 ensemble plus an explicit train-history affinity member.
++"""Debug node 31: use the explicit history-affinity scorer as a possible anti-signal.
+ 
+-New mechanism: non-parametric repeat/affinity ranking.  For each target row score the
+-user's historical preference for the exact video, author, tab and duration bucket,
+-with recency-decayed positive/interact counts.  This uses only labels from the
+-training side (never target labels) and is fused by per-user RRF/z-score so its
+-signal is readable at top-5.
++Node 31 diluted the node-30 ensemble with a positive handcrafted repeat/author
++history member and lost mostly nDCG@5.  This keeps the node-30 fusion unchanged
++and adds the same cached/computable history scorer only as a negative per-user
++z-scored residual, testing whether the heuristic is systematically over-ranking
++bad top-5 candidates rather than merely weak.
+ """
+ import argparse, os, sys, math
+ from collections import defaultdict
+@@ -12,18 +12,6 @@
+ import lightgbm as lgb
+ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'kuairand-starter-kit'))
+ from data import load, encode, FIELDS
+-
+-
+-def dur_bucket_ms(x):
+-    try: v=float(x)
+-    except Exception: v=0.0
+-    # match coarse buckets adequate for history affinity
+-    if v < 5000: return 0
+-    if v < 10000: return 1
+-    if v < 30000: return 2
+-    if v < 60000: return 3
+-    if v < 120000: return 4
+-    return 5
+ 
+ 
+ def duration_array(rows):
+@@ -51,10 +39,10 @@
+     Ftr=np.column_stack([Xtr.astype(np.float32),np.log1p(np.maximum(dtr,0))[:,None],(dtr/100000.0)[:,None]]).astype(np.float32)
+     Fva=np.column_stack([Xva.astype(np.float32),np.log1p(np.maximum(dva,0))[:,None],(dva/100000.0)[:,None]]).astype(np.float32)
+     Ft=np.column_stack([Xt.astype(np.float32),np.log1p(np.maximum(dt,0))[:,None],(dt/100000.0)[:,None]]).astype(np.float32)
+-    clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=260,learning_rate=0.05,num_leaves=63,min_child_samples=500,subsample=0.85,subsample_freq=1,colsample_bytree=0.9,reg_alpha=0.1,reg_lambda=2.0,random_state=int(seed),n_jobs=-1,verbose=-1,force_col_wise=True)
+-    clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=[lgb.early_stopping(25,first_metric_only=True,verbose=False)])
++    clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=220,learning_rate=0.05,num_leaves=63,min_child_samples=500,subsample=0.85,subsample_freq=1,colsample_bytree=0.9,reg_alpha=0.1,reg_lambda=2.0,random_state=int(seed),n_jobs=-1,verbose=-1,force_col_wise=True)
++    clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=[lgb.early_stopping(20,first_metric_only=True,verbose=False)])
+     p=clf.predict(Ft,num_iteration=clf.best_iteration_,raw_score=True).astype(np.float32)
+-    np.save(f'pred_cache/031_fallback_minimal_split{split_name}_seed{seed}.npy',p)
++    np.save(f'pred_cache/032_fallback_minimal_split{split_name}_seed{seed}.npy',p)
+     return p
+ 
+ 
+@@ -65,6 +53,17 @@
+             a=np.load(path)
+             if len(a)==n: return a.astype(np.float32,copy=False)
+     return None
++
++
++def z_per_user(arr, users):
++    users=np.asarray(users); arr=np.asarray(arr,dtype=np.float32)
++    out=np.zeros(len(users),dtype=np.float32)
++    order=np.argsort(users,kind='mergesort'); us=users[order]
++    starts=np.r_[0,np.flatnonzero(us[1:]!=us[:-1])+1,len(us)]
++    for a,b in zip(starts[:-1],starts[1:]):
++        idx=order[a:b]; v=arr[idx]
++        out[idx]=(v-v.mean())/max(float(v.std()),1e-6)
++    return out
+ 
+ 
+ def z_per_user_blend(arrs,weights,users):
+@@ -102,12 +101,28 @@
+     return z_per_user_blend([zexact,fast],[0.77,0.23],users)
+ 
+ 
++def node30_score(exact0,exact2,fast,stat,seq,aux,users):
++    inc=node24(exact0,exact2,fast,users)
++    zmain=z_per_user_blend([inc,stat,seq,aux],[0.38,0.10,0.22,0.30],users)
++    rrf=rrf_per_user([inc,stat,seq,aux],[0.38,0.10,0.22,0.30],users,k=60.0)
++    return z_per_user_blend([zmain,rrf],[0.70,0.30],users)
++
++
++def dur_bucket_ms(x):
++    try: v=float(x)
++    except Exception: v=0.0
++    if v < 5000: return 0
++    if v < 10000: return 1
++    if v < 30000: return 2
++    if v < 60000: return 3
++    if v < 120000: return 4
++    return 5
++
++
+ def add_stat(d,key,pos,w):
+     a=d.get(key)
+-    if a is None:
+-        d[key]=[w*pos,w]
+-    else:
+-        a[0]+=w*pos; a[1]+=w
++    if a is None: d[key]=[w*pos,w]
++    else: a[0]+=w*pos; a[1]+=w
+ 
+ 
+ def history_affinity(train_rows, target_rows, cache_name):
+@@ -116,17 +131,13 @@
+     if os.path.isfile(path):
+         p=np.load(path)
+         if len(p)==len(target_rows): return p.astype(np.float32,copy=False)
+-    # recency relative to latest training date.  Half-life about 6 days.
+     max_date=max(int(r[0]) for r in train_rows) if train_rows else 0
+-    # keys include user to be directly within-user personalized.
+     uv=defaultdict(lambda:[0.0,0.0]); ua=defaultdict(lambda:[0.0,0.0]); ut=defaultdict(lambda:[0.0,0.0]); ud=defaultdict(lambda:[0.0,0.0])
+     uglob=defaultdict(lambda:[0.0,0.0]); vglob=defaultdict(lambda:[0.0,0.0]); aglob=defaultdict(lambda:[0.0,0.0]); tglob=defaultdict(lambda:[0.0,0.0])
+     gpos=0.0; gcnt=0.0
+     for r in train_rows:
+         date,u,v,a,tab,dur,y=r[0],r[1],r[2],r[3],r[4],r[5],float(r[6])
+-        # dates are yyyymmdd; this approximate delta is monotone enough across one month
+-        delta=max(0, max_date-int(date))
+-        w=0.60 + 0.40*math.exp(-delta/6.0)
++        delta=max(0, max_date-int(date)); w=0.60 + 0.40*math.exp(-delta/6.0)
+         db=dur_bucket_ms(dur)
+         add_stat(uv,(u,v),y,w); add_stat(ua,(u,a),y,w); add_stat(ut,(u,tab),y,w); add_stat(ud,(u,db),y,w)
+         add_stat(uglob,u,y,w); add_stat(vglob,v,y,w); add_stat(aglob,a,y,w); add_stat(tglob,tab,y,w)
+@@ -138,17 +149,11 @@
+         s,c=dic.get(key,(0.0,0.0)); return math.log1p(c)
+     out=np.empty(len(target_rows),dtype=np.float32)
+     for i,r in enumerate(target_rows):
+-        u,v,a,tab,dur=r[1],r[2],r[3],r[4],r[5]
+-        db=dur_bucket_ms(dur)
+-        # Strong exact-repeat and author affinity, backed off to user/tab/duration and global item popularity.
+-        score=0.0
+-        score += 2.20*ctr(uv,(u,v),4.0) + 0.22*cnt(uv,(u,v))
+-        score += 1.25*ctr(ua,(u,a),8.0) + 0.10*cnt(ua,(u,a))
+-        score += 0.70*ctr(ut,(u,tab),12.0)
+-        score += 0.45*ctr(ud,(u,db),12.0)
+-        score += 0.35*ctr(uglob,u,20.0)
+-        score += 0.30*ctr(vglob,v,25.0) + 0.25*ctr(aglob,a,30.0) + 0.20*ctr(tglob,tab,30.0)
+-        out[i]=score
++        u,v,a,tab,dur=r[1],r[2],r[3],r[4],r[5]; db=dur_bucket_ms(dur)
++        out[i]=(2.20*ctr(uv,(u,v),4.0)+0.22*cnt(uv,(u,v))+
++                1.25*ctr(ua,(u,a),8.0)+0.10*cnt(ua,(u,a))+
++                0.70*ctr(ut,(u,tab),12.0)+0.45*ctr(ud,(u,db),12.0)+
++                0.35*ctr(uglob,u,20.0)+0.30*ctr(vglob,v,25.0)+0.25*ctr(aglob,a,30.0)+0.20*ctr(tglob,tab,30.0))
+     np.save(path,out)
+     return out
+ 
+@@ -169,20 +174,23 @@
+     stat=load_first([f'{p}_oof_target_stats_split{sp}_mseed6.npy' for p in ['025','028','029']],n)
+     seq=load_first([f'{p}_user_history_seq_split{sp}_mseed8.npy' for p in ['026','028','029']],n)
+     aux=load_first([f'029_aux_soft_seq_split{sp}_mseed10.npy'],n)
+-    if exact0 is None: exact0=train_minimal(splits,target,sp,0)
+-    if exact2 is None: exact2=train_minimal(splits,target,sp,2)
+-    if fast is None: fast=train_minimal(splits,target,sp,4)
+-    if stat is None: stat=train_minimal(splits,target,sp,6)
+-    if seq is None: seq=train_minimal(splits,target,sp,8)
+-    if aux is None: aux=train_minimal(splits,target,sp,10)
+-    # Target-valid uses train only.  For test, use train+valid labels as history because they precede test.
+-    hist_rows = list(splits['train']) if target=='valid' else list(splits['train'])+list(splits['valid'])
+-    hist = history_affinity(hist_rows, splits[target], f'031_history_affinity_split{sp}.npy')
+-    inc=node24(exact0,exact2,fast,users)
+-    # Node-30 core, then add history member at readable 25% weight in both score and rank spaces.
+-    zmain=z_per_user_blend([inc,stat,seq,aux,hist],[0.30,0.08,0.17,0.23,0.22],users)
+-    rrf=rrf_per_user([inc,stat,seq,aux,hist],[0.30,0.08,0.17,0.23,0.22],users,k=60.0)
+-    scores=z_per_user_blend([zmain,rrf],[0.70,0.30],users).astype(np.float64)
++    fallback=None
++    def fb(seed=0):
++        global fallback
++        if fallback is None: fallback=train_minimal(splits,target,sp,seed)
++        return fallback
++    if exact0 is None: exact0=fb(0)
++    if exact2 is None: exact2=fb(2)
++    if fast is None: fast=fb(4)
++    if stat is None: stat=fb(6)
++    if seq is None: seq=fb(8)
++    if aux is None: aux=fb(10)
++    base=node30_score(exact0,exact2,fast,stat,seq,aux,users)
++    hist_rows=list(splits['train']) if target=='valid' else list(splits['train'])+list(splits['valid'])
++    hist=history_affinity(hist_rows,splits[target],f'031_history_affinity_split{sp}.npy')
++    # Negative residual at a readable but not overwhelming magnitude.  Per-user
++    # standardization preserves within-user ranking scale and makes subtraction meaningful.
++    scores=(z_per_user(base,users) - 0.22*z_per_user(hist,users)).astype(np.float64)
+     if a.out:
+         np.save(a.out,scores); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else:

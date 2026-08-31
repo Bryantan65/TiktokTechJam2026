@@ -1,0 +1,29 @@
+# iteration 12  (parent: 11)
+# hypothesis: improve 11: the 30% watch blend moved both GAUC and nDCG up, so try a still-readable 40% watch weight using the same cached members; listwise softmax is a promising next draft per ListMLE/sampled-softmax ranking literature (https://doi.org/10.1145/1390156.1390306), but this cheap weight probe is the highest-leverage last step.
+# result: GAUC 0.671151 | nDCG@5 0.537431 | primary 0.604291 | verdict KEPT
+
+--- logs/record-run-15-bryan-pure/solutions/011_blend_bpr_watch.py
++++ logs/record-run-15-bryan-pure/solutions/012_blend_bpr_watch40.py
+@@ -1,9 +1,7 @@
+-"""Blend current best BPR ensemble with debugged gentle watch-time BPR ensemble.
+-
+-Current best node-7 is unchanged and loaded from/retrained into the same 006 cache.
+-Node-10 gentle-watch members are also unchanged and loaded from/retrained into the
+-same 010 cache.  Fusion is readable: 70% best BPR + 30% gentle-watch, with all
+-member/model scores per-user z-normalized before averaging.
++"""40% blend of current best plain BPR ensemble with gentle watch-time BPR ensemble.
++
++Same unchanged cached members as node 11; only the readable fusion weight changes from
++70/30 to 60/40 after the 30% watch blend improved both metrics.
+ """
+ import argparse
+ import csv
+@@ -261,7 +259,7 @@
+         watch.append(per_user_zscore(cached_watch_predictions(enc, dim, weights, target, split_name, k, lr, epochs, ms, device, verbose), users))
+     watch_fused = per_user_zscore(np.mean(np.vstack(watch), axis=0), users)
+ 
+-    return 0.70 * plain_fused + 0.30 * watch_fused
++    return 0.60 * plain_fused + 0.40 * watch_fused
+ 
+ 
+ if __name__ == '__main__':

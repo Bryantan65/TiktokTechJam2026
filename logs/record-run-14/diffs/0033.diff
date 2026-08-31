@@ -1,0 +1,108 @@
+# iteration 33  (parent: 32)
+# hypothesis: debug 32: node 32 crashed only because the imported base lacked percentile/RRF helpers; define them locally and rerun the same user-video/stat-prior rank fusion so the change actually scores.
+# result: GAUC 0.671537 | nDCG@5 0.537859 | primary 0.604698 | verdict KEPT
+
+--- logs/record-run-14/solutions/032_statprior_uv_rank.py
++++ logs/record-run-14/solutions/033_statprior_uv_rank_debug.py
+@@ -17,9 +17,11 @@
+ def stat_score(train_keys, y, target_keys, alpha=30.0):
+     y = np.asarray(y, dtype=np.float64)
+     gmean = float(y.mean()) if len(y) else 0.5
+-    cnt = defaultdict(int); pos = defaultdict(float)
++    cnt = defaultdict(int)
++    pos = defaultdict(float)
+     for k, yy in zip(train_keys, y):
+-        cnt[k] += 1; pos[k] += float(yy)
++        cnt[k] += 1
++        pos[k] += float(yy)
+     g = _clip_logit(gmean)
+     out = np.empty(len(target_keys), dtype=np.float64)
+     for i, k in enumerate(target_keys):
+@@ -29,6 +31,44 @@
+             out[i] = _clip_logit(p) - g
+         else:
+             out[i] = 0.0
++    return out
++
++
++def percentile_by_user(scores, users):
++    scores = np.asarray(scores, dtype=np.float64)
++    users = np.asarray(users)
++    out = np.empty(len(scores), dtype=np.float64)
++    buckets = defaultdict(list)
++    for i, u in enumerate(users):
++        buckets[u].append(i)
++    for idxs in buckets.values():
++        idx = np.asarray(idxs, dtype=np.int64)
++        n = len(idx)
++        if n <= 1:
++            out[idx] = 0.5
++            continue
++        vals = scores[idx]
++        order = np.argsort(vals, kind='mergesort')
++        ranks = np.empty(n, dtype=np.float64)
++        ranks[order] = np.arange(n, dtype=np.float64)
++        out[idx] = ranks / (n - 1.0)
++    return out
++
++
++def rrf_by_user(scores, users, k=60.0):
++    scores = np.asarray(scores, dtype=np.float64)
++    users = np.asarray(users)
++    out = np.empty(len(scores), dtype=np.float64)
++    buckets = defaultdict(list)
++    for i, u in enumerate(users):
++        buckets[u].append(i)
++    for idxs in buckets.values():
++        idx = np.asarray(idxs, dtype=np.int64)
++        vals = scores[idx]
++        order = np.argsort(-vals, kind='mergesort')
++        ranks = np.empty(len(idx), dtype=np.float64)
++        ranks[order] = np.arange(1, len(idx) + 1, dtype=np.float64)
++        out[idx] = 1.0 / (k + ranks)
+     return out
+ 
+ 
+@@ -53,9 +93,8 @@
+         s = stat_score(fn(Xtr), ytr, fn(Xta), alpha=a)
+         parts.append(w * base.z_by_user(s, users))
+     raw = base.z_by_user(np.sum(parts, axis=0), users)
+-    # Empirical rates are sparse; percentile rank within user makes them act as robust top-list tie breakers.
+-    pr = base.percentile_by_user(raw, users)
+-    rr = base.rrf_by_user(raw, users)
++    pr = percentile_by_user(raw, users)
++    rr = rrf_by_user(raw, users)
+     return base.z_by_user(0.72 * raw + 0.20 * pr + 0.08 * rr, users)
+ 
+ 
+@@ -67,13 +106,18 @@
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+-    torch.manual_seed(a.seed); np.random.seed(a.seed)
++    torch.manual_seed(a.seed)
++    np.random.seed(a.seed)
+     if a.split == 'dev':
+         from devdata import load as load_dev
+-        splits = load_dev(a.data_dir); target = 'valid'; split_name = 'dev'
++        splits = load_dev(a.data_dir)
++        target = 'valid'
++        split_name = 'dev'
+     else:
+         from data import load
+-        splits = load(a.data_dir); target = a.split; split_name = a.split
++        splits = load(a.data_dir)
++        target = a.split
++        split_name = a.split
+     enc, dim = base.build_augmented(splits, a.data_dir)
+     hist = base.build_hist(enc, K=20)
+     users = enc[target][2]
+@@ -90,7 +134,7 @@
+     strong = base.z_by_user((1.0 - alpha) * parent + alpha * dinc, users)
+     stat = make_stat_member(enc, target, users)
+     scores = base.z_by_user(0.875 * strong + 0.125 * stat, users)
+-    print('fixed_seed27_plus_uv_rank_statprior stat_weight=0.125', flush=True)
++    print('debug32_fixed_seed27_plus_uv_rank_statprior stat_weight=0.125', flush=True)
+     np.save(a.out, scores.astype(np.float64))
+ 
+ 

@@ -1,0 +1,119 @@
+# iteration 17  (parent: 16)
+# hypothesis: debug 16: the large drop may be LambdaRank/group construction rather than target-encoding itself; keep the same leakage-safe TE/count features but train pointwise LightGBM binary loss and blend it at the same readable 30% with node 14.
+# result: GAUC 0.667062 | nDCG@5 0.536331 | primary 0.601697 | verdict noise
+
+--- logs/record-run-15-bryan-pure/solutions/016_lambdarank_te_blend30.py
++++ logs/record-run-15-bryan-pure/solutions/017_lgbm_pointwise_te_blend30.py
+@@ -1,8 +1,9 @@
+-"""Blend best FM ranking ensemble with a LightGBM LambdaRank target-encoding member.
+-
+-The added member is deliberately different from the FM members: leakage-safe
+-(leave-one-out on train) historical CTR/count features for item/author and
+-user-item/user-author/user-tab preferences, trained with LambdaRank/NDCG@5.
++"""Debug node 16: keep the leakage-safe TE features but replace LambdaRank.
++
++Node 16's LightGBM LambdaRank member was harmful.  This tests whether the bug is
++in the rank objective/group construction rather than in the historical target
++encoding features, by training a pointwise binary LightGBM member and blending it
++at the same readable 30% with the node-14 FM ensemble.
+ """
+ import argparse, csv, os, sys, time
+ from collections import defaultdict, deque
+@@ -201,20 +202,20 @@
+ 
+ 
+ def make_te_features(rows, train_y, global_mean, tables, train_mode=False):
+-    n = len(rows); feats = []
+-    # Cheap raw/context columns first.
+-    raw = np.zeros((n, 5), dtype=np.float32)
++    n = len(rows); raw = np.zeros((n, 5), dtype=np.float32)
+     for i, r in enumerate(rows):
+         try: date = int(r[0])
+         except Exception: date = 0
+         try: dur = float(r[5])
+         except Exception: dur = 0.0
+-        raw[i, 0] = float(r[4]) if str(r[4]).lstrip('-').isdigit() else 0.0
++        try: tab = float(r[4])
++        except Exception: tab = 0.0
++        raw[i, 0] = tab
+         raw[i, 1] = float(dur_bucket(dur))
+         raw[i, 2] = np.log1p(max(dur, 0.0)) / 12.0
+         raw[i, 3] = (date % 100) / 31.0
+         raw[i, 4] = 1.0
+-    feats.append(raw)
++    feats = [raw]
+     for name, fn, alpha, table in tables:
+         arr = np.zeros((n, 2), dtype=np.float32)
+         for i, r in enumerate(rows):
+@@ -222,48 +223,33 @@
+             if train_mode:
+                 yy = float(train_y[i]); s -= yy; c -= 1
+             if c < 0: c = 0; s = 0.0
+-            ctr = (s + alpha * global_mean) / (c + alpha)
+-            arr[i, 0] = float(ctr)
++            arr[i, 0] = float((s + alpha * global_mean) / (c + alpha))
+             arr[i, 1] = np.log1p(float(c)) / 8.0
+         feats.append(arr)
+     return np.hstack(feats).astype(np.float32)
+ 
+ 
+-def order_by_user(users):
+-    d = defaultdict(list)
+-    for i, u in enumerate(users): d[u].append(i)
+-    order = [] ; groups = []
+-    for idxs in d.values():
+-        groups.append(len(idxs)); order.extend(idxs)
+-    return np.asarray(order, dtype=np.int64), groups
+-
+-
+-def train_lgbm_ranker_predict(splits, target, split_name, seed=0, verbose=True):
++def train_lgbm_binary_predict(splits, target, split_name, seed=0, verbose=True):
+     os.makedirs('pred_cache', exist_ok=True)
+-    path = os.path.join('pred_cache', f'016_lgbm_lambdarank_te_seed{seed}_{split_name}_{target}.npy')
++    path = os.path.join('pred_cache', f'017_lgbm_binary_te_seed{seed}_{split_name}_{target}.npy')
+     if os.path.isfile(path):
+         if verbose: print(f'loading cached member: {path}')
+         return np.load(path)
+     import lightgbm as lgb
+     ytr, global_mean, tables = build_stat_tables(splits['train'])
+     Xtr = make_te_features(splits['train'], ytr, global_mean, tables, train_mode=True)
++    Xva = make_te_features(splits['valid'], ytr, global_mean, tables, train_mode=False)
+     yva = np.asarray([r[6] for r in splits['valid']], dtype=np.int32)
+-    Xva = make_te_features(splits['valid'], ytr, global_mean, tables, train_mode=False)
+-    utr = [str(r[1]) for r in splits['train']]; uva = [str(r[1]) for r in splits['valid']]
+-    otr, gtr = order_by_user(utr); ova, gva = order_by_user(uva)
+-    Xtr_s = Xtr[otr]; ytr_s = ytr[otr].astype(np.int32)
+-    Xva_s = Xva[ova]; yva_s = yva[ova]
+-    ranker = lgb.LGBMRanker(
+-        objective='lambdarank', metric='ndcg', eval_at=[5], boosting_type='gbdt',
+-        n_estimators=1200, learning_rate=0.035, num_leaves=63, max_depth=-1,
+-        min_child_samples=80, subsample=0.85, subsample_freq=1, colsample_bytree=0.85,
+-        reg_alpha=0.05, reg_lambda=1.0, random_state=seed, n_jobs=4, verbosity=-1,
+-        label_gain=[0, 1]
++    clf = lgb.LGBMClassifier(
++        objective='binary', metric='auc', boosting_type='gbdt', n_estimators=1600,
++        learning_rate=0.025, num_leaves=63, max_depth=-1, min_child_samples=100,
++        subsample=0.85, subsample_freq=1, colsample_bytree=0.9,
++        reg_alpha=0.05, reg_lambda=1.0, random_state=seed, n_jobs=4, verbosity=-1
+     )
+-    callbacks = [lgb.early_stopping(60, verbose=verbose), lgb.log_evaluation(50 if verbose else 0)]
+-    ranker.fit(Xtr_s, ytr_s, group=gtr, eval_set=[(Xva_s, yva_s)], eval_group=[gva], eval_at=[5], callbacks=callbacks)
++    callbacks = [lgb.early_stopping(80, verbose=verbose), lgb.log_evaluation(100 if verbose else 0)]
++    clf.fit(Xtr, ytr.astype(np.int32), eval_set=[(Xva, yva)], callbacks=callbacks)
+     Xt = make_te_features(splits[target], ytr, global_mean, tables, train_mode=False)
+-    preds = ranker.predict(Xt, num_iteration=ranker.best_iteration_).astype(np.float64)
++    preds = clf.predict_proba(Xt, num_iteration=clf.best_iteration_)[:, 1].astype(np.float64)
+     np.save(path, preds)
+     return preds
+ 
+@@ -279,8 +265,8 @@
+     listwise = [per_user_zscore(cached_fm_predictions(enc, dim, target, split_name, ms, device, verbose, '014_softmax7neg_member', 'softmax', None, 7, k, lr, epochs), users) for ms in member_seeds]
+     listwise_fused = per_user_zscore(np.mean(np.vstack(listwise), axis=0), users)
+     base14 = per_user_zscore(0.70 * incumbent + 0.30 * listwise_fused, users)
+-    lgb_preds = [per_user_zscore(train_lgbm_ranker_predict(splits, target, split_name, seed=ms, verbose=verbose), users) for ms in member_seeds]
+-    lgb_fused = per_user_zscore(np.mean(np.vstack(lgb_preds), axis=0), users)
++    lgb = [per_user_zscore(train_lgbm_binary_predict(splits, target, split_name, seed=ms, verbose=verbose), users) for ms in member_seeds]
++    lgb_fused = per_user_zscore(np.mean(np.vstack(lgb), axis=0), users)
+     return 0.70 * base14 + 0.30 * lgb_fused
+ 
+ 

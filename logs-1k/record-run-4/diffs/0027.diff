@@ -1,0 +1,172 @@
+# iteration 27  (parent: 26)
+# hypothesis: improve 26: the history member moved nDCG strongly, so enrich the same mechanism with recent-window user counts and online global item/author/tab priors while preserving chronological no-lookahead construction. This should make the sequence signal less sparse than exact cumulative user-video/user-author features.
+# result: GAUC None | nDCG@5 None | primary None | verdict failed
+
+--- logs-1k/record-run-4/solutions/026_lgbm_user_history_seq.py
++++ logs-1k/record-run-4/solutions/027_lgbm_history_v2.py
+@@ -1,15 +1,15 @@
+-"""Node-24 ensemble plus a target-conditioned user-history member.
+-
+-This is a cheap sequence/DIN-inspired variant: instead of a neural attention
+-network, expose LightGBM to chronological same-user history features for the
+-candidate video/author/tab.  Training rows use only earlier train rows; valid
+-and test rows use statistics accumulated from the whole training window.
++"""Node-26 ensemble with richer target-conditioned user history.
++
++Same mechanism as node 26, but the sequence member gets recent-window and
++online global item/author statistics in addition to cumulative same-user
++candidate video/author/tab history.  Training rows use only earlier training
++rows; valid/test rows use the completed training-window state only.
+ """
+ import argparse
+ import os
+ import sys
+ import time
+-from collections import defaultdict
++from collections import defaultdict, deque, Counter
+ 
+ import numpy as np
+ import lightgbm as lgb
+@@ -69,34 +69,58 @@
+ def get_node24_members(splits, target, split_name, verbose=False):
+     os.makedirs('pred_cache', exist_ok=True)
+     n=len(splits[target])
+-    exact=[]; need=[]
++    exact=[]
+     for ms in [0,2]:
+         found=None
+-        for p in ['018','019','020','021','022','023','024','025','026']:
++        for p in ['018','019','020','021','022','023','024','025','026','027']:
+             path=f'pred_cache/{p}_node11_raw_split{split_name}_mseed{ms}.npy'
+             if os.path.isfile(path):
+                 arr=np.load(path)
+                 if len(arr)==n: found=arr.astype(np.float32,copy=False); break
+-        if found is None: need.append(ms); exact.append(None)
++        if found is None: exact.append(None)
+         else: exact.append(found)
+     fast=None
+-    for p in ['022','023','024','025','026']:
++    for p in ['022','023','024','025','026','027']:
+         path=f'pred_cache/{p}_fast_lgbm_split{split_name}_mseed4.npy'
+         if os.path.isfile(path):
+             arr=np.load(path)
+             if len(arr)==n: fast=arr.astype(np.float32,copy=False); break
+-    if need or fast is None:
++    if any(x is None for x in exact) or fast is None:
+         Ftr,ytr,Fva,yva,Ft,_,_,_=minimal_mats(splits,target)
+         for k,ms in enumerate([0,2]):
+             if exact[k] is None:
+-                arr=fit_lgbm(Ftr,ytr,Fva,yva,Ft,ms,False,verbose); np.save(f'pred_cache/026_node11_raw_split{split_name}_mseed{ms}.npy',arr); exact[k]=arr
++                arr=fit_lgbm(Ftr,ytr,Fva,yva,Ft,ms,False,verbose); np.save(f'pred_cache/027_node11_raw_split{split_name}_mseed{ms}.npy',arr); exact[k]=arr
+         if fast is None:
+-            fast=fit_lgbm(Ftr,ytr,Fva,yva,Ft,4,True,verbose); np.save(f'pred_cache/026_fast_lgbm_split{split_name}_mseed4.npy',fast)
++            fast=fit_lgbm(Ftr,ytr,Fva,yva,Ft,4,True,verbose); np.save(f'pred_cache/027_fast_lgbm_split{split_name}_mseed4.npy',fast)
+     return exact, fast
+ 
+ 
+ def pair_key(a,b,base):
+     return int(a)*base + int(b)
++
++
++def push_window(dq, cv, ca, ct, row, y):
++    v=int(row[1]); a=int(row[2]); t=int(row[3])
++    dq.append((v,a,t,int(y)))
++    cv[v]+=1; ca[a]+=1; ct[t]+=1
++    if len(dq) > dq.maxlen:
++        ov,oa,ot,oy = dq.popleft()
++        cv[ov]-=1; ca[oa]-=1; ct[ot]-=1
++        if cv[ov] <= 0: del cv[ov]
++        if ca[oa] <= 0: del ca[oa]
++        if ct[ot] <= 0: del ct[ot]
++
++
++def push_pos_window(dq, cv, ca, ct, row):
++    v=int(row[1]); a=int(row[2]); t=int(row[3])
++    dq.append((v,a,t))
++    cv[v]+=1; ca[a]+=1; ct[t]+=1
++    if len(dq) > dq.maxlen:
++        ov,oa,ot = dq.popleft()
++        cv[ov]-=1; ca[oa]-=1; ct[ot]-=1
++        if cv[ov] <= 0: del cv[ov]
++        if ca[oa] <= 0: del ca[oa]
++        if ct[ot] <= 0: del ct[ot]
+ 
+ 
+ def history_features_train_query(Xtr, ytr, Xq):
+@@ -108,7 +132,17 @@
+     cnt_uv=defaultdict(int); pos_uv=defaultdict(int); last_uv={}; lpos_uv={}
+     cnt_ua=defaultdict(int); pos_ua=defaultdict(int); last_ua={}; lpos_ua={}
+     cnt_ut=defaultdict(int); pos_ut=defaultdict(int); last_ut={}; lpos_ut={}
+-    Ftr=np.zeros((ntr,14),dtype=np.float32)
++    # online global popularity/quality statistics
++    vcnt=defaultdict(int); vpos=defaultdict(int); acnt=defaultdict(int); apos=defaultdict(int); tcnt=defaultdict(int); tpos=defaultdict(int)
++    # recent per-user windows; only about 1K users, so Python state is acceptable.
++    all20=defaultdict(lambda: deque(maxlen=20)); all100=defaultdict(lambda: deque(maxlen=100))
++    pos20=defaultdict(lambda: deque(maxlen=20)); pos100=defaultdict(lambda: deque(maxlen=100))
++    all20c=defaultdict(lambda: (Counter(),Counter(),Counter()))
++    all100c=defaultdict(lambda: (Counter(),Counter(),Counter()))
++    pos20c=defaultdict(lambda: (Counter(),Counter(),Counter()))
++    pos100c=defaultdict(lambda: (Counter(),Counter(),Counter()))
++    nfeat=36
++    Ftr=np.zeros((ntr,nfeat),dtype=np.float32)
+     def fill(row, i, out, update, yy=0):
+         u=int(row[0]); v=int(row[1]); a=int(row[2]); t=int(row[3])
+         keys=[pair_key(u,v,nvid), pair_key(u,a,nauth), pair_key(u,t,ntab)]
+@@ -122,14 +156,27 @@
+             out[off+2]=0.0 if key not in ld else np.log1p(i-ld[key])
+             out[off+3]=0.0 if key not in lpd else np.log1p(i-lpd[key])
+             off += 4
++        for c,p in [(vcnt[v],vpos[v]),(acnt[a],apos[a]),(tcnt[t],tpos[t])]:
++            out[off]=np.log1p(c); out[off+1]=(p+prior*alpha)/(c+alpha); off += 2
++        for dq, ctrs in [(all20[u],all20c[u]), (all100[u],all100c[u])]:
++            cv,ca,ct=ctrs; denom=max(len(dq),1)
++            out[off]=np.log1p(cv.get(v,0)); out[off+1]=np.log1p(ca.get(a,0)); out[off+2]=np.log1p(ct.get(t,0))
++            out[off+3]=sum(x[3] for x in dq)/denom if len(dq) else prior; off += 4
++        for dq, ctrs in [(pos20[u],pos20c[u]), (pos100[u],pos100c[u])]:
++            cv,ca,ct=ctrs
++            out[off]=np.log1p(cv.get(v,0)); out[off+1]=np.log1p(ca.get(a,0)); out[off+2]=np.log1p(ct.get(t,0)); out[off+3]=np.log1p(len(dq)); off += 4
+         if update:
+-            ucnt[u]=uc+1; upos[u]=up+int(yy)
++            iy=int(yy); ucnt[u]=uc+1; upos[u]=up+iy
+             for key,(cd,pd,ld,lpd) in zip(keys,dicts):
+-                cd[key]+=1; pd[key]+=int(yy); ld[key]=i
+-                if yy: lpd[key]=i
++                cd[key]+=1; pd[key]+=iy; ld[key]=i
++                if iy: lpd[key]=i
++            vcnt[v]+=1; vpos[v]+=iy; acnt[a]+=1; apos[a]+=iy; tcnt[t]+=1; tpos[t]+=iy
++            push_window(all20[u], *all20c[u], row, iy); push_window(all100[u], *all100c[u], row, iy)
++            if iy:
++                push_pos_window(pos20[u], *pos20c[u], row); push_pos_window(pos100[u], *pos100c[u], row)
+     for i in range(ntr):
+         fill(Xtr[i], i, Ftr[i], True, int(ytr[i]))
+-    Fq=np.zeros((nq,14),dtype=np.float32)
++    Fq=np.zeros((nq,nfeat),dtype=np.float32)
+     base_i=ntr
+     for j in range(nq):
+         fill(Xq[j], base_i+j, Fq[j], False, 0)
+@@ -138,7 +185,7 @@
+ 
+ def sequence_member(splits, target, split_name, verbose=False):
+     os.makedirs('pred_cache', exist_ok=True)
+-    path=f'pred_cache/026_user_history_seq_split{split_name}_mseed8.npy'
++    path=f'pred_cache/027_user_history_v2_split{split_name}_mseed8.npy'
+     n=len(splits[target])
+     if os.path.isfile(path):
+         arr=np.load(path)
+@@ -148,11 +195,11 @@
+     Htr,Hva = history_features_train_query(Xtr,ytr,Xva)
+     _,Ht = history_features_train_query(Xtr,ytr,Xt) if target!='valid' else (None,Hva)
+     Ftr=np.column_stack([Ftr0,Htr]).astype(np.float32); Fva=np.column_stack([Fva0,Hva]).astype(np.float32); Ft=np.column_stack([Ft0,Ht]).astype(np.float32)
+-    if verbose: print('seq mats',Ftr.shape,Fva.shape,Ft.shape,'built',time.time()-t0)
+-    clf=lgb.LGBMClassifier(objective='binary', metric='binary_logloss', boosting_type='gbdt', n_estimators=260,
+-                           learning_rate=0.05, num_leaves=63, max_depth=-1, min_child_samples=600,
+-                           subsample=0.85, subsample_freq=1, colsample_bytree=0.85, reg_alpha=0.2,
+-                           reg_lambda=3.0, random_state=8, n_jobs=-1, verbose=-1, force_col_wise=True)
++    if verbose: print('hist-v2 mats',Ftr.shape,Fva.shape,Ft.shape,'built',time.time()-t0)
++    clf=lgb.LGBMClassifier(objective='binary', metric='binary_logloss', boosting_type='gbdt', n_estimators=280,
++                           learning_rate=0.05, num_leaves=63, max_depth=-1, min_child_samples=650,
++                           subsample=0.85, subsample_freq=1, colsample_bytree=0.82, reg_alpha=0.25,
++                           reg_lambda=3.5, random_state=8, n_jobs=-1, verbose=-1, force_col_wise=True)
+     cb=[lgb.early_stopping(25, first_metric_only=True, verbose=verbose)]
+     if verbose: cb.append(lgb.log_evaluation(50))
+     clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=cb)

@@ -1,0 +1,31 @@
+# iteration 18  (parent: 17)
+# hypothesis: improve 17: rank-percentile weight improved from 30% to 40%, so keep all cached members fixed and test 50/50 score-vs-rank fusion to see whether the rank-heavy trend continues or peaks.
+# result: GAUC 0.671438 | nDCG@5 0.537983 | primary 0.60471 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/017_rankblend40.py
++++ logs/record-run-16-uct/solutions/018_rankblend50.py
+@@ -1,9 +1,9 @@
+-"""Cached seed-bagged BPR/soft-hard FM with a stronger rank-percentile blend.
+-
+-Node 012 found that adding 30% per-user rank-percentile signal to the six-member
+-per-user-z score average improved both GAUC and nDCG.  This keeps all member
+-models and cache keys identical, changing only the final fusion to 40% rank to
+-check whether the optimum is beyond the first hand-picked 30% point.
++"""Cached seed-bagged BPR/soft-hard FM with 50% rank-percentile fusion.
++
++Parent 017 improved node 012 by raising the per-user rank-percentile component
++from 30% to 40%.  This keeps all six cached member models identical and changes
++only the final score/rank fusion to an even 50/50 blend, testing whether the
++rank-heavy trend continues for top-of-list ranking.
+ """
+ import argparse
+ import os
+@@ -234,7 +234,7 @@
+     score_z = 0.60 * np.mean(z_bpr, axis=0) + 0.40 * np.mean(z_soft, axis=0)
+     score_rank = 0.60 * np.mean(r_bpr, axis=0) + 0.40 * np.mean(r_soft, axis=0)
+     score_rank = per_user_z(score_rank, groups)
+-    scores = 0.60 * score_z + 0.40 * score_rank
++    scores = 0.50 * score_z + 0.50 * score_rank
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

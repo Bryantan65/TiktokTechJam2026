@@ -1,0 +1,86 @@
+# iteration 11  (parent: 10)
+# hypothesis: improve 10: keep the two mechanisms and 60/40 per-user-z fusion fixed, but bag member seeds 0/1/2 inside each prediction to reduce variance and stabilize top-5 rankings; member training is unchanged and reuses node-10 prediction caches.
+# result: GAUC 0.670825 | nDCG@5 0.537619 | primary 0.604222 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/010_bpr_soft_ensemble.py
++++ logs/record-run-16-uct/solutions/011_seedbag_bpr_soft_ensemble.py
+@@ -1,10 +1,10 @@
+-"""Readable ensemble of the two strongest pairwise FM variants.
+-
+-Member A is the best node-2 mechanism: one random same-user negative per
+-positive with BPR.  Member B is node-8 soft hard-negative BPR.  Predictions are
+-cached per member/seed/split and fused at readable 60/40 weight after per-user
+-z-score normalization, so the soft-hard member can change rankings rather than
+-being diluted to a token weight.
++"""Seed-bagged version of the strongest BPR/soft-hard ensemble.
++
++This keeps the two member mechanisms from 010 unchanged, uses the same cache
++namespace for their predictions, but at prediction time averages member
++predictions from seeds 0, 1, and 2.  Each member prediction is normalized within
++user before blending, and the final 2-member blend remains the readable 60/40
++weight from node 10.
+ """
+ import argparse
+ import os
+@@ -120,7 +120,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  {name} epoch {ep:2d} | loss {np.mean(losses):.4f} | "
++            print(f"  {name} seed {seed} epoch {ep:2d} | loss {np.mean(losses):.4f} | "
+                   f"valid primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+@@ -136,6 +136,8 @@
+ 
+ def get_member_preds(member_name, enc, dim, target, split_name, seed, device, verbose):
+     os.makedirs('pred_cache', exist_ok=True)
++    # Reuse node-10 cache because the member training code and hyperparameters
++    # are intentionally unchanged.
+     cache_path = os.path.join('pred_cache', f'010_{member_name}_seed{seed}_{split_name}.npy')
+     want_len = len(enc[target][0])
+     if os.path.isfile(cache_path):
+@@ -143,7 +145,7 @@
+             p = np.load(cache_path)
+             if len(p) == want_len:
+                 if verbose:
+-                    print(f'loaded {member_name} predictions from {cache_path}')
++                    print(f'loaded {member_name} seed {seed} from {cache_path}')
+                 return p.astype(np.float64)
+         except Exception:
+             pass
+@@ -185,6 +187,8 @@
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+ 
++    # This solution intentionally bags fixed member seeds.  The harness seed is
++    # accepted for contract compatibility but does not change the final bag.
+     torch.manual_seed(a.seed)
+     if a.split == 'dev':
+         from devdata import load as load_dev
+@@ -200,11 +204,20 @@
+ 
+     enc, dim = encode(splits)
+     _, _, users = enc[target]
+-    p_bpr = get_member_preds('bpr1', enc, dim, target, split_name, a.seed,
+-                             a.device, verbose=(a.out is None))
+-    p_soft = get_member_preds('soft5_tau1', enc, dim, target, split_name, a.seed,
+-                              a.device, verbose=(a.out is None))
+-    scores = 0.60 * per_user_z(p_bpr, users) + 0.40 * per_user_z(p_soft, users)
++
++    bag_seeds = [0, 1, 2]
++    bpr_parts = []
++    soft_parts = []
++    for s in bag_seeds:
++        bpr_parts.append(per_user_z(get_member_preds('bpr1', enc, dim, target,
++                                                     split_name, s, a.device,
++                                                     verbose=(a.out is None)), users))
++        soft_parts.append(per_user_z(get_member_preds('soft5_tau1', enc, dim, target,
++                                                       split_name, s, a.device,
++                                                       verbose=(a.out is None)), users))
++    p_bpr = np.mean(bpr_parts, axis=0)
++    p_soft = np.mean(soft_parts, axis=0)
++    scores = 0.60 * p_bpr + 0.40 * p_soft
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

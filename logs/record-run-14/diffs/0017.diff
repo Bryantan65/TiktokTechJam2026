@@ -1,0 +1,71 @@
+# iteration 17  (parent: 16)
+# hypothesis: improve 16: use the cached old and balanced BPR members but change only fusion: add per-user percentile-rank averaging at 30%, a scale-free top-k-oriented blend, while retaining the strong score blend for GAUC.
+# result: GAUC 0.670937 | nDCG@5 0.537597 | primary 0.604267 | verdict KEPT
+
+--- logs/record-run-14/solutions/016_ndcg_balanced_bpr_blend.py
++++ logs/record-run-14/solutions/017_rank_fusion_cached.py
+@@ -193,8 +193,6 @@
+         if not ns:
+             continue
+         arr = np.asarray(ns, dtype=np.int64)
+-        # GAUC weights users by positive count; nDCG@5 is per-user.  This mild cap makes a
+-        # second member care less about users with many positives, without discarding GAUC signal.
+         w = 1.0 / float(min(len(ps), 5)) if balanced else 1.0
+         for p in ps:
+             pidx.append(p); pools.append(arr); weights.append(w)
+@@ -272,6 +270,25 @@
+     return out
+ 
+ 
++def pct_rank_by_user(scores, users):
++    scores = np.asarray(scores, dtype=np.float64)
++    out = np.zeros_like(scores)
++    groups = defaultdict(list)
++    for i, u in enumerate(users):
++        groups[u].append(i)
++    for idx in groups.values():
++        idx = np.asarray(idx, dtype=np.int64)
++        n = len(idx)
++        if n <= 1:
++            out[idx] = 0.0
++            continue
++        order = np.argsort(scores[idx], kind='mergesort')
++        ranks = np.empty(n, dtype=np.float64)
++        ranks[order] = np.arange(n, dtype=np.float64) / float(n - 1)
++        out[idx] = ranks
++    return out
++
++
+ def member_pred(enc, dim, target, mseed, split_name, device, balanced=False):
+     os.makedirs('pred_cache', exist_ok=True)
+     prefix = '016_time_bpr_ndcgbal_v1' if balanced else '010_time_bpr_v1'
+@@ -306,14 +323,21 @@
+     enc, dim = build_augmented(splits, a.data_dir)
+     _, _, users = enc[target]
+     seeds = [a.seed, a.seed + 101, a.seed + 202, a.seed + 303, a.seed + 404]
+-    old_z, bal_z = [], []
++    old_z, bal_z, old_r, bal_r = [], [], [], []
+     for ms in seeds:
+-        old_z.append(z_by_user(member_pred(enc, dim, target, ms, split_name, a.device, balanced=False), users))
+-        bal_z.append(z_by_user(member_pred(enc, dim, target, ms, split_name, a.device, balanced=True), users))
+-    old_ens = z_by_user(np.mean(old_z, axis=0), users)
+-    bal_ens = z_by_user(np.mean(bal_z, axis=0), users)
+-    # Keep the strong GAUC-oriented incumbent dominant, but let the balanced member move rankings.
+-    scores = 0.65 * old_ens + 0.35 * bal_ens
+-    print(f'blend old=0.65 ndcg_balanced=0.35 members_each={len(seeds)} done in {time.time()-t0:.1f}s')
++        po = member_pred(enc, dim, target, ms, split_name, a.device, balanced=False)
++        pb = member_pred(enc, dim, target, ms, split_name, a.device, balanced=True)
++        old_z.append(z_by_user(po, users)); bal_z.append(z_by_user(pb, users))
++        old_r.append(pct_rank_by_user(po, users)); bal_r.append(pct_rank_by_user(pb, users))
++    old_score = z_by_user(np.mean(old_z, axis=0), users)
++    bal_score = z_by_user(np.mean(bal_z, axis=0), users)
++    score_blend = z_by_user(0.65 * old_score + 0.35 * bal_score, users)
++    old_rank = z_by_user(np.mean(old_r, axis=0), users)
++    bal_rank = z_by_user(np.mean(bal_r, axis=0), users)
++    # Rank averaging is robust to member scale and targets top-k ordering; keep mostly the
++    # proven score blend so GAUC is not sacrificed for nDCG.
++    rank_blend = z_by_user(0.70 * old_rank + 0.30 * bal_rank, users)
++    scores = 0.70 * score_blend + 0.30 * rank_blend
++    print(f'cached_rank_fusion score=0.70 rank=0.30 old/bal score=0.65/0.35 rank=0.70/0.30 members_each={len(seeds)} done in {time.time()-t0:.1f}s')
+     np.save(a.out, scores.astype(np.float64))
+ 

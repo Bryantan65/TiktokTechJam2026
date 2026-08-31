@@ -1,0 +1,47 @@
+# iteration 23  (parent: 19)
+# hypothesis: improve 19: the rank/history knobs appear locally peaked, so test a different high-leverage blend parameter: increase the readable soft-hard BPR family from 40% to 50% while keeping node-019's 50/50 score-rank fusion and 10% user-context prior fixed.
+# result: GAUC 0.67105 | nDCG@5 0.537765 | primary 0.604408 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/019_hist_residual_blend.py
++++ logs/record-run-16-uct/solutions/023_mech50_hist10.py
+@@ -1,15 +1,14 @@
+-"""Cached rank/score FM ensemble plus train-only historical residual priors.
+-
+-Builds on 018: same six cached BPR/soft-hard FM members and 50/50
+-score-vs-rank fusion.  Adds a small per-user-z normalized correction from
+-TRAIN labels only: repeated (user, video), (user, author), and (user, tab)
+-empirical residuals relative to that user's train mean.
++"""Cached FM ensemble with equal BPR/soft-hard mechanism weights plus history prior.
++
++Refines node 019: keep the best score/rank fusion (50/50) and the 10% train-only
++user-context residual prior, but retune the cached member-family blend from
++60/40 BPR/soft-hard to 50/50.  The soft-hard member was the stronger standalone
++ranking loss, so a slightly larger readable weight may improve the ensemble.
+ """
+ import argparse
+ import os
+ import sys
+ import time
+-from collections import defaultdict
+ 
+ import numpy as np
+ import torch
+@@ -228,7 +227,6 @@
+         u, v, au, tab = row[1], row[2], row[3], row[4]
+         us, uc = user_stat.get(u, (global_mean, 0))
+         base = us / uc if uc > 0 else global_mean
+-        # Repeated exact item is rare but high precision; author and tab are broader.
+         out[i] = (1.00 * smoothed_dev(uv_stat, (u, v), base, alpha=1.0) +
+                   0.45 * smoothed_dev(ua_stat, (u, au), base, alpha=5.0) +
+                   0.20 * smoothed_dev(ut_stat, (u, tab), base, alpha=10.0))
+@@ -273,8 +271,8 @@
+         r_bpr.append(per_user_rank_percentile(pb, groups))
+         r_soft.append(per_user_rank_percentile(ps, groups))
+ 
+-    score_z = 0.60 * np.mean(z_bpr, axis=0) + 0.40 * np.mean(z_soft, axis=0)
+-    score_rank = 0.60 * np.mean(r_bpr, axis=0) + 0.40 * np.mean(r_soft, axis=0)
++    score_z = 0.50 * np.mean(z_bpr, axis=0) + 0.50 * np.mean(z_soft, axis=0)
++    score_rank = 0.50 * np.mean(r_bpr, axis=0) + 0.50 * np.mean(r_soft, axis=0)
+     score_rank = per_user_z(score_rank, groups)
+     ensemble = 0.50 * score_z + 0.50 * score_rank
+ 

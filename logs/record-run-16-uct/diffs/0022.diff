@@ -1,0 +1,45 @@
+# iteration 22  (parent: 19)
+# hypothesis: improve 19: node 020 showed stronger history/global priors hurt, so keep node-019's 10% user-context prior and instead test the only remaining monotone signal: increasing rank-percentile fusion from 50% to 60% while leaving cached members fixed.
+# result: GAUC 0.671387 | nDCG@5 0.537934 | primary 0.60466 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/019_hist_residual_blend.py
++++ logs/record-run-16-uct/solutions/022_rank60_hist10.py
+@@ -1,15 +1,14 @@
+-"""Cached rank/score FM ensemble plus train-only historical residual priors.
+-
+-Builds on 018: same six cached BPR/soft-hard FM members and 50/50
+-score-vs-rank fusion.  Adds a small per-user-z normalized correction from
+-TRAIN labels only: repeated (user, video), (user, author), and (user, tab)
+-empirical residuals relative to that user's train mean.
++"""Cached FM ensemble with a stronger rank-percentile component plus history prior.
++
++Refines node 019: the score-vs-rank weight had improved as rank weight was
++increased through the previous hand-fusion steps, while making the history prior
++stronger failed.  Keep node-019's 10% train-only user-context residual prior but
++push the cached member fusion from 50/50 score/rank to 40/60 score/rank.
+ """
+ import argparse
+ import os
+ import sys
+ import time
+-from collections import defaultdict
+ 
+ import numpy as np
+ import torch
+@@ -228,7 +227,6 @@
+         u, v, au, tab = row[1], row[2], row[3], row[4]
+         us, uc = user_stat.get(u, (global_mean, 0))
+         base = us / uc if uc > 0 else global_mean
+-        # Repeated exact item is rare but high precision; author and tab are broader.
+         out[i] = (1.00 * smoothed_dev(uv_stat, (u, v), base, alpha=1.0) +
+                   0.45 * smoothed_dev(ua_stat, (u, au), base, alpha=5.0) +
+                   0.20 * smoothed_dev(ut_stat, (u, tab), base, alpha=10.0))
+@@ -276,7 +274,7 @@
+     score_z = 0.60 * np.mean(z_bpr, axis=0) + 0.40 * np.mean(z_soft, axis=0)
+     score_rank = 0.60 * np.mean(r_bpr, axis=0) + 0.40 * np.mean(r_soft, axis=0)
+     score_rank = per_user_z(score_rank, groups)
+-    ensemble = 0.50 * score_z + 0.50 * score_rank
++    ensemble = 0.40 * score_z + 0.60 * score_rank
+ 
+     hist = per_user_z(build_history_signal(splits, target), groups)
+     scores = 0.90 * ensemble + 0.10 * hist

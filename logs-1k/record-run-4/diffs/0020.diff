@@ -1,0 +1,87 @@
+# iteration 20  (parent: 19)
+# hypothesis: improve 19: seed-bagging helped, and the next cheap test is per-user z-score normalization before fusing the two cached LightGBM raw margins, since both metrics only depend on within-user rank and this removes member scale drift.
+# result: GAUC 0.678903 | nDCG@5 0.630407 | primary 0.654655 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/019_lgbm_seedbag2_node11.py
++++ logs-1k/record-run-4/solutions/020_lgbm_seedbag2_userz.py
+@@ -1,10 +1,10 @@
+-"""Two-member seed-bagged node 11 LightGBM binary classifier.
+-
+-Debug of node 18: the 3-member bag timed out on a fresh cache.  This keeps the
+-exact node 11 feature pipeline/hyperparameters but averages only member seeds 0
+-and 2 (the two stable/high node-11 seeds in the ledger), caching their raw-margin
+-predictions.  It should fit under the 900s per-run limit while testing whether
+-seed bagging improves nDCG variance/top-rank stability.
++"""Node 19 with per-user z-score fusion of the two LightGBM members.
++
++The two cached node-11 LightGBM members are strong, but raw margins can have
++slightly different per-user scales.  Since both official metrics rank only
++within user, normalize each member's target scores inside each user before
++averaging.  If caches are absent this remains standalone and trains the same two
++members as node 19 before fusing them.
+ """
+ import argparse
+ import os
+@@ -106,17 +106,34 @@
+     return clf.predict(Ft, num_iteration=clf.best_iteration_, raw_score=True).astype(np.float32)
+ 
+ 
+-def train_seed_bag(splits, target, split_name, verbose=True):
++def per_user_z_fuse(member_preds, users):
++    P = np.vstack([p.astype(np.float32, copy=False) for p in member_preds])
++    users = np.asarray(users)
++    out = np.zeros(P.shape[1], dtype=np.float32)
++    order = np.argsort(users, kind='mergesort')
++    us = users[order]
++    starts = np.r_[0, np.flatnonzero(us[1:] != us[:-1]) + 1, len(us)]
++    for a, b in zip(starts[:-1], starts[1:]):
++        idx = order[a:b]
++        block = P[:, idx]
++        mu = block.mean(axis=1, keepdims=True)
++        sd = block.std(axis=1, keepdims=True)
++        z = (block - mu) / np.maximum(sd, 1e-6)
++        out[idx] = z.mean(axis=0)
++    return out.astype(np.float64)
++
++
++def train_seed_bag_members(splits, target, split_name, verbose=True):
+     os.makedirs('pred_cache', exist_ok=True)
+     member_seeds = [0, 2]
+     n_target = len(splits[target])
+     preds = [None] * len(member_seeds)
+     need = []
+     for i, ms in enumerate(member_seeds):
+-        # Reuse a completed member from failed node 18 if present; member code is identical.
+         paths = [
+             os.path.join('pred_cache', f'018_node11_raw_split{split_name}_mseed{ms}.npy'),
+             os.path.join('pred_cache', f'019_node11_raw_split{split_name}_mseed{ms}.npy'),
++            os.path.join('pred_cache', f'020_node11_raw_split{split_name}_mseed{ms}.npy'),
+         ]
+         loaded = False
+         for path in paths:
+@@ -144,8 +161,12 @@
+             preds[i] = arr
+             if verbose:
+                 print(f"trained cached member {ms} in {time.time() - m0:.1f}s -> {path}")
+-
+-    return np.mean(np.vstack(preds), axis=0).astype(np.float64)
++    return preds
++
++
++def get_target_users(splits, target):
++    enc, _ = encode(splits)
++    return enc[target][2]
+ 
+ 
+ if __name__ == '__main__':
+@@ -168,7 +189,9 @@
+         target = a.split
+     print({k: len(v) for k, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    scores = train_seed_bag(splits, target=target, split_name=a.split, verbose=a.out is None)
++    members = train_seed_bag_members(splits, target=target, split_name=a.split, verbose=a.out is None)
++    users = get_target_users(splits, target)
++    scores = per_user_z_fuse(members, users)
+     if a.out:
+         np.save(a.out, scores)
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")

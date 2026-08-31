@@ -1,0 +1,77 @@
+# iteration 20  (parent: 19)
+# hypothesis: improve 19: the train-only residual prior helped, so make it stronger and add smoothed global video/author/tab residuals to cover users without repeated user-context matches.
+# result: GAUC 0.670738 | nDCG@5 0.537408 | primary 0.604073 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/019_hist_residual_blend.py
++++ logs/record-run-16-uct/solutions/020_hist_global_blend.py
+@@ -1,15 +1,14 @@
+ """Cached rank/score FM ensemble plus train-only historical residual priors.
+ 
+-Builds on 018: same six cached BPR/soft-hard FM members and 50/50
+-score-vs-rank fusion.  Adds a small per-user-z normalized correction from
+-TRAIN labels only: repeated (user, video), (user, author), and (user, tab)
+-empirical residuals relative to that user's train mean.
++Builds on 019: same six cached BPR/soft-hard FM members and 50/50
++score-vs-rank fusion.  Keeps the user-context residual prior and adds a
++small TRAIN-only global item/author popularity residual, then gives the
++combined prior a readable 15% blend weight.
+ """
+ import argparse
+ import os
+ import sys
+ import time
+-from collections import defaultdict
+ 
+ import numpy as np
+ import torch
+@@ -208,9 +207,10 @@
+ 
+ 
+ def build_history_signal(splits, target):
+-    """TRAIN-only residual target encoding for repeated user context."""
++    """TRAIN-only residual target encoding for repeated user and global context."""
+     user_stat = {}
+     uv_stat, ua_stat, ut_stat = {}, {}, {}
++    v_stat, a_stat, t_stat = {}, {}, {}
+     global_sum, global_cnt = 0.0, 0
+     for row in splits['train']:
+         u, v, au, tab, y = row[1], row[2], row[3], row[4], row[6]
+@@ -219,6 +219,9 @@
+         add_stat(uv_stat, (u, v), yy)
+         add_stat(ua_stat, (u, au), yy)
+         add_stat(ut_stat, (u, tab), yy)
++        add_stat(v_stat, v, yy)
++        add_stat(a_stat, au, yy)
++        add_stat(t_stat, tab, yy)
+         global_sum += yy
+         global_cnt += 1
+     global_mean = global_sum / max(1, global_cnt)
+@@ -228,10 +231,15 @@
+         u, v, au, tab = row[1], row[2], row[3], row[4]
+         us, uc = user_stat.get(u, (global_mean, 0))
+         base = us / uc if uc > 0 else global_mean
+-        # Repeated exact item is rare but high precision; author and tab are broader.
+-        out[i] = (1.00 * smoothed_dev(uv_stat, (u, v), base, alpha=1.0) +
+-                  0.45 * smoothed_dev(ua_stat, (u, au), base, alpha=5.0) +
+-                  0.20 * smoothed_dev(ut_stat, (u, tab), base, alpha=10.0))
++        user_part = (1.00 * smoothed_dev(uv_stat, (u, v), base, alpha=1.0) +
++                     0.45 * smoothed_dev(ua_stat, (u, au), base, alpha=5.0) +
++                     0.20 * smoothed_dev(ut_stat, (u, tab), base, alpha=10.0))
++        # Global priors use stronger smoothing; they can separate items/authors
++        # even when a user has no exact historical match, but should not dominate.
++        global_part = (0.35 * smoothed_dev(v_stat, v, global_mean, alpha=20.0) +
++                       0.20 * smoothed_dev(a_stat, au, global_mean, alpha=50.0) +
++                       0.05 * smoothed_dev(t_stat, tab, global_mean, alpha=200.0))
++        out[i] = user_part + global_part
+     return out
+ 
+ 
+@@ -279,7 +287,7 @@
+     ensemble = 0.50 * score_z + 0.50 * score_rank
+ 
+     hist = per_user_z(build_history_signal(splits, target), groups)
+-    scores = 0.90 * ensemble + 0.10 * hist
++    scores = 0.85 * ensemble + 0.15 * hist
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

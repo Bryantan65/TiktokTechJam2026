@@ -1,0 +1,34 @@
+# iteration 14  (parent: 11)
+# hypothesis: improve 11: node 11 is selected by validation logloss, so switch LightGBM early stopping to AUC while keeping the same minimal features and hyperparameters. If calibration-driven checkpointing is costing ranking quality, the selected iteration should improve GAUC/nDCG.
+# result: GAUC 0.677026 | nDCG@5 0.622028 | primary 0.649527 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/011_lgbm_binary_base_valid.py
++++ logs-1k/record-run-4/solutions/014_lgbm_binary_auc_es.py
+@@ -1,10 +1,9 @@
+-"""Minimal LightGBM binary classifier on the official FM fields.
++"""Minimal LightGBM binary classifier with AUC early stopping.
+ 
+-Node 10 showed on the train-only dev holdout that LightGBM itself is sane once
+-broken historical/stat features are removed.  This validates that minimal model
+-on the real valid split: encoded [user_id, video_id, author_id, tab,
+-dur_bucket] as categorical features, plus two raw duration transforms, trained
+-with binary logloss and early stopping on valid exactly as the FM baseline does.
++Node 11's LightGBM binary model is strong but is selected by validation logloss,
++which rewards calibration more than within-user ordering.  This keeps the same
++minimal features and model capacity, but uses LightGBM's AUC metric for early
++stopping so the saved boosting round is chosen by a ranking-oriented criterion.
+ """
+ import argparse
+ import os
+@@ -85,9 +84,9 @@
+ 
+     clf = lgb.LGBMClassifier(
+         objective='binary',
+-        metric='binary_logloss',
++        metric='auc',
+         boosting_type='gbdt',
+-        n_estimators=350,
++        n_estimators=500,
+         learning_rate=0.05,
+         num_leaves=63,
+         max_depth=-1,

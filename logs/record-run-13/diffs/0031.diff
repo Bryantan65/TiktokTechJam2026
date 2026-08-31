@@ -1,0 +1,59 @@
+# iteration 31  (parent: 30)
+# hypothesis: improve 30: tab has very different base positive rates by product surface, so hour effects may be tab-specific; add a date-free tab×4-hour categorical cross to the time FM and keep the 60% time blend.
+# result: GAUC 0.671704 | nDCG@5 0.537868 | primary 0.604786 | verdict KEPT
+
+--- logs/record-run-13/solutions/030_time_nodate_60.py
++++ logs/record-run-13/solutions/031_time_tab_hour.py
+@@ -1,7 +1,8 @@
+-"""Node 29 variant: keep the date-free time member, but move the blend toward it.
+-
+-All member predictions are cached under the same names as node 29.  This script is otherwise a
+-standalone reproduction: if caches are absent it trains the unchanged base and date-free time members.
++"""Date-free time member with tab x hour interaction.
++
++Based on node 30.  The base bag is unchanged/cached.  The time member keeps dow and
++4-hour bucket from node 29/30 and adds a tab-hour categorical cross so the FM can learn
++tab-specific diurnal effects without relying on raw date leakage.
+ """
+ import argparse, csv, datetime as _dt, os, sys, time
+ from collections import defaultdict
+@@ -176,11 +177,13 @@
+                 if p<len(short.get(skey,[])): hb=short[skey][p]; short_pos[skey]+=1
+             if hb is None: hb='hUNK'
+             else: hit+=1
+-            total+=1; cur.append((_dow_feat(date),hb))
++            total+=1
++            tab_s=_norm(tab)
++            cur.append((_dow_feat(date),hb,'tab%s_%s'%(tab_s,hb)))
+         extras[name]=cur
+     print(f'time feature hour lookup hits: {hit}/{total}')
+     maps=[]
+-    for j in range(2):
++    for j in range(3):
+         mp={}
+         for name in splits.keys():
+             for tup in extras[name]:
+@@ -190,11 +193,11 @@
+     for mp in maps: offsets.append(off); off+=len(mp)
+     enc={}
+     for name,(X,y,u) in enc_base.items():
+-        extra=np.empty((len(X),2),dtype=np.int64)
++        extra=np.empty((len(X),3),dtype=np.int64)
+         for i,tup in enumerate(extras[name]):
+-            for j in range(2): extra[i,j]=offsets[j]+maps[j][tup[j]]
++            for j in range(3): extra[i,j]=offsets[j]+maps[j][tup[j]]
+         enc[name]=(np.hstack([X.astype(np.int64),extra]),y,u)
+-    print(f"augmented fields={FIELDS+['dow','hour4']} dim {dim_base}->{off}")
++    print(f"augmented fields={FIELDS+['dow','hour4','tab_hour4']} dim {dim_base}->{off}")
+     return enc,off
+ 
+ def make_bag(splits,enc,dim,target,groups,a,prefix):
+@@ -223,7 +226,7 @@
+     enc_base,dim_base=encode(splits); X,y,users=enc_base[target]; groups=user_groups(users)
+     base=make_bag(splits,enc_base,dim_base,target,groups,a,'006')
+     enc_time,dim_time=augment_with_time(splits,enc_base,dim_base,a.data_dir)
+-    timebag=make_bag(splits,enc_time,dim_time,target,groups,a,'029_time_nodate')
++    timebag=make_bag(splits,enc_time,dim_time,target,groups,a,'031_time_tab_hour')
+     base_f=0.70*per_user_zscore(base,groups)+0.30*per_user_rank01(base,groups)
+     time_f=0.70*per_user_zscore(timebag,groups)+0.30*per_user_rank01(timebag,groups)
+     scores=0.40*per_user_zscore(base_f,groups)+0.60*per_user_zscore(time_f,groups)

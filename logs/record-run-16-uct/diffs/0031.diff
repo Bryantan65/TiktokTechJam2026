@@ -1,0 +1,254 @@
+# iteration 31  (parent: 30)
+# hypothesis: improve 30: tuple-only weekday/date residual was weak, so test the intended time feature with a faster occurrence-safe raw CSV hourmin join and a small 3% per-user-normalized hour residual on the node-024 blend.
+# result: GAUC 0.671633 | nDCG@5 0.538027 | primary 0.60483 | verdict no-op
+
+--- logs/record-run-16-uct/solutions/030_debug_time_date.py
++++ logs/record-run-16-uct/solutions/031_hourmin_residual.py
+@@ -1,15 +1,16 @@
+-"""Debug node 029: cheap tuple-only calendar residual on top of node 024.
+-
+-Node 029 timed out while joining raw CSV hourmin.  This keeps the same time-feature
+-hypothesis but removes the expensive/raw join: use date already present in the
+-loader tuples (weekday and train-window date trend) to build a small TRAIN-only
+-calendar residual, then blend it lightly with the cached node-024 ensemble.
++"""Improve node 030: fast raw-CSV hourmin residual on top of node-024 blend.
++
++This keeps the cached six-member BPR/soft-hard ensemble and the node-024
++p^2-rank + 10% history blend, but replaces the weak tuple-only calendar signal
++with an hour-of-day residual read from the raw KuaiRand log CSVs using an
++occurrence-safe tuple-key join.
+ """
+ import argparse
+-import datetime as _dt
++import csv
+ import os
+ import sys
+ import time
++from collections import defaultdict, deque
+ 
+ import numpy as np
+ import torch
+@@ -91,7 +92,6 @@
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+-    name = 'soft_hard' if soft_hard else 'bpr1'
+ 
+     for ep in range(1, epochs + 1):
+         neg_idx = sample_negatives(neg_pools, rng, n_neg)
+@@ -120,6 +120,7 @@
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
++            name = 'soft5_tau1' if soft_hard else 'bpr1'
+             print(f"  {name} seed {seed} epoch {ep:2d} | loss {np.mean(losses):.4f} | "
+                   f"valid primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+@@ -230,82 +231,133 @@
+     return out
+ 
+ 
+-def weekday(date_val):
++def first_existing(paths):
++    for p in paths:
++        if os.path.isfile(p):
++            return p
++    return None
++
++
++def row_key_from_tuple(row):
++    return (str(row[0]), str(row[1]), str(row[2]), str(row[3]), str(row[4]), str(row[5]))
++
++
++def pick_col(rec, names):
++    for n in names:
++        if n in rec and rec[n] != '':
++            return rec[n]
++    return ''
++
++
++def parse_hour(v):
++    if v is None or v == '':
++        return -1
++    s = str(v)
+     try:
+-        s = str(int(date_val))
+-        return _dt.datetime.strptime(s, '%Y%m%d').weekday()
++        x = int(float(s))
+     except Exception:
+         return -1
+-
+-
+-def date_ord(date_val):
+-    try:
+-        s = str(int(date_val))
+-        return _dt.datetime.strptime(s, '%Y%m%d').toordinal()
+-    except Exception:
+-        return 0
+-
+-
+-def build_calendar_signal(splits, target):
++    # hourmin in KuaiRand is usually HHMM (e.g. 1532), but tolerate seconds/minutes.
++    if 0 <= x <= 23:
++        return x
++    if 0 <= x <= 2359:
++        h = x // 100
++        return h if 0 <= h <= 23 else -1
++    if 0 <= x < 86400:
++        h = x // 3600
++        return h if 0 <= h <= 23 else -1
++    return -1
++
++
++def build_hour_lookup(data_dir):
++    candidates = []
++    bases = [data_dir,
++             os.path.join(data_dir, 'data'),
++             os.path.join(data_dir, '..'),
++             os.path.join(data_dir, '..', 'data')]
++    names = ['log_standard_4_08_to_4_21_pure.csv',
++             'log_standard_4_22_to_5_08_pure.csv']
++    for nm in names:
++        candidates.append([os.path.join(b, nm) for b in bases])
++    files = [first_existing(c) for c in candidates]
++    if any(f is None for f in files):
++        return None
++
++    q = defaultdict(deque)
++    for fp in files:
++        with open(fp, 'r', newline='', encoding='utf-8') as f:
++            rdr = csv.DictReader(f)
++            for rec in rdr:
++                key = (str(pick_col(rec, ['date'])),
++                       str(pick_col(rec, ['user_id', 'user_id_str'])),
++                       str(pick_col(rec, ['video_id', 'photo_id'])),
++                       str(pick_col(rec, ['author_id'])),
++                       str(pick_col(rec, ['tab'])),
++                       str(pick_col(rec, ['duration_ms', 'duration'])))
++                h = parse_hour(pick_col(rec, ['hourmin', 'time_ms', 'time', 'request_time']))
++                q[key].append(h)
++    return q
++
++
++def aligned_hours(splits, target, data_dir):
++    lookup = build_hour_lookup(data_dir)
++    out = {}
++    if lookup is None:
++        return {sp: np.full(len(rows), -1, dtype=np.int16) for sp, rows in splits.items()}
++    # Copy queues because train and target may be requested in either order; consuming in
++    # train/valid/test order matches data.load's preserved source-file order well enough
++    # while keeping duplicate tuple occurrences stable.
++    for sp in ['train', 'valid', 'test']:
++        if sp not in splits:
++            continue
++        arr = np.full(len(splits[sp]), -1, dtype=np.int16)
++        for i, row in enumerate(splits[sp]):
++            dq = lookup.get(row_key_from_tuple(row))
++            if dq:
++                arr[i] = dq.popleft()
++        out[sp] = arr
++    return out
++
++
++def build_hour_signal(splits, target, data_dir):
++    hours_by_split = aligned_hours(splits, target, data_dir)
++    htrain = hours_by_split.get('train', np.full(len(splits['train']), -1, dtype=np.int16))
++    htar = hours_by_split.get(target, np.full(len(splits[target]), -1, dtype=np.int16))
++
+     user_stat, tab_stat = {}, {}
+-    uw_stat, utw_stat, tw_stat, gw_stat = {}, {}, {}, {}
+-    # simple smoothed linear label trend by tab and globally from TRAIN dates
+-    rows_for_slope = []
+-    by_tab_slope = {}
+-    tab_rows = {}
++    uh_stat, uth_stat, th_stat, gh_stat = {}, {}, {}, {}
+     gsum, gcnt = 0.0, 0
+-    for row in splits['train']:
+-        d, u, tab, y = row[0], row[1], row[4], float(row[6])
+-        w = weekday(d)
+-        od = date_ord(d)
+-        add_stat(user_stat, u, y)
+-        add_stat(tab_stat, tab, y)
+-        if w >= 0:
+-            add_stat(uw_stat, (u, w), y)
+-            add_stat(utw_stat, (u, tab, w), y)
+-            add_stat(tw_stat, (tab, w), y)
+-            add_stat(gw_stat, w, y)
+-        if od > 0:
+-            rows_for_slope.append((od, y))
+-            tab_rows.setdefault(tab, []).append((od, y))
+-        gsum += y
++    for row, h in zip(splits['train'], htrain):
++        u, tab, y = row[1], row[4], float(row[6])
++        yy = float(y)
++        add_stat(user_stat, u, yy)
++        add_stat(tab_stat, tab, yy)
++        if 0 <= int(h) <= 23:
++            hb = int(h)
++            h6 = hb // 4
++            add_stat(uh_stat, (u, hb), yy)
++            add_stat(uth_stat, (u, tab, h6), yy)
++            add_stat(th_stat, (tab, hb), yy)
++            add_stat(gh_stat, hb, yy)
++        gsum += yy
+         gcnt += 1
+     gm = gsum / max(1, gcnt)
+ 
+-    def slope(pairs):
+-        if len(pairs) < 20:
+-            return 0.0
+-        x = np.asarray([p[0] for p in pairs], dtype=np.float64)
+-        y = np.asarray([p[1] for p in pairs], dtype=np.float64)
+-        x = x - x.mean()
+-        den = float((x * x).sum())
+-        return float((x * (y - y.mean())).sum() / den) if den > 1e-12 else 0.0
+-
+-    gslope = slope(rows_for_slope)
+-    for tab, pairs in tab_rows.items():
+-        by_tab_slope[tab] = slope(pairs)
+-    train_ords = [p[0] for p in rows_for_slope]
+-    ref_ord = max(train_ords) if train_ords else 0
+-
+     out = np.zeros(len(splits[target]), dtype=np.float64)
+-    for i, row in enumerate(splits[target]):
+-        d, u, tab = row[0], row[1], row[4]
+-        w = weekday(d)
+-        od = date_ord(d)
++    for i, (row, h) in enumerate(zip(splits[target], htar)):
++        if not (0 <= int(h) <= 23):
++            continue
++        u, tab = row[1], row[4]
++        hb = int(h)
++        h6 = hb // 4
+         us, uc = user_stat.get(u, (gm, 0))
+         ub = us / uc if uc > 0 else gm
+         ts, tc = tab_stat.get(tab, (gm, 0))
+         tb = ts / tc if tc > 0 else gm
+-        val = 0.0
+-        if w >= 0:
+-            val += 0.55 * smoothed_dev(uw_stat, (u, w), ub, alpha=8.0)
+-            val += 0.25 * smoothed_dev(utw_stat, (u, tab, w), ub, alpha=12.0)
+-            val += 0.18 * smoothed_dev(tw_stat, (tab, w), tb, alpha=80.0)
+-            val += 0.10 * smoothed_dev(gw_stat, w, gm, alpha=200.0)
+-        if od > 0 and ref_ord > 0:
+-            days = max(-14.0, min(21.0, float(od - ref_ord)))
+-            val += 0.20 * days * gslope + 0.18 * days * by_tab_slope.get(tab, 0.0)
+-        out[i] = val
++        out[i] = (0.70 * smoothed_dev(uh_stat, (u, hb), ub, alpha=8.0) +
++                  0.35 * smoothed_dev(uth_stat, (u, tab, h6), ub, alpha=12.0) +
++                  0.25 * smoothed_dev(th_stat, (tab, hb), tb, alpha=80.0) +
++                  0.12 * smoothed_dev(gh_stat, hb, gm, alpha=200.0))
+     return out
+ 
+ 
+@@ -355,8 +407,8 @@
+     hist = per_user_z(build_history_signal(splits, target), groups)
+     base = 0.90 * ensemble + 0.10 * hist
+ 
+-    cal = per_user_z(build_calendar_signal(splits, target), groups)
+-    scores = 0.97 * base + 0.03 * cal
++    hour = per_user_z(build_hour_signal(splits, target, a.data_dir), groups)
++    scores = 0.97 * base + 0.03 * hour
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

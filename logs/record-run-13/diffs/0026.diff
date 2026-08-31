@@ -1,0 +1,122 @@
+# iteration 26  (parent: 25)
+# hypothesis: draft different models: add a standalone LightGBM LambdaRank member at 30% weight, using categorical ids plus smoothed CTR/count features; LightGBM docs note LambdaRank optimizes NDCG and categorical features are integer-coded (https://lightgbm.readthedocs.io/en/latest/Advanced-Topics.html).
+# result: GAUC 0.670656 | nDCG@5 0.537152 | primary 0.603904 | verdict KEPT
+
+--- logs/record-run-13/solutions/025_blend_time_base_5050.py
++++ logs/record-run-13/solutions/026_lgbm_lambdarank_blend.py
+@@ -1,13 +1,14 @@
+-"""50/50 blend of node-13 base bag and node-16 time-aware bag.
+-
+-Copies node 24 but raises the complementary time-aware member from 40% to 50%.
+-All member cache keys and training code are unchanged, so cached predictions are
+-reused when present; with an empty cache this script still trains everything.
++"""Blend current best FM time ensemble with a LightGBM LambdaRank member.
++
++New direction: tree LambdaRank can optimize NDCG@5 directly and capture non-linear
++categorical/time interactions that the FM blend may miss.  The FM members are
++unchanged from node 25 and use the same cache keys.
+ """
+ import argparse, csv, datetime as _dt, os, sys, time
+ from collections import defaultdict
+ import numpy as np
+ import torch
++import lightgbm as lgb
+ 
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'kuairand-starter-kit'))
+ from data import load, encode, FIELDS          # noqa: E402
+@@ -225,6 +226,82 @@
+     return 0.995 * bag + 0.005 * seed_scores[cur_idx]
+ 
+ 
++def group_sort(X, y, users):
++    u = np.asarray(users)
++    order = np.argsort(u, kind='mergesort')
++    us = u[order]
++    if len(us) == 0: return X, y, []
++    cuts = np.r_[0, np.flatnonzero(us[1:] != us[:-1]) + 1, len(us)]
++    group = np.diff(cuts).astype(int).tolist()
++    return X[order], y[order].astype(np.int32), group
++
++
++def add_ctr_features(enc):
++    Xtr, ytr, _ = enc['train']
++    gmean = float(np.mean(ytr)); out = {}
++    cat_cols = list(range(min(8, Xtr.shape[1])))
++    single_cols = [1, 2, 3, 4, 5, 6, 7] if Xtr.shape[1] >= 8 else list(range(1, Xtr.shape[1]))
++    pair_cols = [(2,3), (2,7), (1,7), (3,7)] if Xtr.shape[1] >= 8 else []
++
++    stats = []
++    for c in single_cols:
++        d = {}
++        for v, yy in zip(Xtr[:, c], ytr):
++            s, n = d.get(int(v), (0.0, 0)); d[int(v)] = (s + float(yy), n + 1)
++        stats.append(('s', c, d))
++    for c1, c2 in pair_cols:
++        d = {}
++        for v1, v2, yy in zip(Xtr[:, c1], Xtr[:, c2], ytr):
++            key = (int(v1), int(v2)); s, n = d.get(key, (0.0, 0)); d[key] = (s + float(yy), n + 1)
++        stats.append(('p', (c1, c2), d))
++
++    alpha = 20.0
++    for name, (X, y, u) in enc.items():
++        feats = [X.astype(np.float32)]
++        num = np.empty((len(X), 2 * len(stats)), dtype=np.float32)
++        j = 0
++        for typ, cols, d in stats:
++            if typ == 's':
++                vals = X[:, cols]
++                for i, v in enumerate(vals):
++                    s, n = d.get(int(v), (0.0, 0)); num[i, j] = np.log1p(n); num[i, j+1] = (s + alpha * gmean) / (n + alpha)
++            else:
++                c1, c2 = cols
++                for i, (v1, v2) in enumerate(zip(X[:, c1], X[:, c2])):
++                    s, n = d.get((int(v1), int(v2)), (0.0, 0)); num[i, j] = np.log1p(n); num[i, j+1] = (s + alpha * gmean) / (n + alpha)
++            j += 2
++        feats.append(num)
++        out[name] = (np.hstack(feats).astype(np.float32), y, u)
++    return out, cat_cols
++
++
++def fit_lgbm_lambdarank(enc, target, seed=0, use_cache=True):
++    os.makedirs('pred_cache', exist_ok=True)
++    Xtar, _, _ = enc[target]
++    path = os.path.join('pred_cache', f'026_lgbm_lambdarank_ctr_{target}_seed{seed}.npy')
++    if use_cache and os.path.isfile(path):
++        p = np.load(path)
++        if len(p) == len(Xtar): return p.astype(np.float64, copy=False)
++    t0 = time.time()
++    enc_lgb, cat_cols = add_ctr_features(enc)
++    Xtr, ytr, utr = enc_lgb['train']; Xva, yva, uva = enc_lgb['valid']
++    Xtr_s, ytr_s, gtr = group_sort(Xtr, ytr, utr)
++    Xva_s, yva_s, gva = group_sort(Xva, yva, uva)
++    model = lgb.LGBMRanker(
++        objective='lambdarank', metric='ndcg', boosting_type='gbdt',
++        n_estimators=700, learning_rate=0.035, num_leaves=63, max_depth=-1,
++        min_child_samples=80, subsample=0.85, subsample_freq=1,
++        colsample_bytree=0.9, reg_alpha=0.05, reg_lambda=1.0,
++        random_state=seed, n_jobs=4, label_gain=[0, 1],
++        lambdarank_truncation_level=5, verbosity=-1)
++    model.fit(Xtr_s, ytr_s, group=gtr, eval_set=[(Xva_s, yva_s)], eval_group=[gva], eval_at=[5],
++              categorical_feature=cat_cols, callbacks=[lgb.early_stopping(50, verbose=False)])
++    p = model.predict(enc_lgb[target][0], num_iteration=model.best_iteration_).astype(np.float64)
++    print(f"LightGBM LambdaRank best_iter={model.best_iteration_} trained in {time.time()-t0:.1f}s")
++    if use_cache: np.save(path, p)
++    return p
++
++
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser(); ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+     ap.add_argument('--split', default='valid', choices=['train','valid','test','dev']); ap.add_argument('--out', default=None)
+@@ -244,7 +321,11 @@
+     timebag = make_bag(splits, enc_time, dim_time, target, groups, a, '014_timev1')
+     base_f = 0.70 * per_user_zscore(base, groups) + 0.30 * per_user_rank01(base, groups)
+     time_f = 0.70 * per_user_zscore(timebag, groups) + 0.30 * per_user_rank01(timebag, groups)
+-    scores = 0.50 * per_user_zscore(base_f, groups) + 0.50 * per_user_zscore(time_f, groups)
++    best25 = 0.50 * per_user_zscore(base_f, groups) + 0.50 * per_user_zscore(time_f, groups)
++    use_cache = a.out is not None and a.split != 'dev'
++    lgbp = fit_lgbm_lambdarank(enc_time, target, seed=a.seed, use_cache=use_cache)
++    lgb_f = 0.50 * per_user_zscore(lgbp, groups) + 0.50 * per_user_rank01(lgbp, groups)
++    scores = 0.70 * per_user_zscore(best25, groups) + 0.30 * per_user_zscore(lgb_f, groups)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:

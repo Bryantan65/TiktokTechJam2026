@@ -1,0 +1,232 @@
+# iteration 4  (parent: 2)
+# hypothesis: improve 2: replace random positive-negative BPR pairs with a ListNet-style per-user softmax loss, using uniform target mass over positives and a small BCE stabilizer, following Cao et al. Learning to Rank: From Pairwise Approach to Listwise Approach (https://www.microsoft.com/en-us/research/publication/learning-to-rank-from-pairwise-approach-to-listwise-approach/). This still expands the ranking-l
+# result: GAUC 0.663518 | nDCG@5 0.534648 | primary 0.599083 | verdict worse
+
+--- logs/record-run-14/solutions/002_bpr_fm.py
++++ logs/record-run-14/solutions/004_listwise_fm.py
+@@ -1,11 +1,10 @@
+-"""Factorization Machine trained with within-user BPR pairwise ranking loss.
++"""FM trained with a within-user listwise softmax loss.
+ 
+-The baseline optimises pointwise BCE, while the leaderboard metrics rank videos
+-within each user.  Here each training update samples (positive, negative) rows
+-from the same user and minimises -log sigmoid(s_pos - s_neg), the standard BPR
+-objective from Rendle et al.  A small pointwise BCE term on the sampled rows is
+-kept only as a stabiliser so score scales do not drift too far from the
+-baseline.
++This refines the BPR loss direction: instead of sampling one negative for each
++positive, each training step ranks all impressions for a sampled user and applies
++a softmax cross-entropy whose target mass is spread over that user's positives.
++A small BCE term keeps the FM biases calibrated without dominating the ranking
++objective.
+ """
+ import argparse
+ import os
+@@ -25,8 +24,8 @@
+     def __init__(self, dim, k=16, seed=0):
+         super().__init__()
+         rng = np.random.default_rng(seed)
+-        V0 = rng.normal(0, 0.01, (dim, k)).astype(np.float32)
+-        self.V = torch.nn.Parameter(torch.from_numpy(V0))
++        self.V = torch.nn.Parameter(torch.from_numpy(
++            rng.normal(0, 0.01, (dim, k)).astype(np.float32)))
+         self.W = torch.nn.Parameter(torch.zeros(dim, dtype=torch.float32))
+         self.b = torch.nn.Parameter(torch.zeros((), dtype=torch.float32))
+ 
+@@ -46,32 +45,70 @@
+         return np.concatenate(out)
+ 
+ 
+-def build_pair_sampler(y, users):
+-    """Return positive indices and per-user negative pools for BPR sampling."""
++def make_user_groups(y, users, max_rows_per_user=80):
++    """Return arrays of row indices per user that have at least one pos/neg.
++
++    Very long histories are capped per epoch by sampling inside the training loop;
++    this prevents a few heavy users from dominating and keeps softmax groups small.
++    """
++    by_user = {}
++    for i, u in enumerate(users):
++        by_user.setdefault(u, []).append(i)
++    groups = []
+     y = np.asarray(y)
+-    users = np.asarray(users)
+-    pos_by_user = {}
+-    neg_by_user = {}
+-    for i, (u, yy) in enumerate(zip(users, y)):
+-        if yy > 0.5:
+-            pos_by_user.setdefault(u, []).append(i)
+-        else:
+-            neg_by_user.setdefault(u, []).append(i)
+-
+-    pos_idx = []
+-    neg_pools = []
+-    for u, ps in pos_by_user.items():
+-        ns = neg_by_user.get(u)
+-        if ns:
+-            arr = np.asarray(ns, dtype=np.int64)
+-            for p in ps:
+-                pos_idx.append(p)
+-                neg_pools.append(arr)
+-    return np.asarray(pos_idx, dtype=np.int64), neg_pools
++    for idxs in by_user.values():
++        arr = np.asarray(idxs, dtype=np.int64)
++        s = float(y[arr].sum())
++        if s > 0.0 and s < len(arr):
++            groups.append(arr)
++    return groups
+ 
+ 
+-def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        bce_weight=0.05, seed=0, device='cpu', verbose=True):
++def listwise_loss_for_batch(model, Xtr_t, ytr_t, groups, chosen, rng, device,
++                            max_rows_per_user=80, bce_weight=0.03):
++    rows = []
++    sizes = []
++    for gi in chosen:
++        g = groups[int(gi)]
++        if len(g) > max_rows_per_user:
++            # Keep all positives when possible and sample negatives around them.
++            yy = ytr_t[torch.from_numpy(g)].numpy()
++            pos = g[yy > 0.5]
++            neg = g[yy <= 0.5]
++            room = max(1, max_rows_per_user - len(pos))
++            if len(pos) >= max_rows_per_user:
++                sel = rng.choice(pos, size=max_rows_per_user, replace=False)
++            else:
++                nsel = rng.choice(neg, size=min(room, len(neg)), replace=False)
++                sel = np.concatenate([pos, nsel])
++            rng.shuffle(sel)
++            g = sel.astype(np.int64)
++        rows.append(g)
++        sizes.append(len(g))
++    all_rows = np.concatenate(rows)
++    xb = Xtr_t[torch.from_numpy(all_rows)].to(device)
++    yb = ytr_t[torch.from_numpy(all_rows)].to(device)
++    logits = model(xb)
++
++    losses = []
++    off = 0
++    for n in sizes:
++        s = logits[off:off + n]
++        yy = yb[off:off + n]
++        pos = yy.sum()
++        # Target probability is uniform over positives.  This is equivalent to
++        # -mean log P(positive | all impressions of this user segment).
++        logp = torch.nn.functional.log_softmax(s, dim=0)
++        losses.append(-(logp * (yy / pos)).sum())
++        off += n
++    loss = torch.stack(losses).mean()
++    if bce_weight > 0:
++        loss = loss + bce_weight * torch.nn.functional.binary_cross_entropy_with_logits(logits, yb)
++    return loss
++
++
++def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, user_bs=256,
++        patience=5, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -79,43 +116,25 @@
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+                             {'params': [model.b], 'weight_decay': 0.0}],
+-                           lr=lr, betas=(0.9, 0.999), eps=1e-8)
+-
++                           lr=lr)
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     ytr_t = torch.from_numpy(ytr.astype(np.float32))
+-    pos_idx, neg_pools = build_pair_sampler(ytr, utr)
+-    if len(pos_idx) == 0:
+-        raise RuntimeError('no within-user positive/negative pairs available')
+-
++    groups = make_user_groups(ytr, utr)
++    if not groups:
++        raise RuntimeError('no users with both positive and negative rows')
+     rng = np.random.default_rng(seed)
+     best, best_state, bad = -1.0, None, 0
+-    n_pairs_per_epoch = max(len(ytr), len(pos_idx))
+-    bce_loss = torch.nn.BCEWithLogitsLoss()
+ 
+     for ep in range(1, epochs + 1):
+-        order = rng.integers(0, len(pos_idx), size=n_pairs_per_epoch, dtype=np.int64)
++        order = rng.permutation(len(groups))
+         t0 = time.time()
+         model.train()
+         losses = []
+-        for i in range(0, len(order), bs):
+-            which = order[i:i + bs]
+-            p_np = pos_idx[which]
+-            # Vectorised ragged negative sampling: one draw from each selected user's pool.
+-            n_np = np.empty(len(which), dtype=np.int64)
+-            for j, w in enumerate(which):
+-                pool = neg_pools[int(w)]
+-                n_np[j] = pool[rng.integers(0, len(pool))]
+-
+-            pair_np = np.concatenate([p_np, n_np])
+-            xb = Xtr_t[torch.from_numpy(pair_np)].to(device)
+-            logits = model(xb)
+-            sp, sn = logits[:len(p_np)], logits[len(p_np):]
+-            loss = torch.nn.functional.softplus(-(sp - sn)).mean()
+-            if bce_weight > 0:
+-                yb = ytr_t[torch.from_numpy(pair_np)].to(device)
+-                loss = loss + bce_weight * bce_loss(logits, yb)
+-
++        for i in range(0, len(order), user_bs):
++            chosen = order[i:i + user_bs]
+             opt.zero_grad(set_to_none=True)
++            loss = listwise_loss_for_batch(model, Xtr_t, ytr_t, groups, chosen,
++                                           rng, device)
+             loss.backward()
+             opt.step()
+             losses.append(float(loss.detach().cpu()))
+@@ -126,15 +145,15 @@
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+-            best, bad = va['primary'], 0
+-            best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
++            best = va['primary']
++            best_state = {kk: vv.detach().clone() for kk, vv in model.state_dict().items()}
++            bad = 0
+         else:
+             bad += 1
+             if bad >= patience:
+                 if verbose:
+                     print(f"  early stop at epoch {ep}")
+                 break
+-
+     model.load_state_dict(best_state)
+     return model, enc
+ 
+@@ -146,7 +165,6 @@
+     ap.add_argument('--out', default=None)
+     ap.add_argument('--k', type=int, default=16)
+     ap.add_argument('--lr', type=float, default=0.001)
+-    ap.add_argument('--epochs', type=int, default=40)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+@@ -160,18 +178,17 @@
+     else:
+         splits = load(a.data_dir)
+         target = a.split
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
++    print({kk: len(vv) for kk, vv in splits.items()}, f"fields={FIELDS}")
+ 
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed,
+-                     device=a.device, verbose=a.out is None)
++    model, enc = run(splits, k=a.k, lr=a.lr, seed=a.seed, device=a.device,
++                     verbose=a.out is None)
+     X, y, users = enc[target]
+     scores = model.predict(X, device=a.device)
+-
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== listwise_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

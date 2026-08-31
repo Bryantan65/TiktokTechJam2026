@@ -1,0 +1,49 @@
+# iteration 17  (parent: 12)
+# hypothesis: improve 12: node 012's 30% rank-percentile fusion was the largest clean gain after ensembling; keep all cached members fixed and test a stronger 40% rank signal, which is cheap and directly targets top-of-list nDCG.
+# result: GAUC 0.67143 | nDCG@5 0.537965 | primary 0.604698 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/012_seedbag_rankblend.py
++++ logs/record-run-16-uct/solutions/017_rankblend40.py
+@@ -1,10 +1,9 @@
+-"""Rank-aware fusion of the cached seed-bagged BPR/soft-hard FM members.
+-
+-Parent 011 averaged per-user z-scored logits from six unchanged member models
+-(2 mechanisms x seeds 0/1/2).  This variant keeps member training identical and
+-adds a per-user rank-percentile fusion signal, blended at 30%, to focus the
+-ensemble on the top of each user's list for nDCG@5 while retaining most GAUC
+-from score averaging.
++"""Cached seed-bagged BPR/soft-hard FM with a stronger rank-percentile blend.
++
++Node 012 found that adding 30% per-user rank-percentile signal to the six-member
++per-user-z score average improved both GAUC and nDCG.  This keeps all member
++models and cache keys identical, changing only the final fusion to 40% rank to
++check whether the optimum is beyond the first hand-picked 30% point.
+ """
+ import argparse
+ import os
+@@ -180,7 +179,6 @@
+ 
+ 
+ def per_user_rank_percentile(pred, groups):
+-    """Within-user rank score in [0,1], higher is better."""
+     out = np.empty_like(pred, dtype=np.float64)
+     for idx in groups:
+         vals = pred[idx]
+@@ -188,7 +186,7 @@
+         if n <= 1:
+             out[idx] = 0.0
+             continue
+-        order = np.argsort(vals, kind='mergesort')  # ascending
++        order = np.argsort(vals, kind='mergesort')
+         ranks = np.empty(n, dtype=np.float64)
+         ranks[order] = np.arange(n, dtype=np.float64)
+         out[idx] = ranks / (n - 1.0)
+@@ -236,7 +234,7 @@
+     score_z = 0.60 * np.mean(z_bpr, axis=0) + 0.40 * np.mean(z_soft, axis=0)
+     score_rank = 0.60 * np.mean(r_bpr, axis=0) + 0.40 * np.mean(r_soft, axis=0)
+     score_rank = per_user_z(score_rank, groups)
+-    scores = 0.70 * score_z + 0.30 * score_rank
++    scores = 0.60 * score_z + 0.40 * score_rank
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

@@ -1,0 +1,28 @@
+# iteration 30  (parent: 29)
+# hypothesis: improve 29: date-free time clearly improved the blend, and node 25's 50% setting was inherited from the date-aware member rather than tuned; shift to 60% time weight using the same cached members to test whether the complementary signal is still underweighted.
+# result: GAUC 0.672606 | nDCG@5 0.538361 | primary 0.605484 | verdict KEPT
+
+--- logs/record-run-13/solutions/029_time_nodate_blend.py
++++ logs/record-run-13/solutions/030_time_nodate_60.py
+@@ -1,8 +1,7 @@
+-"""Improve node 25 by removing the raw date categorical from the time-aware member.
+-
+-The date values in valid/test are largely future categories relative to train, so their FM embeddings
+-are untrained random vectors.  Keep the stable cyclical-ish time signals (day-of-week and 4-hour
+-bucket) and blend 50/50 with the unchanged cached base bag from node 13.
++"""Node 29 variant: keep the date-free time member, but move the blend toward it.
++
++All member predictions are cached under the same names as node 29.  This script is otherwise a
++standalone reproduction: if caches are absent it trains the unchanged base and date-free time members.
+ """
+ import argparse, csv, datetime as _dt, os, sys, time
+ from collections import defaultdict
+@@ -227,7 +226,7 @@
+     timebag=make_bag(splits,enc_time,dim_time,target,groups,a,'029_time_nodate')
+     base_f=0.70*per_user_zscore(base,groups)+0.30*per_user_rank01(base,groups)
+     time_f=0.70*per_user_zscore(timebag,groups)+0.30*per_user_rank01(timebag,groups)
+-    scores=0.50*per_user_zscore(base_f,groups)+0.50*per_user_zscore(time_f,groups)
++    scores=0.40*per_user_zscore(base_f,groups)+0.60*per_user_zscore(time_f,groups)
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else:

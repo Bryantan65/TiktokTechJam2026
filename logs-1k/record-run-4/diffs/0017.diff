@@ -1,0 +1,116 @@
+# iteration 17  (parent: 14)
+# hypothesis: debug 14: the earlier LambdaMART failures mixed ranking loss with broken stat/cross features, so retry lambdarank on node 14's minimal safe feature pipeline only, grouped by user and split only to satisfy LightGBM's 10000-row query limit. This tests the ranked objective directly where the binary LightGBM is already strong.
+# result: GAUC 0.661021 | nDCG@5 0.606463 | primary 0.633742 | verdict worse
+
+--- logs-1k/record-run-4/solutions/014_lgbm_binary_auc_es.py
++++ logs-1k/record-run-4/solutions/017_lgbm_lambdarank_minimal.py
+@@ -1,9 +1,9 @@
+-"""Minimal LightGBM binary classifier with AUC early stopping.
++"""Minimal LightGBM LambdaRank on the same safe features as node 14.
+ 
+-Node 11's LightGBM binary model is strong but is selected by validation logloss,
+-which rewards calibration more than within-user ordering.  This keeps the same
+-minimal features and model capacity, but uses LightGBM's AUC metric for early
+-stopping so the saved boosting round is chosen by a ranking-oriented criterion.
++The earlier LambdaMART attempts were entangled with broken target/stat features.
++This keeps node 14's minimal [user, video, author, tab, dur_bucket, duration]
++feature pipeline, sorts rows by user, and trains a real within-user ranking
++objective with oversized users split into <=10000-row query chunks.
+ """
+ import argparse
+ import os
+@@ -70,23 +70,55 @@
+         ])
+         return np.column_stack([Xcat.astype(np.float32), extra]).astype(np.float32, copy=False)
+ 
+-    return (finish(Xtr_cat, dtr), ytr.astype(np.int32),
+-            finish(Xva_cat, dva), yva.astype(np.int32),
++    return (finish(Xtr_cat, dtr), ytr.astype(np.int32), Xtr_base[:, 0].astype(np.int64),
++            finish(Xva_cat, dva), yva.astype(np.int32), Xva_base[:, 0].astype(np.int64),
+             finish(Xt_cat, dt))
+ 
+ 
+-def train_classifier(splits, target, seed=0, verbose=True):
++def sort_by_user(F, y, users):
++    users = np.asarray(users)
++    order = np.argsort(users, kind='mergesort')
++    Fs = F[order]
++    ys = y[order]
++    us = users[order]
++    return Fs, ys, us
++
++
++def make_groups(sorted_users, max_group=10000):
++    users = np.asarray(sorted_users)
++    if len(users) == 0:
++        return []
++    cuts = np.flatnonzero(users[1:] != users[:-1]) + 1
++    starts = np.r_[0, cuts]
++    ends = np.r_[cuts, len(users)]
++    groups = []
++    for s, e in zip(starts, ends):
++        n = int(e - s)
++        while n > max_group:
++            groups.append(max_group)
++            n -= max_group
++        if n > 0:
++            groups.append(n)
++    return groups
++
++
++def train_ranker(splits, target, seed=0, verbose=True):
+     t0 = time.time()
+-    Ftr, ytr, Fva, yva, Ft = build_feature_matrices(splits, target)
++    Ftr, ytr, utr, Fva, yva, uva, Ft = build_feature_matrices(splits, target)
++    Ftr_s, ytr_s, utr_s = sort_by_user(Ftr, ytr, utr)
++    Fva_s, yva_s, uva_s = sort_by_user(Fva, yva, uva)
++    gtr = make_groups(utr_s)
++    gva = make_groups(uva_s)
+     if verbose:
+         print(f"features train={Ftr.shape} valid={Fva.shape} target={Ft.shape} build {time.time() - t0:.1f}s")
++        print(f"groups train={len(gtr)} max={max(gtr)} valid={len(gva)} max={max(gva)}")
+         print(f"train pos={float(np.mean(ytr)):.4f} valid pos={float(np.mean(yva)):.4f}")
+ 
+-    clf = lgb.LGBMClassifier(
+-        objective='binary',
+-        metric='auc',
++    ranker = lgb.LGBMRanker(
++        objective='lambdarank',
++        metric='ndcg',
+         boosting_type='gbdt',
+-        n_estimators=500,
++        n_estimators=300,
+         learning_rate=0.05,
+         num_leaves=63,
+         max_depth=-1,
+@@ -100,14 +132,17 @@
+         n_jobs=-1,
+         verbose=-1,
+         force_col_wise=True,
++        label_gain=[0, 1],
++        eval_at=[5],
+     )
+     callbacks = [lgb.early_stopping(30, first_metric_only=True, verbose=verbose),
+                  lgb.log_evaluation(50 if verbose else 0)]
+-    clf.fit(Ftr, ytr, eval_set=[(Fva, yva)],
+-            categorical_feature=list(range(5)), callbacks=callbacks)
++    ranker.fit(Ftr_s, ytr_s, group=gtr,
++               eval_set=[(Fva_s, yva_s)], eval_group=[gva], eval_at=[5],
++               categorical_feature=list(range(5)), callbacks=callbacks)
+     if verbose:
+-        print(f"best_iteration={clf.best_iteration_} total {time.time() - t0:.1f}s")
+-    return clf.predict_proba(Ft, num_iteration=clf.best_iteration_)[:, 1]
++        print(f"best_iteration={ranker.best_iteration_} total {time.time() - t0:.1f}s")
++    return ranker.predict(Ft, num_iteration=ranker.best_iteration_)
+ 
+ 
+ if __name__ == '__main__':
+@@ -130,7 +165,7 @@
+         target = a.split
+     print({k: len(v) for k, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    scores = train_classifier(splits, target=target, seed=a.seed, verbose=a.out is None)
++    scores = train_ranker(splits, target=target, seed=a.seed, verbose=a.out is None)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")

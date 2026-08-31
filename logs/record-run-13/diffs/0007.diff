@@ -1,0 +1,91 @@
+# iteration 7  (parent: 6)
+# hypothesis: improve 6: node 6 showed BCE and BPR complement after per-user z-scoring; keep the same cached members but weight the stronger ranking-loss member more heavily (65% BPR, 35% BCE) to try to push primary over the target.
+# result: GAUC 0.669903 | nDCG@5 0.536757 | primary 0.60333 | verdict noise
+
+--- logs/record-run-13/solutions/006_bce_bpr_zblend.py
++++ logs/record-run-13/solutions/007_bpr_heavy_zblend.py
+@@ -1,9 +1,9 @@
+-"""BCE + uniform-BPR FM ensemble with per-user z-score blending.
+-
+-BPR (node 2) was the best single model but noisy; pointwise BCE (node 1) is
+-slightly weaker but very stable and optimizes calibration differently.  This
+-script trains one of each and blends their within-user standardized logits 50/50,
+-so the BPR signal is readable rather than a tiny ensemble member.
++"""BCE + uniform-BPR FM ensemble with BPR-heavy per-user z-score blending.
++
++Node 6 showed that BCE and BPR complement each other after per-user scale
++alignment.  This keeps the same cached member predictions/training code but
++leans the final ranking toward the stronger standalone BPR member (65%) while
++retaining BCE's stabilising signal (35%).
+ """
+ import argparse
+ import os
+@@ -72,8 +72,7 @@
+             losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  BCE epoch {ep:2d} | loss {np.mean(losses):.4f} | valid "
+-                  f"primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
++            print(f"  BCE epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {kk: vv.detach().clone() for kk, vv in model.state_dict().items()}
+@@ -133,8 +132,7 @@
+     best, best_state, bad = -1.0, None, 0
+     for ep in range(1, epochs + 1):
+         t0 = time.time()
+-        p_idx, n_idx = sample_uniform_pairs(pos_idx, neg_pools, rng,
+-                                            neg_per_pos=neg_per_pos)
++        p_idx, n_idx = sample_uniform_pairs(pos_idx, neg_pools, rng, neg_per_pos=neg_per_pos)
+         model.train(); losses = []
+         for i in range(0, len(p_idx), bs):
+             ps = torch.from_numpy(p_idx[i:i + bs])
+@@ -147,8 +145,7 @@
+             losses.append(loss.item())
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  BPR epoch {ep:2d} | loss {np.mean(losses):.4f} | valid "
+-                  f"primary {va['primary']:.4f} | pairs {len(p_idx):,d} | {time.time()-t0:.1f}s")
++            print(f"  BPR epoch {ep:2d} | loss {np.mean(losses):.4f} | valid primary {va['primary']:.4f} | pairs {len(p_idx):,d} | {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {kk: vv.detach().clone() for kk, vv in model.state_dict().items()}
+@@ -177,9 +174,10 @@
+     return out
+ 
+ 
+-def cached_predict(member_name, train_fn, enc, dim, target, seed, device, use_cache=True):
++def cached_predict(member_name, train_fn, enc, target, seed, device, use_cache=True):
+     os.makedirs('pred_cache', exist_ok=True)
+     X, y, users = enc[target]
++    # Reuse node-6 member names because member training code is intentionally unchanged.
+     cache_path = os.path.join('pred_cache', f'006_{member_name}_{target}_seed{seed}.npy')
+     if use_cache and os.path.isfile(cache_path):
+         preds = np.load(cache_path)
+@@ -224,22 +222,22 @@
+         'bce',
+         lambda: fit_bce(splits, enc, dim, k=a.k, lr=a.lr, epochs=a.epochs,
+                         seed=a.seed, device=a.device, verbose=verbose),
+-        enc, dim, target, a.seed, a.device, use_cache=use_cache)
++        enc, target, a.seed, a.device, use_cache=use_cache)
+     bpr_preds = cached_predict(
+         'bpr_uniform_np3',
+         lambda: fit_bpr(splits, enc, dim, k=a.k, lr=a.lr, epochs=a.epochs,
+                         neg_per_pos=a.neg_per_pos, seed=a.seed,
+                         device=a.device, verbose=verbose),
+-        enc, dim, target, a.seed, a.device, use_cache=use_cache)
++        enc, target, a.seed, a.device, use_cache=use_cache)
+ 
+     X, y, users = enc[target]
+-    scores = 0.5 * per_user_zscore(bce_preds, users) + 0.5 * per_user_zscore(bpr_preds, users)
++    scores = 0.35 * per_user_zscore(bce_preds, users) + 0.65 * per_user_zscore(bpr_preds, users)
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bce_bpr_zblend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_heavy_zblend (seed={a.seed}, device={a.device}) ===")
+         r = evaluate(users, y, scores)
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

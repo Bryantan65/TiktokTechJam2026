@@ -1,0 +1,130 @@
+# iteration 15  (parent: 12)
+# hypothesis: draft 2: add a DIN-inspired user behaviour history signal (DIN paper https://arxiv.org/abs/1904.00177) to node 12: smoothed same-user item/author/tab/duration affinities from training history, blended at 30% after per-user z-normalisation.
+# result: GAUC 0.669093 | nDCG@5 0.536384 | primary 0.602738 | verdict noise
+
+--- logs/record-run-16-uct/solutions/012_seedbag_rankblend.py
++++ logs/record-run-16-uct/solutions/015_history_affinity_blend.py
+@@ -1,15 +1,16 @@
+-"""Rank-aware fusion of the cached seed-bagged BPR/soft-hard FM members.
+-
+-Parent 011 averaged per-user z-scored logits from six unchanged member models
+-(2 mechanisms x seeds 0/1/2).  This variant keeps member training identical and
+-adds a per-user rank-percentile fusion signal, blended at 30%, to focus the
+-ensemble on the top of each user's list for nDCG@5 while retaining most GAUC
+-from score averaging.
++"""History-affinity blend on top of the best cached rank-fusion ensemble.
++
++Keeps node 012's six cached BPR/soft-hard FM members and adds a DIN-inspired
++user-history affinity signal: target items/authors/tabs are scored from the
++same user's labelled training history, with smoothed global item/author priors.
++The history score is per-user z-normalised and blended at 30% so the signal is
++large enough to test whether behavioural history complements the FM ensemble.
+ """
+ import argparse
+ import os
+ import sys
+ import time
++from collections import defaultdict
+ 
+ import numpy as np
+ import torch
+@@ -195,6 +196,87 @@
+     return out
+ 
+ 
++def add_stat(d, key, y):
++    a = d.get(key)
++    if a is None:
++        d[key] = [float(y), 1.0]
++    else:
++        a[0] += float(y)
++        a[1] += 1.0
++
++
++def smoothed_logit(stat, global_rate, alpha):
++    if stat is None:
++        return 0.0, 0.0
++    pos, cnt = stat
++    p = (pos + alpha * global_rate) / (cnt + alpha)
++    p = min(max(p, 1e-4), 1.0 - 1e-4)
++    g = min(max(global_rate, 1e-4), 1.0 - 1e-4)
++    return np.log(p / (1.0 - p)) - np.log(g / (1.0 - g)), cnt
++
++
++def bucket_duration(ms):
++    try:
++        x = int(ms)
++    except Exception:
++        return 'unk'
++    if x < 5_000:
++        return 0
++    if x < 10_000:
++        return 1
++    if x < 20_000:
++        return 2
++    if x < 40_000:
++        return 3
++    if x < 80_000:
++        return 4
++    return 5
++
++
++def history_affinity_score(splits, target, groups):
++    """Smoothed train-history score for each target row, using no target labels."""
++    train_rows = splits['train']
++    target_rows = splits[target]
++    ysum = sum(float(r[6]) for r in train_rows)
++    global_rate = ysum / max(1, len(train_rows))
++
++    uv = {}
++    ua = {}
++    utab = {}
++    udur = {}
++    gv = {}
++    ga = {}
++    for r in train_rows:
++        u, v, a, tab, dur, y = str(r[1]), str(r[2]), str(r[3]), str(r[4]), r[5], float(r[6])
++        db = bucket_duration(dur)
++        add_stat(uv, (u, v), y)
++        add_stat(ua, (u, a), y)
++        add_stat(utab, (u, tab), y)
++        add_stat(udur, (u, db), y)
++        add_stat(gv, v, y)
++        add_stat(ga, a, y)
++
++    out = np.zeros(len(target_rows), dtype=np.float64)
++    for i, r in enumerate(target_rows):
++        u, v, a, tab, dur = str(r[1]), str(r[2]), str(r[3]), str(r[4]), r[5]
++        db = bucket_duration(dur)
++        s = 0.0
++        val, cnt = smoothed_logit(uv.get((u, v)), global_rate, alpha=1.0)
++        s += 1.20 * min(cnt, 3.0) / 3.0 * val
++        val, cnt = smoothed_logit(ua.get((u, a)), global_rate, alpha=3.0)
++        s += 0.75 * min(cnt, 10.0) / 10.0 * val
++        val, cnt = smoothed_logit(utab.get((u, tab)), global_rate, alpha=8.0)
++        s += 0.25 * min(cnt, 20.0) / 20.0 * val
++        val, cnt = smoothed_logit(udur.get((u, db)), global_rate, alpha=8.0)
++        s += 0.15 * min(cnt, 20.0) / 20.0 * val
++        val, cnt = smoothed_logit(gv.get(v), global_rate, alpha=20.0)
++        s += 0.25 * min(cnt, 50.0) / 50.0 * val
++        val, cnt = smoothed_logit(ga.get(a), global_rate, alpha=20.0)
++        s += 0.15 * min(cnt, 50.0) / 50.0 * val
++        out[i] = s
++    return per_user_z(out, groups)
++
++
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser()
+     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+@@ -236,7 +318,10 @@
+     score_z = 0.60 * np.mean(z_bpr, axis=0) + 0.40 * np.mean(z_soft, axis=0)
+     score_rank = 0.60 * np.mean(r_bpr, axis=0) + 0.40 * np.mean(r_soft, axis=0)
+     score_rank = per_user_z(score_rank, groups)
+-    scores = 0.70 * score_z + 0.30 * score_rank
++    parent_score = 0.70 * score_z + 0.30 * score_rank
++
++    hist_score = history_affinity_score(splits, target, groups)
++    scores = 0.70 * parent_score + 0.30 * hist_score
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

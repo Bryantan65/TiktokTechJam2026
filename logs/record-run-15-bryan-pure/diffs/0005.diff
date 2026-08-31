@@ -1,0 +1,92 @@
+# iteration 5  (parent: 4)
+# hypothesis: debug 4: max-selected hard negatives were too aggressive; use detached softmax weights over five same-user negatives with a uniform-loss mix so hard examples get emphasis without discarding the stable random-negative BPR signal.
+# result: GAUC 0.669374 | nDCG@5 0.536619 | primary 0.602997 | verdict noise
+
+--- logs/record-run-15-bryan-pure/solutions/004_bpr_hardneg_fm.py
++++ logs/record-run-15-bryan-pure/solutions/005_bpr_soft_hardneg_fm.py
+@@ -1,10 +1,10 @@
+-"""FM with same-user BPR and online hard negative selection.
++"""FM with same-user BPR and soft hard-negative weighting.
+ 
+-Node 3 improved BPR by drawing three same-user negatives per positive. This
+-variant draws a small candidate set of same-user negatives for each positive,
+-scores them with the current model, and applies BPR only against the highest
+-scoring (hardest) candidate. The aim is to spend updates on negatives that can
+-enter the user's top ranks rather than averaging many already-easy pairs.
++This debugs node 4. The max over five candidate negatives was too aggressive
++from cold start and collapsed. Here every sampled same-user negative still
++contributes a BPR comparison, but comparisons are weighted by a detached softmax
++of the current negative scores, so high-scoring negatives matter more without
++throwing away the random-negative signal that worked in node 3.
+ """
+ import argparse
+ import os
+@@ -69,7 +69,7 @@
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=50, bs=8192, patience=5,
+-        seed=0, device='cpu', verbose=True, ncand=5):
++        seed=0, device='cpu', verbose=True, nneg=5, tau=0.5, uniform_mix=0.25):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -82,7 +82,7 @@
+     Xtr_t = torch.from_numpy(Xtr.astype(np.int64))
+     pos_idx, pos_users, neg_by_u = make_pair_sampler(ytr, utr)
+     if verbose:
+-        print(f"BPR train positives: {len(pos_idx):,d} from {len(neg_by_u):,d} mixed-label users; hard ncand={ncand}")
++        print(f"BPR train positives: {len(pos_idx):,d} from {len(neg_by_u):,d} mixed-label users; soft-hard nneg={nneg} tau={tau} mix={uniform_mix}")
+     if len(pos_idx) == 0:
+         raise RuntimeError('no same-user positive/negative training pairs found')
+ 
+@@ -97,27 +97,31 @@
+         for i in range(0, len(order), bs):
+             sel = order[i:i + bs]
+             pidx = pos_idx[sel]
+-            cand_idx = np.empty((len(sel), ncand), dtype=np.int64)
++            nidx = np.empty((len(sel), nneg), dtype=np.int64)
+             for j, uu in enumerate(pos_users[sel]):
+                 ns = neg_by_u[uu]
+-                cand_idx[j] = ns[rng.integers(len(ns), size=ncand)]
++                nidx[j] = ns[rng.integers(len(ns), size=nneg)]
+ 
+             xp = Xtr_t[torch.from_numpy(pidx)].to(device)
+-            xc = Xtr_t[torch.from_numpy(cand_idx.reshape(-1))].to(device)
++            xn = Xtr_t[torch.from_numpy(nidx.reshape(-1))].to(device)
+             opt.zero_grad(set_to_none=True)
+-            sp = model(xp)
+-            sc = model(xc).view(len(sel), ncand)
+-            # Online hard negative: only the candidate currently ranked highest
+-            # by the model contributes to the BPR update.
+-            sn = sc.max(dim=1).values
+-            loss = torch.nn.functional.softplus(-(sp - sn)).mean()
++            sp = model(xp).view(-1, 1)
++            sn = model(xn).view(len(sel), nneg)
++            pair_loss = torch.nn.functional.softplus(-(sp - sn))
++            # Detached weights avoid the degenerate incentive to raise negative
++            # scores to get more weight; uniform mixing keeps the successful
++            # random-negative BPR objective present in every batch.
++            hard_w = torch.softmax((sn.detach() - sn.detach().mean(dim=1, keepdim=True)) / tau, dim=1)
++            uni_w = torch.full_like(hard_w, 1.0 / nneg)
++            w = (1.0 - uniform_mix) * hard_w + uniform_mix * uni_w
++            loss = (w * pair_loss).sum(dim=1).mean()
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | hard-bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | soft-hard-bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -168,7 +172,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_hardneg_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_soft_hardneg_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]

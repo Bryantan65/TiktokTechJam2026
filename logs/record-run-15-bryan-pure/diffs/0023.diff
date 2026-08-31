@@ -1,0 +1,54 @@
+# iteration 23  (parent: 22)
+# hypothesis: improve 22: learned sequence-context improved both metrics at 30% weight, so keep the member unchanged and test a still-readable 40% blend using cached predictions.
+# result: GAUC 0.671752 | nDCG@5 0.538249 | primary 0.605001 | verdict KEPT
+
+--- logs/record-run-15-bryan-pure/solutions/022_seq_context_fm.py
++++ logs/record-run-15-bryan-pure/solutions/023_seq_blend40.py
+@@ -1,9 +1,8 @@
+-"""Debug node 21: learn the sequence/history signal instead of hard-coding it.
++"""Improve node 22: same learned sequence-context member, higher readable blend weight.
+ 
+-Node 21 blended a hand-weighted history-overlap score and dropped badly.  This
+-keeps node 20 unchanged, builds leakage-safe online prior-history buckets for
+-train and train-history buckets for valid/test, trains a same-user BPR FM member
+-on those sequence context fields, and blends it at a readable 30% weight.
++Uses unchanged node20 and node22 sequence BPR member caches when present.  The only
++change from node22 is increasing the learned history-context contribution from
++30% to 40% after it improved both GAUC and nDCG.
+ """
+ import argparse, os, sys
+ from collections import defaultdict
+@@ -81,7 +80,6 @@
+ def build_seq_rows(splits):
+     vals_by = {}
+     maps = [dict() for _ in range(17)]
+-    # Train features use only preceding rows for that user.
+     hist = defaultdict(empty_hist); vals = []
+     for r in splits['train']:
+         ubase = (str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(dur_bucket(r[5])))
+@@ -91,7 +89,6 @@
+     for vr in vals:
+         for j, v in enumerate(vr):
+             if v not in maps[j]: maps[j][v] = len(maps[j])
+-    # Valid/test features use full train history only, avoiding target self-label leakage.
+     base_hist = hist
+     for sp in splits:
+         if sp == 'train': continue
+@@ -140,7 +137,7 @@
+         splits = load_dev(a.data_dir); target = 'valid'
+     else:
+         splits = load(a.data_dir); target = a.split
+-    print({k: len(v) for k, v in splits.items()}, 'fields=node20+learned_seq_context')
++    print({k: len(v) for k, v in splits.items()}, 'fields=node20+learned_seq_context_blend40')
+     base = node20.run_solution(splits, target, a.split, a.data_dir, k=a.k, lr=a.lr, epochs=a.epochs, seed=a.seed, device=a.device, verbose=a.out is None)
+     enc0, _ = encode(splits); users = enc0[target][2]
+     senc, sdim = build_seq_rows(splits)
+@@ -151,7 +148,7 @@
+                                       '022_seq_context_bpr_member', 'bpr', None, 3, a.k, a.lr, a.epochs)
+         seq_members.append(per_user_zscore(p, users))
+     seq = per_user_zscore(np.mean(np.vstack(seq_members), axis=0), users)
+-    scores = 0.70 * per_user_zscore(base, users) + 0.30 * seq
++    scores = 0.60 * per_user_zscore(base, users) + 0.40 * seq
+     if a.out:
+         np.save(a.out, scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else:

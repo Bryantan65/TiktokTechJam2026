@@ -1,0 +1,88 @@
+# iteration 19  (parent: 18)
+# hypothesis: improve 18: add a readable 10% train-only historical residual prior for repeated user-video/user-author/user-tab contexts, a common recommender ensemble feature/stacking trick (rank-fusion background search returned RRF form but no useful cited writeup).
+# result: GAUC 0.671491 | nDCG@5 0.538027 | primary 0.604759 | verdict KEPT
+
+--- logs/record-run-16-uct/solutions/018_rankblend50.py
++++ logs/record-run-16-uct/solutions/019_hist_residual_blend.py
+@@ -1,14 +1,15 @@
+-"""Cached seed-bagged BPR/soft-hard FM with 50% rank-percentile fusion.
+-
+-Parent 017 improved node 012 by raising the per-user rank-percentile component
+-from 30% to 40%.  This keeps all six cached member models identical and changes
+-only the final score/rank fusion to an even 50/50 blend, testing whether the
+-rank-heavy trend continues for top-of-list ranking.
++"""Cached rank/score FM ensemble plus train-only historical residual priors.
++
++Builds on 018: same six cached BPR/soft-hard FM members and 50/50
++score-vs-rank fusion.  Adds a small per-user-z normalized correction from
++TRAIN labels only: repeated (user, video), (user, author), and (user, tab)
++empirical residuals relative to that user's train mean.
+ """
+ import argparse
+ import os
+ import sys
+ import time
++from collections import defaultdict
+ 
+ import numpy as np
+ import torch
+@@ -193,6 +194,47 @@
+     return out
+ 
+ 
++def add_stat(dct, key, y):
++    s, c = dct.get(key, (0.0, 0))
++    dct[key] = (s + float(y), c + 1)
++
++
++def smoothed_dev(dct, key, base, alpha):
++    s, c = dct.get(key, (0.0, 0))
++    if c <= 0:
++        return 0.0
++    rate = (s + alpha * base) / (c + alpha)
++    return rate - base
++
++
++def build_history_signal(splits, target):
++    """TRAIN-only residual target encoding for repeated user context."""
++    user_stat = {}
++    uv_stat, ua_stat, ut_stat = {}, {}, {}
++    global_sum, global_cnt = 0.0, 0
++    for row in splits['train']:
++        u, v, au, tab, y = row[1], row[2], row[3], row[4], row[6]
++        yy = float(y)
++        add_stat(user_stat, u, yy)
++        add_stat(uv_stat, (u, v), yy)
++        add_stat(ua_stat, (u, au), yy)
++        add_stat(ut_stat, (u, tab), yy)
++        global_sum += yy
++        global_cnt += 1
++    global_mean = global_sum / max(1, global_cnt)
++
++    out = np.zeros(len(splits[target]), dtype=np.float64)
++    for i, row in enumerate(splits[target]):
++        u, v, au, tab = row[1], row[2], row[3], row[4]
++        us, uc = user_stat.get(u, (global_mean, 0))
++        base = us / uc if uc > 0 else global_mean
++        # Repeated exact item is rare but high precision; author and tab are broader.
++        out[i] = (1.00 * smoothed_dev(uv_stat, (u, v), base, alpha=1.0) +
++                  0.45 * smoothed_dev(ua_stat, (u, au), base, alpha=5.0) +
++                  0.20 * smoothed_dev(ut_stat, (u, tab), base, alpha=10.0))
++    return out
++
++
+ if __name__ == '__main__':
+     ap = argparse.ArgumentParser()
+     ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+@@ -234,7 +276,10 @@
+     score_z = 0.60 * np.mean(z_bpr, axis=0) + 0.40 * np.mean(z_soft, axis=0)
+     score_rank = 0.60 * np.mean(r_bpr, axis=0) + 0.40 * np.mean(r_soft, axis=0)
+     score_rank = per_user_z(score_rank, groups)
+-    scores = 0.50 * score_z + 0.50 * score_rank
++    ensemble = 0.50 * score_z + 0.50 * score_rank
++
++    hist = per_user_z(build_history_signal(splits, target), groups)
++    scores = 0.90 * ensemble + 0.10 * hist
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

@@ -1,0 +1,36 @@
+# iteration 9  (parent: 8)
+# hypothesis: improve 8: node 8's rank-percentile term was the only cheap change still moving both metrics upward, so raise it from 30% to 50% while reusing the identical cached members.
+# result: GAUC 0.67008 | nDCG@5 0.536834 | primary 0.603457 | verdict noise
+
+--- logs/record-run-13/solutions/008_bpr_rank_zblend.py
++++ logs/record-run-13/solutions/009_bpr_rank50_zblend.py
+@@ -1,9 +1,9 @@
+ """BCE + uniform-BPR FM ensemble using cached node-6 members.
+ 
+-This is a cheap fusion-only refinement of node 7.  It keeps the same trained
+-members/cache keys, but blends both per-user z-scored logits and per-user rank
+-percentiles.  The rank term should emphasize top-of-user ordering for nDCG@5
+-while the z term preserves score gaps that helped GAUC.
++Refinement of node 8: keep the exact same trained BCE/BPR members/cache keys,
++but put more weight on per-user rank-percentile fusion.  Node 8 showed the rank
++term helped both GAUC and nDCG, so this tests whether a stronger top-ordering
++signal pushes the blend over the target without retraining.
+ """
+ import argparse
+ import os
+@@ -247,13 +247,13 @@
+     groups = user_groups(users)
+     zblend = 0.35 * per_user_zscore(bce_preds, groups) + 0.65 * per_user_zscore(bpr_preds, groups)
+     rblend = 0.35 * per_user_rank01(bce_preds, groups) + 0.65 * per_user_rank01(bpr_preds, groups)
+-    scores = 0.70 * zblend + 0.30 * rblend
++    scores = 0.50 * zblend + 0.50 * rblend
+ 
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== bpr_rank_zblend (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== bpr_rank50_zblend (seed={a.seed}, device={a.device}) ===")
+         r = evaluate(users, y, scores)
+         print(f"  {target:5s}  GAUC {r['GAUC']:.4f} | nDCG@5 {r['nDCG@5']:.4f} | primary {r['primary']:.4f}")
+ 

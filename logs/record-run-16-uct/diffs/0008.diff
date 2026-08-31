@@ -1,0 +1,118 @@
+# iteration 8  (parent: 7)
+# hypothesis: debug 7: pure max hard-negative BPR likely collapsed because one noisy early negative got all gradient; use detached softmax weighting over five same-user candidates so the model emphasizes hard negatives without discarding the stabilizing easy-negative signal.
+# result: GAUC 0.669722 | nDCG@5 0.536871 | primary 0.603296 | verdict noise
+
+--- logs/record-run-16-uct/solutions/007_hardneg_bpr_fm.py
++++ logs/record-run-16-uct/solutions/008_soft_hard_bpr_fm.py
+@@ -1,10 +1,10 @@
+-"""FM trained with within-user BPR and online hard negative sampling.
++"""FM trained with within-user BPR and soft hard-negative sampling.
+ 
+-This refines the successful 1-negative BPR objective.  For each positive row we
+-sample several negatives from the same user, but instead of averaging all pairs
+-(as in 003) we train only against the currently highest-scoring sampled negative.
+-That should focus updates on mistakes near the top of each user's ranking, which
+-is where nDCG@5 is measured.
++Debugs 007: the pure max over five sampled negatives was too aggressive and sent
++all gradient through one noisy early negative, collapsing GAUC.  This version
++keeps the same candidate sampling but uses a detached softmax over candidate
++scores to smoothly emphasize harder negatives while still training on every
++sampled same-user negative.
+ """
+ import argparse
+ import os
+@@ -66,15 +66,15 @@
+     return np.asarray(pos_all, dtype=np.int64), neg_pools
+ 
+ 
+-def sample_negatives(neg_pools, rng, n_candidates):
+-    neg = np.empty((len(neg_pools), n_candidates), dtype=np.int64)
++def sample_negatives(neg_pools, rng, n_neg):
++    neg = np.empty((len(neg_pools), n_neg), dtype=np.int64)
+     for i, pool in enumerate(neg_pools):
+-        neg[i] = pool[rng.integers(len(pool), size=n_candidates)]
++        neg[i] = pool[rng.integers(len(pool), size=n_neg)]
+     return neg
+ 
+ 
+ def run(splits, k=16, lr=0.001, l2=1e-6, epochs=40, bs=8192, patience=4,
+-        n_candidates=5, seed=0, device='cpu', verbose=True):
++        n_neg=5, tau=1.0, seed=0, device='cpu', verbose=True):
+     enc, dim = encode(splits)
+     Xtr, ytr, utr = enc['train']
+     Xva, yva, uva = enc['valid']
+@@ -83,8 +83,7 @@
+     if len(pos_idx) == 0:
+         raise RuntimeError('no within-user positive/negative pairs in train split')
+     if verbose:
+-        print(f"hard-BPR positives per epoch: {len(pos_idx):,d}; "
+-              f"negative candidates/positive={n_candidates}")
++        print(f"soft-hard BPR positives: {len(pos_idx):,d}; negatives/positive={n_neg}; tau={tau}")
+ 
+     model = TorchFM(dim, k=k, seed=seed).to(device)
+     opt = torch.optim.Adam([{'params': [model.V, model.W], 'weight_decay': l2},
+@@ -96,7 +95,7 @@
+     best, best_state, bad = -1.0, None, 0
+ 
+     for ep in range(1, epochs + 1):
+-        neg_idx = sample_negatives(neg_pools, rng, n_candidates)
++        neg_idx = sample_negatives(neg_pools, rng, n_neg)
+         order = rng.permutation(len(pos_idx))
+         t0 = time.time()
+         model.train()
+@@ -108,17 +107,20 @@
+             xp = Xtr_t[torch.from_numpy(psel_np)].to(device)
+             xn = Xtr_t[torch.from_numpy(nsel_np)].to(device)
+             opt.zero_grad(set_to_none=True)
+-            sp = model(xp)
+-            sn = model(xn).view(len(sel), n_candidates)
+-            hard_sn = sn.max(dim=1).values
+-            loss = torch.nn.functional.softplus(-(sp - hard_sn)).mean()
++            sp = model(xp).view(-1, 1)
++            sn = model(xn).view(len(sel), n_neg)
++            per_pair = torch.nn.functional.softplus(-(sp - sn))
++            # Detached weights: choose which negatives matter without rewarding
++            # the model for merely increasing a negative's score to get weight.
++            w = torch.softmax((sn / tau).detach(), dim=1)
++            loss = (per_pair * w).sum(dim=1).mean()
+             loss.backward()
+             opt.step()
+             losses.append(loss.item())
+ 
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  epoch {ep:2d} | hard_bpr {np.mean(losses):.4f} | valid "
++            print(f"  epoch {ep:2d} | soft_hard_bpr {np.mean(losses):.4f} | valid "
+                   f"GAUC {va['GAUC']:.4f} nDCG@5 {va['nDCG@5']:.4f} "
+                   f"primary {va['primary']:.4f} | {time.time() - t0:.1f}s")
+ 
+@@ -144,7 +146,8 @@
+     ap.add_argument('--k', type=int, default=16)
+     ap.add_argument('--lr', type=float, default=0.001)
+     ap.add_argument('--epochs', type=int, default=40)
+-    ap.add_argument('--n_candidates', type=int, default=5)
++    ap.add_argument('--n_neg', type=int, default=5)
++    ap.add_argument('--tau', type=float, default=1.0)
+     ap.add_argument('--seed', type=int, default=0)
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+@@ -160,8 +163,8 @@
+         target = a.split
+     print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs,
+-                     n_candidates=a.n_candidates, seed=a.seed, device=a.device,
++    model, enc = run(splits, k=a.k, lr=a.lr, epochs=a.epochs, n_neg=a.n_neg,
++                     tau=a.tau, seed=a.seed, device=a.device,
+                      verbose=a.out is None)
+     X, y, users = enc[target]
+     scores = model.predict(X, device=a.device)
+@@ -170,7 +173,7 @@
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")
+     else:
+-        print(f"\n=== hardneg_bpr_fm (seed={a.seed}, device={a.device}) ===")
++        print(f"\n=== soft_hard_bpr_fm (seed={a.seed}, device={a.device}) ===")
+         for sp in ('valid', 'test'):
+             if sp in enc:
+                 Xs, ys, us = enc[sp]
