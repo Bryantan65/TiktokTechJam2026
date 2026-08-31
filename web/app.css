@@ -170,6 +170,11 @@ select, input[type=text], input[type=number], input:not([type]) {
              pointer-events: none; }
 .node.cur text { fill: var(--fg); }
 .gridline { stroke: var(--line-soft); stroke-width: 1; }
+.axis { pointer-events: none; }
+/* Unranked: failed, no-op or dev-screened. It sits level with its parent
+   because it produced no ranking information, and is hollow so that position
+   cannot be misread as a result. */
+.node.unranked circle { stroke-width: 1.6; stroke-dasharray: 2.5 2; }
 .baseline { stroke: var(--worse); stroke-dasharray: 4 3; stroke-width: 1.2; }
 .axlabel { font-family: var(--mono); font-size: 9px; fill: var(--fg-faint); }
 .spark { fill: none; stroke-width: 1.8; }
@@ -315,3 +320,5 @@ pre.diff, pre.src {
   .panes { grid-template-columns: 1fr; }
   .form, .presets { grid-template-columns: 1fr; }
 }
+
+.k-hollow { background: transparent; box-shadow: inset 0 0 0 1.5px var(--fg-faint); }

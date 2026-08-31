@@ -91,48 +91,92 @@ async function selectRun(id) {
   draw();
 }
 
-function nodesUpTo(recs, cursor) {
-  return recs.filter(r => r.iteration <= cursor);
-}
-
 /* Lay the run out as the tree it actually is: every record carries a parent,
  * so a run is a search tree and not a list. Depth left to right, children
  * stacked vertically, parents centred on their children. */
-function layout(recs) {
+/* Lay the run out as a search trajectory.
+ *
+ * X is the iteration, so time runs left to right. Y is the node's RANK among
+ * every scored node in the run, best at the top - a branch that climbs found
+ * something and a branch that drops did not.
+ *
+ * Rank rather than the score itself, because the scores do not spread: in
+ * record-run-13, 26 of 32 nodes sit between 0.603 and 0.605 while one collapse
+ * sits at 0.5735. On a linear axis that outlier stretches the scale and jams
+ * the rest into a hairline band. Rank spends the canvas evenly and keeps the
+ * ordering, which is what the tree is for; the chart underneath still shows
+ * true magnitudes, so nothing is lost between the two.
+ *
+ * Ranks are computed over the WHOLE run, never over what is currently visible,
+ * so a node's position never changes as the replay plays.
+ */
+function layout(recs, dataset) {
   const byIter = new Map(recs.map(r => [r.iteration, r]));
   const kids = new Map();
-  const roots = [];
   recs.forEach(r => {
     const p = parseInt(r.parent, 10);
     if (Number.isFinite(p) && byIter.has(p) && p !== r.iteration) {
       if (!kids.has(p)) kids.set(p, []);
       kids.get(p).push(r.iteration);
-    } else roots.push(r.iteration);
-  });
-  const pos = new Map();
-  let slot = 0;
-  const seen = new Set();
-  function walk(it, depth) {
-    if (seen.has(it)) return 0;
-    seen.add(it);
-    const ch = (kids.get(it) || []).sort((a, b) => a - b);
-    let y;
-    if (!ch.length) { y = slot++; }
-    else {
-      const ys = ch.map(c => walk(c, depth + 1)).filter(v => v != null);
-      y = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : slot++;
     }
-    pos.set(it, { depth, y });
-    return y;
+  });
+
+  // A dev screen or a duplicate carries a number that is not comparable with a
+  // valid-split score, so it is not ranked - same rule bestSoFar() applies.
+  const rankable = r => r.valid_primary != null
+    && r.verdict !== 'screen' && r.verdict !== 'duplicate';
+  const scored = recs.filter(rankable).sort((a, b) =>
+    a.valid_primary - b.valid_primary || a.iteration - b.iteration);
+  const rank = new Map();
+  scored.forEach((r, i) => rank.set(r.iteration, i));   // 0 = worst
+  const nRanked = scored.length;
+
+  const iters = recs.map(r => r.iteration).sort((a, b) => a - b);
+  const ix = new Map(iters.map((it, i) => [it, i]));
+
+  const pos = new Map();
+  recs.forEach(r => {
+    let y;
+    if (rank.has(r.iteration)) {
+      y = nRanked > 1 ? rank.get(r.iteration) / (nRanked - 1) : 0.5;
+    } else {
+      // Failed, no-op, screened: nothing moved, so sit level with the parent.
+      // That is the honest position - the experiment produced no ranking
+      // information - and it makes a dead end read as a flat stub.
+      const p = parseInt(r.parent, 10);
+      const pr = rank.get(p);
+      y = pr != null && nRanked > 1 ? pr / (nRanked - 1) : 0.5;
+      pos.set(r.iteration, { ix: ix.get(r.iteration), y, unranked: true });
+      return;
+    }
+    pos.set(r.iteration, { ix: ix.get(r.iteration), y, unranked: false });
+  });
+
+  // Where the official FM baseline would sit on this same rank axis, so the
+  // vertical position means something absolute and not just "better than the
+  // other things this run happened to try".
+  let baselineY = null;
+  const base = BASELINE[dataset];
+  if (base != null && nRanked > 1) {
+    let below = 0;
+    scored.forEach(r => { if (r.valid_primary < base) below++; });
+    baselineY = (below - 0.5) / (nRanked - 1);
+    if (baselineY > 1 || baselineY < 0) baselineY = null;
   }
-  roots.sort((a, b) => a - b).forEach(r => walk(r, 0));
-  recs.forEach(r => { if (!pos.has(r.iteration)) walk(r.iteration, 0); });
-  return { pos, byIter, kids };
+
+  const best = scored.length ? scored[scored.length - 1] : null;
+  const worst = scored.length ? scored[0] : null;
+  return { pos, byIter, kids, nRanked, baselineY, best, worst,
+           nIters: iters.length };
 }
 
 function el(tag, attrs, parent) {
   const n = document.createElementNS(SVGNS, tag);
-  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  // Skip null/undefined: setAttribute would write the string "null" and quietly
+  // override the stylesheet with an invalid value.
+  for (const k in attrs) {
+    if (attrs[k] != null) n.setAttribute(k, attrs[k]);
+  }
   if (parent) parent.appendChild(n);
   return n;
 }
@@ -148,7 +192,9 @@ function el(tag, attrs, parent) {
  * Layout is still computed over the whole run, so a node's position never
  * depends on how much has been revealed and nothing shifts as it plays.
  */
-const TREE_GEOM = { COLW: 58, ROWH: 25, PADX: 26, PADY: 18 };
+// COLW is per ITERATION now, not per depth level, so the canvas is as wide as
+// the run is long and scrolls. PLOTH is the rank axis's height in px.
+const TREE_GEOM = { COLW: 34, PADX: 46, PADY: 22, PLOTH: 300 };
 
 function treeState(svg, key) {
   if (!svg._reg || svg._key !== key) {
@@ -208,20 +254,42 @@ function drawTree(svgSel, recs, cursor, opts) {
   opts = opts || {};
   const svg = $(svgSel);
   if (!recs.length) { svg.innerHTML = ''; svg._key = null; return; }
-  const { pos, byIter } = layout(recs);
-  const { COLW, ROWH, PADX, PADY } = TREE_GEOM;
-  let maxD = 0, maxY = 0;
-  pos.forEach(p => { maxD = Math.max(maxD, p.depth); maxY = Math.max(maxY, p.y); });
-  const W = PADX * 2 + maxD * COLW + 30;
-  const H = PADY * 2 + maxY * ROWH + 20;
+  const L = layout(recs, opts.dataset || 'pure');
+  const { pos, byIter } = L;
+  const { COLW, PADX, PADY, PLOTH } = TREE_GEOM;
+  // Enough vertical room that unique ranks do not collide at r=5, but capped so
+  // a long run does not turn the pane into a scroll shaft.
+  const plotH = Math.max(150, Math.min(PLOTH, L.nRanked * 14));
+  const W = PADX * 2 + Math.max(1, L.nIters - 1) * COLW + 20;
+  const H = PADY * 2 + plotH;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('height', H);
   svg.style.minWidth = W + 'px';
-  const X = it => PADX + pos.get(it).depth * COLW;
-  const Y = it => PADY + pos.get(it).y * ROWH;
+  const X = it => PADX + pos.get(it).ix * COLW;
+  const Y = it => PADY + (1 - pos.get(it).y) * plotH;
 
   const key = (opts.key || '') + '|' + recs.length;
   const reg = treeState(svg, key);
+  if (svg._fresh) {
+    const g = el('g', { class: 'axis' }, svg);
+    svg.insertBefore(g, svg._edgeLayer);
+    // Rank is ordinal, so label the two ends with real scores - without them
+    // "higher is better" has no scale a reader can calibrate against.
+    if (L.best) {
+      el('text', { x: 4, y: PADY + 4, class: 'axlabel' }, g)
+        .textContent = 'best ' + fmt(L.best.valid_primary, 4);
+    }
+    if (L.worst && L.worst !== L.best) {
+      el('text', { x: 4, y: PADY + plotH + 4, class: 'axlabel' }, g)
+        .textContent = fmt(L.worst.valid_primary, 4);
+    }
+    if (L.baselineY != null) {
+      const by = PADY + (1 - L.baselineY) * plotH;
+      el('line', { x1: PADX - 14, x2: W - 8, y1: by, y2: by, class: 'baseline' }, g);
+      el('text', { x: W - 8, y: by - 4, class: 'axlabel', 'text-anchor': 'end' }, g)
+        .textContent = 'FM baseline';
+    }
+  }
   const animate = !!opts.animate && !svg._fresh;
   const dur = opts.dur || 380;
   const edgeMs = Math.round(dur * 0.62);
@@ -259,12 +327,16 @@ function drawTree(svgSel, recs, cursor, opts) {
       if (isNew) animateEdge(path, edgeMs);
     }
 
-    const g = el('g', { class: 'node' }, svg._nodeLayer);
+    const unranked = pos.get(it).unranked;
+    const g = el('g', { class: 'node' + (unranked ? ' unranked' : '') },
+      svg._nodeLayer);
     const failed = r.status === 'error';
     const radius = failed ? 5.5 : 5;
     const colour = VERDICT_COLOR[r.verdict] || 'var(--noise)';
     const circle = el('circle', {
-      cx: X(it), cy: Y(it), r: radius, fill: colour
+      cx: X(it), cy: Y(it), r: radius,
+      fill: unranked ? 'var(--bg)' : colour,
+      stroke: unranked ? colour : null
     }, g);
     el('text', { x: X(it), y: Y(it) - 9, 'text-anchor': 'middle' }, g)
       .textContent = it;
@@ -523,6 +595,7 @@ function draw() {
   const tick = +$('#speed').value;
   drawTree('#tree', recs, state.cursor, {
     key: state.runId,
+    dataset: ds,
     animate: state.animate,
     dur: Math.max(160, Math.min(430, tick * 0.62)),
     onclick: i => { stopPlay(); setCursor(i, false); }
@@ -722,8 +795,10 @@ $('#btn-newrun').addEventListener('click', () => { showStep('step-settings'); lo
 function drawLive() {
   const recs = state.live.records;
   const head = Math.max(...recs.map(r => r.iteration), 0);
-  drawTree('#live-tree', recs, head,
-    { key: state.live.runId, animate: true, dur: 420 });
+  drawTree('#live-tree', recs, head, {
+    key: state.live.runId, dataset: state.live.dataset,
+    animate: true, dur: 420
+  });
   drawChart('#live-chart', recs, head, state.live.dataset, true);
   const last = recs[recs.length - 1];
   renderDetail('#live-detail', '#live-verdict', last,
