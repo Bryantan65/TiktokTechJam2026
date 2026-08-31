@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root {
+      --bg:#0c0f14; --panel:#131820; --panel-2:#171d27; --line:#232c3a;
+      --line-soft:#1b2331; --fg:#dfe6f0; --fg-dim:#8d9bb0; --fg-faint:#5d6b80;
+      --accent:#58b0ff; --kept:#3fcf8e; --noise:#6b7d97; --worse:#e0a341;
+      --failed:#ef5f6b; --noop:#a97bd8; --screen:#3d4a5c;
+      --mono: ui-monospace,"SF Mono","Cascadia Mono","JetBrains Mono",Consolas,monospace;
+    }
+    body { margin:0; background:var(--bg); color:var(--fg);
+           font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+           -webkit-font-smoothing:antialiased; }
+    a { color:var(--accent); } a:hover { color:#8ac8ff; }
+    .wrap { padding:22px 24px; display:flex; flex-direction:column; gap:20px;
+            box-sizing:border-box; }
+    .title { font-size:13px; font-weight:600; letter-spacing:-.01em; }
+    .sub { font-size:11.5px; color:var(--fg-dim); line-height:1.5;
+           text-wrap:pretty; max-width:74ch; }
+    .row { display:flex; align-items:center; gap:16px; }
+    .caption { font-family:var(--mono); font-size:10.5px; color:var(--fg-faint);
+               letter-spacing:.04em; width:84px; flex-shrink:0; }
+
+    .scrubwrap { position:relative; flex:1; }
+    /* one mark per iteration, coloured by its verdict: the failures are visible
+       before you drag onto them */
+    .verdicts { position:absolute; left:7px; right:7px; top:15px; height:5px;
+      display:flex; gap:1px; pointer-events:none; }
+    .verdicts i { flex:1; height:100%; border-radius:1px; opacity:.62; }
+
+    input[type=range] { -webkit-appearance:none; appearance:none; width:100%;
+      background:transparent; height:26px; margin:0; display:block;
+      cursor:pointer; }
+    input[type=range]::-webkit-slider-runnable-track { height:5px;
+      border-radius:3px; background:#1c2532;
+      box-shadow:inset 0 0 0 1px var(--line-soft); }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance:none;
+      width:15px; height:15px; margin-top:-5px; border-radius:50%;
+      background:var(--accent); border:2px solid var(--bg);
+      box-shadow:0 0 0 3px rgba(88,176,255,.16), 0 0 10px rgba(88,176,255,.45);
+      transition:box-shadow .18s ease,
+                 transform .18s cubic-bezier(.34,1.56,.64,1); }
+    input[type=range]:hover::-webkit-slider-thumb { transform:scale(1.18);
+      box-shadow:0 0 0 6px rgba(88,176,255,.2), 0 0 14px rgba(88,176,255,.6); }
+    input[type=range]:active::-webkit-slider-thumb { transform:scale(1.05);
+      box-shadow:0 0 0 8px rgba(88,176,255,.26), 0 0 16px rgba(88,176,255,.75); }
+    input[type=range]:focus { outline:none; }
+    input[type=range]:focus-visible::-webkit-slider-thumb {
+      box-shadow:0 0 0 4px rgba(88,176,255,.35), 0 0 12px rgba(88,176,255,.6); }
+    input[type=range]::-moz-range-track { height:5px; border-radius:3px;
+      background:#1c2532; box-shadow:inset 0 0 0 1px var(--line-soft); }
+    input[type=range]::-moz-range-thumb { width:13px; height:13px; border:2px solid var(--bg);
+      border-radius:50%; background:var(--accent); }
+
+    .scrub-label { font-family:var(--mono); font-size:12px; color:var(--fg-dim);
+      min-width:196px; text-align:right; }
+    .legend { display:flex; gap:14px; font-family:var(--mono); font-size:10.5px;
+      color:var(--fg-faint); flex-wrap:wrap; }
+    .legend span { display:flex; align-items:center; gap:5px; }
+    .legend i { width:9px; height:5px; border-radius:1px; display:inline-block; }
+    .before { opacity:.55; }
+    .before input[type=range] { accent-color:var(--accent); height:20px; }
+    .before input[type=range]::-webkit-slider-runnable-track { background:none;
+      box-shadow:none; height:auto; }
+    .before input[type=range]::-webkit-slider-thumb { -webkit-appearance:auto;
+      appearance:auto; width:auto; height:auto; background:none; border:none;
+      box-shadow:none; margin-top:0; }
+    .rule { height:1px; background:var(--line-soft); }
+  </style>
+</helmet>
+
+<div class="wrap">
+  <div>
+    <div class="title">The scrubber</div>
+    <div class="sub">The track carries one mark per iteration, coloured by its
+      verdict, so the run's shape &mdash; where it collapsed, where it started
+      keeping things, where it failed &mdash; is readable before you drag onto it.
+      The thumb picks up the same focus ring the rest of the console uses.</div>
+  </div>
+
+  <div class="row">
+    <div class="caption">now</div>
+    <div class="scrubwrap">
+      <div class="verdicts">
+        <i style="background:var(--noise)"></i><i style="background:var(--noise)"></i>
+        <i style="background:var(--noise)"></i><i style="background:var(--worse)"></i>
+        <i style="background:var(--worse)"></i><i style="background:var(--noise)"></i>
+        <i style="background:var(--noise)"></i><i style="background:var(--noise)"></i>
+        <i style="background:var(--noise)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--screen)"></i>
+        <i style="background:var(--screen)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--noise)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--failed)"></i><i style="background:var(--kept)"></i>
+      </div>
+      <input type="range" min="0" max="30" value="19">
+    </div>
+    <div class="scrub-label">iteration 19 / 30&nbsp;&nbsp; best 0.60464</div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--kept)"></i>kept</span>
+    <span><i style="background:var(--noise)"></i>noise</span>
+    <span><i style="background:var(--worse)"></i>worse</span>
+    <span><i style="background:var(--failed)"></i>failed</span>
+    <span><i style="background:var(--noop)"></i>no-op</span>
+    <span><i style="background:var(--screen)"></i>screen</span>
+  </div>
+
+  <div class="rule"></div>
+
+  <div class="row before">
+    <div class="caption">today</div>
+    <div class="scrubwrap">
+      <input type="range" min="0" max="30" value="19">
+    </div>
+    <div class="scrub-label">iteration 19 / 30&nbsp;&nbsp; best 0.60464</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

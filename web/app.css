@@ -128,21 +128,165 @@ select, input[type=text], input[type=number], input:not([type]) {
 }
 
 .scrub { display: flex; align-items: center; gap: 12px; padding: 0 18px 10px; }
-#scrubber { flex: 1; accent-color: var(--accent); }
+.scrubwrap { position: relative; flex: 1; }
+/* One mark per iteration, coloured by its verdict: the run's shape - where it
+   collapsed, where it started keeping things - is readable before you drag. */
+.verdicts {
+  position: absolute; left: 7px; right: 7px; top: 15px; height: 5px;
+  display: flex; gap: 1px; pointer-events: none;
+}
+.verdicts i { flex: 1; height: 100%; border-radius: 1px; opacity: .62; }
+#scrubber {
+  -webkit-appearance: none; appearance: none; width: 100%; display: block;
+  background: transparent; height: 26px; margin: 0; cursor: pointer;
+}
+#scrubber:disabled { cursor: default; opacity: .5; }
+#scrubber::-webkit-slider-runnable-track {
+  height: 5px; border-radius: 3px; background: #1c2532;
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+#scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 15px; height: 15px; margin-top: -5px;
+  border-radius: 50%; background: var(--accent); border: 2px solid var(--bg);
+  box-shadow: 0 0 0 3px rgba(88,176,255,.16), 0 0 10px rgba(88,176,255,.45);
+  transition: box-shadow .18s ease,
+              transform .18s cubic-bezier(.34,1.56,.64,1);
+}
+#scrubber:hover:not(:disabled)::-webkit-slider-thumb {
+  transform: scale(1.18);
+  box-shadow: 0 0 0 6px rgba(88,176,255,.2), 0 0 14px rgba(88,176,255,.6);
+}
+#scrubber:active:not(:disabled)::-webkit-slider-thumb {
+  transform: scale(1.05);
+  box-shadow: 0 0 0 8px rgba(88,176,255,.26), 0 0 16px rgba(88,176,255,.75);
+}
+#scrubber:focus { outline: none; }
+#scrubber:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgba(88,176,255,.35), 0 0 12px rgba(88,176,255,.6);
+}
+#scrubber::-moz-range-track {
+  height: 5px; border-radius: 3px; background: #1c2532;
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+#scrubber::-moz-range-thumb {
+  width: 13px; height: 13px; border: 2px solid var(--bg);
+  border-radius: 50%; background: var(--accent);
+}
 .scrub-label { font-family: var(--mono); font-size: 12px; color: var(--fg-dim);
                min-width: 210px; text-align: right; }
 
 /* ---------------------------------------------------------------- panes */
 .panes { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(0,1fr);
          gap: 12px; padding: 0 18px; flex: 1; min-height: 0; }
-.pane { background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
+.pane { position: relative;
+        background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
         display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+/* Content dissolves into the panel instead of hard-cutting at the border, so a
+   pane with more below it says so without a scrollbar having to be visible. */
+.pane::after {
+  content: ''; position: absolute; left: 1px; right: 1px; bottom: 1px;
+  height: 30px; pointer-events: none; border-radius: 0 0 8px 8px;
+  background: linear-gradient(to top, var(--panel) 15%, transparent);
+}
+.pane.nofade::after { display: none; }
 .pane-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: 8px 12px; border-bottom: 1px solid var(--line-soft);
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
   color: var(--fg-dim); flex-shrink: 0; background: var(--panel-2);
 }
+/* ------------------------------------------------------------ scrollbars */
+/* A hairline at rest that thickens and brightens as the pointer nears the pane,
+   then again on the rail itself. The inset comes from a transparent border with
+   background-clip: content-box - the only way to pad a webkit thumb.
+   Firefox gets scrollbar-width/-color only: a themed thin rail, no hover growth. */
+.runlist, .treewrap, .detail, .events, .console, .revblock pre,
+pre.diff, pre.src, #prompt, .toolgrid {
+  scrollbar-width: thin;
+  scrollbar-color: #3a475c transparent;
+}
+.runlist::-webkit-scrollbar, .treewrap::-webkit-scrollbar,
+.detail::-webkit-scrollbar, .events::-webkit-scrollbar,
+.console::-webkit-scrollbar, .revblock pre::-webkit-scrollbar,
+pre.diff::-webkit-scrollbar, pre.src::-webkit-scrollbar,
+#prompt::-webkit-scrollbar {
+  width: 12px; height: 12px;
+}
+.runlist::-webkit-scrollbar-track, .treewrap::-webkit-scrollbar-track,
+.detail::-webkit-scrollbar-track, .events::-webkit-scrollbar-track,
+.console::-webkit-scrollbar-track, .revblock pre::-webkit-scrollbar-track,
+pre.diff::-webkit-scrollbar-track, pre.src::-webkit-scrollbar-track,
+#prompt::-webkit-scrollbar-track {
+  background: transparent;
+}
+.treewrap::-webkit-scrollbar-corner, .revblock pre::-webkit-scrollbar-corner,
+pre.diff::-webkit-scrollbar-corner, pre.src::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.runlist::-webkit-scrollbar-thumb, .treewrap::-webkit-scrollbar-thumb,
+.detail::-webkit-scrollbar-thumb, .events::-webkit-scrollbar-thumb,
+.console::-webkit-scrollbar-thumb, .revblock pre::-webkit-scrollbar-thumb,
+pre.diff::-webkit-scrollbar-thumb, pre.src::-webkit-scrollbar-thumb,
+#prompt::-webkit-scrollbar-thumb {
+  background-color: #33405480; background-clip: content-box;
+  border: 4.5px solid transparent; border-radius: 999px;
+  transition: background-color .18s ease;
+}
+.pane:hover .events::-webkit-scrollbar-thumb,
+.pane:hover .detail::-webkit-scrollbar-thumb,
+.pane:hover .console::-webkit-scrollbar-thumb,
+.pane:hover .treewrap::-webkit-scrollbar-thumb,
+.runlist:hover::-webkit-scrollbar-thumb,
+.revblock:hover pre::-webkit-scrollbar-thumb,
+#prompt:hover::-webkit-scrollbar-thumb {
+  background-color: #4a5b74; border-width: 3.5px;
+}
+.runlist::-webkit-scrollbar-thumb:hover, .treewrap::-webkit-scrollbar-thumb:hover,
+.detail::-webkit-scrollbar-thumb:hover, .events::-webkit-scrollbar-thumb:hover,
+.console::-webkit-scrollbar-thumb:hover,
+.revblock pre::-webkit-scrollbar-thumb:hover,
+pre.diff::-webkit-scrollbar-thumb:hover, pre.src::-webkit-scrollbar-thumb:hover,
+#prompt::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent); border-width: 3px;
+}
+.runlist::-webkit-scrollbar-thumb:active, .treewrap::-webkit-scrollbar-thumb:active,
+.detail::-webkit-scrollbar-thumb:active, .events::-webkit-scrollbar-thumb:active,
+.console::-webkit-scrollbar-thumb:active,
+#prompt::-webkit-scrollbar-thumb:active {
+  background-color: #8ac8ff;
+}
+/* the page scroll on the Agent and Launch screens */
+html { scrollbar-width: thin; scrollbar-color: #3a475c transparent; }
+body::-webkit-scrollbar { width: 13px; }
+body::-webkit-scrollbar-track { background: var(--bg); }
+body::-webkit-scrollbar-thumb {
+  background-color: #33405480; background-clip: content-box;
+  border: 4.5px solid transparent; border-radius: 999px;
+  transition: background-color .18s ease;
+}
+body::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
+
+/* ---- signal rail: the track as a map of the run ------------------------- */
+/* Only on the two data-bearing scrollers. A tick sits at the row's position in
+   the list, so a crash below the fold is visible before you scroll to it. */
+.signal { position: relative; flex: 1; min-height: 0; display: flex; }
+.signal > .events, .signal > .console { width: 100%; }
+.ticks {
+  position: absolute; right: 13px; top: 6px; bottom: 6px; width: 3px;
+  pointer-events: none; z-index: 2;
+}
+.ticks:empty { display: none; }
+.ticks::before {
+  content: ''; position: absolute; inset: 0;
+  background: var(--line-soft); border-radius: 2px;
+}
+.tick {
+  position: absolute; left: -1px; right: -1px; height: 3px; border-radius: 2px;
+  animation: tickin .3s ease;
+}
+@keyframes tickin { from { opacity: 0; transform: scaleX(.2); }
+                    to { opacity: 1; transform: none; } }
+
 .treewrap { flex: 1; min-height: 150px; overflow: auto; }
 .chartwrap { height: 118px; flex-shrink: 0; }
 #tree, #live-tree, #chart, #live-chart { display: block; width: 100%; }
@@ -217,6 +361,8 @@ pre.diff, pre.src {
            color: var(--fg-dim); flex-wrap: wrap; }
 
 /* events */
+.railhint { text-transform: none; letter-spacing: 0; color: var(--fg-faint);
+            font-size: 10.5px; }
 .eventpane { margin: 12px 18px 16px; max-height: 168px; }
 .events { overflow-y: auto; padding: 6px 0; }
 .ev { display: grid; grid-template-columns: 62px 132px 1fr; gap: 10px;

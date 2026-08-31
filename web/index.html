@@ -58,7 +58,10 @@
     </div>
 
     <div class="scrub">
-      <input type="range" id="scrubber" min="0" max="0" value="0" disabled>
+      <div class="scrubwrap">
+        <div class="verdicts" id="verdicts"></div>
+        <input type="range" id="scrubber" min="0" max="0" value="0" disabled>
+      </div>
       <div class="scrub-label" id="scrub-label">&mdash;</div>
     </div>
 
@@ -91,8 +94,12 @@
     </div>
 
     <div class="pane eventpane">
-      <div class="pane-head"><span>Run log &mdash; events.jsonl</span></div>
-      <div class="events" id="events"></div>
+      <div class="pane-head"><span>Run log &mdash; events.jsonl</span>
+        <span class="railhint">failures and recoveries are marked on the rail</span></div>
+      <div class="signal">
+        <div class="ticks" id="event-ticks"></div>
+        <div class="events" id="events"></div>
+      </div>
     </div>
   </section>
 </main>
@@ -239,11 +246,14 @@
       </div>
     </div>
 
-    <div class="pane consolepane">
+    <div class="pane consolepane nofade">
       <div class="pane-head"><span>stdout</span>
         <label class="follow"><input type="checkbox" id="follow" checked> follow</label>
       </div>
-      <pre class="console" id="console"></pre>
+      <div class="signal">
+        <div class="ticks" id="console-ticks"></div>
+        <pre class="console" id="console"></pre>
+      </div>
     </div>
   </section>
 </main>

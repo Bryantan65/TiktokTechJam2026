@@ -1,0 +1,66 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1120,
+      "h": 620
+    },
+    {
+      "file": "HairlineRail.dc.html",
+      "x": 0,
+      "y": 760,
+      "w": 520,
+      "h": 440
+    },
+    {
+      "file": "RecessedGutter.dc.html",
+      "x": 600,
+      "y": 760,
+      "w": 520,
+      "h": 440
+    },
+    {
+      "file": "SignalRail.dc.html",
+      "x": 1200,
+      "y": 760,
+      "w": 520,
+      "h": 440
+    },
+    {
+      "file": "Scrubber.dc.html",
+      "x": 0,
+      "y": 1320,
+      "w": 940,
+      "h": 300
+    }
+  ],
+  "annotations": [
+    {
+      "id": "the-ask",
+      "x": 1200,
+      "y": -170,
+      "w": 420,
+      "text": "Scroll surfaces in the console: runlist, tree (both axes), detail, events, diffs, review panes, console, prompt textarea.\n\nAll eight get one treatment. Pick a rail below, then the Signal ticks are an add-on for the two data-bearing ones."
+    },
+    {
+      "id": "scroll-them",
+      "x": 1780,
+      "y": 760,
+      "w": 300,
+      "text": "These three scroll for real \u2014 wheel them, then hover the rail itself. The difference is in the hover, not the still frame."
+    },
+    {
+      "id": "firefox",
+      "x": 1780,
+      "y": 980,
+      "w": 300,
+      "text": "Firefox only supports scrollbar-width + scrollbar-color, so it gets a thin themed rail but no hover growth. Chrome/Edge/Safari get all of it. Option C's ticks are real elements, so they work everywhere."
+    }
+  ],
+  "launch": {
+    "view": "focused",
+    "file": "SignalRail.dc.html"
+  }
+}

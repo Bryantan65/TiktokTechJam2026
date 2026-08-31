@@ -1,0 +1,204 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root {
+      --bg:#0c0f14; --panel:#131820; --panel-2:#171d27; --line:#232c3a;
+      --line-soft:#1b2331; --fg:#dfe6f0; --fg-dim:#8d9bb0; --fg-faint:#5d6b80;
+      --accent:#58b0ff; --kept:#3fcf8e; --worse:#e0a341; --failed:#ef5f6b;
+      --noop:#a97bd8;
+      --mono: ui-monospace,"SF Mono","Cascadia Mono","JetBrains Mono",Consolas,monospace;
+    }
+    body { margin:0; background:var(--bg); color:var(--fg);
+           font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+           -webkit-font-smoothing:antialiased; }
+    a { color: var(--accent); } a:hover { color:#8ac8ff; }
+
+    /* ---- the recommended rail: a hairline that thickens when you approach ---- */
+    .rail { scrollbar-width: thin; scrollbar-color: #3a475c transparent; }
+    .rail::-webkit-scrollbar { width:12px; height:12px; }
+    .rail::-webkit-scrollbar-track { background:transparent; }
+    .rail::-webkit-scrollbar-corner { background:transparent; }
+    .rail::-webkit-scrollbar-thumb {
+      background-color:#33405480; background-clip:content-box;
+      border:4.5px solid transparent; border-radius:999px;
+      transition:background-color .18s ease;
+    }
+    .pane:hover .rail::-webkit-scrollbar-thumb {
+      background-color:#4a5b74; border-width:3.5px;
+    }
+    .rail::-webkit-scrollbar-thumb:hover {
+      background-color:var(--accent); border-width:3px;
+    }
+    .rail::-webkit-scrollbar-thumb:active { background-color:#8ac8ff; }
+
+    .pane { position:relative; background:var(--panel);
+            border:1px solid var(--line); border-radius:9px;
+            display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+    /* content dissolves into the panel instead of hard-cutting at the edge */
+    .pane::after { content:''; position:absolute; left:1px; right:1px; bottom:1px;
+      height:30px; pointer-events:none; border-radius:0 0 8px 8px;
+      background:linear-gradient(to top, var(--panel) 15%, transparent); }
+    .pane-head { display:flex; justify-content:space-between; align-items:center;
+      padding:8px 12px; border-bottom:1px solid var(--line-soft);
+      font-size:11px; text-transform:uppercase; letter-spacing:.07em;
+      color:var(--fg-dim); flex-shrink:0; background:var(--panel-2); }
+
+    .events { overflow-y:auto; padding:6px 0; flex:1; }
+    .ev { display:grid; grid-template-columns:62px 132px 1fr; gap:10px;
+      padding:3px 12px; font-family:var(--mono); font-size:11.5px;
+      border-left:2px solid transparent; }
+    .ev .t { color:var(--fg-faint); }
+    .ev .k { font-weight:600; }
+    .ev .d { color:var(--fg-dim); overflow:hidden; text-overflow:ellipsis;
+             white-space:nowrap; }
+    .ev.err { border-left-color:var(--failed); } .ev.err .k { color:var(--failed); }
+    .ev.rec { border-left-color:var(--kept); } .ev.rec .k { color:var(--kept); }
+    .ev.conv { border-left-color:var(--accent); } .ev.conv .k { color:var(--accent); }
+    .ev.ws .k { color:var(--noop); }
+    .ev.run .k { color:var(--fg-dim); }
+
+    /* the track doubles as a map of where the failures are */
+    .signal { position:relative; flex:1; min-height:0; display:flex; }
+    .ticks { position:absolute; right:13px; top:6px; bottom:6px; width:3px;
+             pointer-events:none; z-index:2; }
+    .tick { position:absolute; left:0; right:0; height:3px; border-radius:2px; }
+
+    .console { margin:0; padding:9px 12px; overflow-y:auto; flex:1;
+      font-family:var(--mono); font-size:11.5px; line-height:1.55;
+      color:var(--fg-dim); white-space:pre-wrap; word-break:break-word; }
+    .console .ok { color:var(--kept); } .console .bad { color:var(--failed); }
+    .console .dim { color:var(--fg-faint); }
+
+    /* ---- scrubber: the track carries the run's verdicts ---- */
+    .scrub { display:flex; align-items:center; gap:14px; padding:2px 2px 0; }
+    .scrubwrap { position:relative; flex:1; }
+    .verdicts { position:absolute; left:7px; right:7px; top:15px; height:5px;
+      display:flex; gap:1px; pointer-events:none; }
+    .verdicts i { flex:1; border-radius:1px; height:100%; opacity:.62; }
+    input[type=range] { -webkit-appearance:none; appearance:none; width:100%;
+      background:transparent; height:26px; margin:0; display:block; cursor:pointer; }
+    input[type=range]::-webkit-slider-runnable-track {
+      height:5px; border-radius:3px; background:#1c2532;
+      box-shadow:inset 0 0 0 1px var(--line-soft); }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance:none;
+      width:15px; height:15px; margin-top:-5px; border-radius:50%;
+      background:var(--accent); border:2px solid var(--bg);
+      box-shadow:0 0 0 3px rgba(88,176,255,.16), 0 0 10px rgba(88,176,255,.45);
+      transition:box-shadow .18s ease, transform .18s cubic-bezier(.34,1.56,.64,1); }
+    input[type=range]:hover::-webkit-slider-thumb { transform:scale(1.18);
+      box-shadow:0 0 0 6px rgba(88,176,255,.2), 0 0 14px rgba(88,176,255,.6); }
+    input[type=range]:active::-webkit-slider-thumb { transform:scale(1.05);
+      box-shadow:0 0 0 8px rgba(88,176,255,.26), 0 0 16px rgba(88,176,255,.75); }
+    .scrub-label { font-family:var(--mono); font-size:12px; color:var(--fg-dim);
+      min-width:200px; text-align:right; }
+    .cap { font-family:var(--mono); font-size:10.5px; color:var(--fg-faint);
+      letter-spacing:.04em; }
+  </style>
+</helmet>
+
+<div style="padding:20px; display:flex; flex-direction:column; gap:14px; height:580px; box-sizing:border-box;">
+
+  <div style="display:flex; justify-content:space-between; align-items:baseline;">
+    <div style="font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-dim); font-weight:600;">Recommended treatment &mdash; in context</div>
+    <div class="cap">hover a pane &middot; then hover the rail itself</div>
+  </div>
+
+  <div class="scrub">
+    <div class="scrubwrap">
+      <div class="verdicts">
+        <i style="background:var(--noise,#6b7d97)"></i><i style="background:#6b7d97"></i>
+        <i style="background:#6b7d97"></i><i style="background:var(--worse)"></i>
+        <i style="background:var(--worse)"></i><i style="background:#6b7d97"></i>
+        <i style="background:#6b7d97"></i><i style="background:#6b7d97"></i>
+        <i style="background:#6b7d97"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--screen,#3d4a5c)"></i>
+        <i style="background:#3d4a5c"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:#6b7d97"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--kept)"></i><i style="background:var(--kept)"></i>
+        <i style="background:var(--failed)"></i><i style="background:var(--kept)"></i>
+      </div>
+      <input type="range" min="0" max="30" value="19">
+    </div>
+    <div class="scrub-label">iteration 19 / 30&nbsp;&nbsp; best 0.60464</div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:14px; flex:1; min-height:0;">
+
+    <div class="pane">
+      <div class="pane-head"><span>Run log &mdash; events.jsonl</span><span style="text-transform:none; letter-spacing:0;">28 events</span></div>
+      <div class="signal">
+        <div class="ticks">
+          <div class="tick" style="top:11%; background:var(--noop)"></div>
+          <div class="tick" style="top:29%; background:var(--failed)"></div>
+          <div class="tick" style="top:33%; background:var(--kept)"></div>
+          <div class="tick" style="top:58%; background:var(--noop)"></div>
+          <div class="tick" style="top:71%; background:var(--failed)"></div>
+          <div class="tick" style="top:75%; background:var(--kept)"></div>
+          <div class="tick" style="top:93%; background:var(--accent)"></div>
+        </div>
+        <div class="events rail" style="width:100%;">
+          <div class="ev run"><span class="t">17:39:09</span><span class="k">run_start</span><span class="d">agent loop started</span></div>
+          <div class="ev ws"><span class="t">17:39:25</span><span class="k">web_search</span><span class="d">BPR Bayesian Personalized Ranking pairwise loss original paper</span></div>
+          <div class="ev run"><span class="t">17:41:02</span><span class="k">iteration</span><span class="d">2 &mdash; draft loss: same-user BPR pairs</span></div>
+          <div class="ev run"><span class="t">17:43:44</span><span class="k">iteration</span><span class="d">3 &mdash; improve 2: add BCE auxiliary term</span></div>
+          <div class="ev err"><span class="t">17:46:30</span><span class="k">solution_error</span><span class="d">exited 1 (seed 0)</span></div>
+          <div class="ev rec"><span class="t">17:48:11</span><span class="k">solution_recovered</span><span class="d">iteration 13 scored 0.603619 after its parent 12 failed</span></div>
+          <div class="ev run"><span class="t">17:50:07</span><span class="k">iteration</span><span class="d">5 &mdash; debug 4: delay hard-negative mining</span></div>
+          <div class="ev ws"><span class="t">17:52:19</span><span class="k">web_search</span><span class="d">weighted BPR implicit feedback watch time dwell time pair weights</span></div>
+          <div class="ev run"><span class="t">17:54:33</span><span class="k">iteration</span><span class="d">7 &mdash; improve 6: per-user z-scored fusion</span></div>
+          <div class="ev run"><span class="t">17:56:48</span><span class="k">iteration</span><span class="d">8 &mdash; improve 7: rank-percentile blend</span></div>
+          <div class="ev run"><span class="t">17:58:02</span><span class="k">iteration</span><span class="d">10 &mdash; seed bagging across 0/1/2</span></div>
+          <div class="ev err"><span class="t">18:01:55</span><span class="k">solution_error</span><span class="d">timeout after 900s (seed 0)</span></div>
+          <div class="ev rec"><span class="t">18:03:40</span><span class="k">solution_recovered</span><span class="d">iteration 16 scored 0.603544 after its parent 15 failed</span></div>
+          <div class="ev run"><span class="t">18:09:12</span><span class="k">iteration</span><span class="d">24 &mdash; improve 16: time-aware blend at 40%</span></div>
+          <div class="ev run"><span class="t">18:22:31</span><span class="k">iteration</span><span class="d">28 &mdash; improve 25: hourly buckets</span></div>
+          <div class="ev conv"><span class="t">18:31:18</span><span class="k">converged</span><span class="d">best improved by -0.000131 across the last 3 scored experiments; epsilon is 0.002</span></div>
+          <div class="ev run"><span class="t">18:31:18</span><span class="k">run_end</span><span class="d">converged</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane-head"><span>stdout</span><span style="text-transform:none; letter-spacing:0;">follow</span></div>
+      <pre class="console rail">=== Run folder: logs/record-run-16-uct/ ===
+=== Dataset: pure (baseline 0.6015) ===
+=== Agent loop started (supervised=False, max_iter=100) ===
+
+--- Iteration 5 ---
+    thinking done (6s)
+    [web_search] weighted BPR implicit feedback watch time
+    thinking done (4s)
+    write_solution 006_watch_weighted_bpr3_fm.py
+    run_experiment 006_watch_weighted_bpr3_fm.py done (80s)
+<span class="bad">  [no-op] identical predictions as iteration 3</span>
+<span class="dim">  [146s elapsed] tokens: 114,844in (83% cached)/6,006out ($0.156)</span>
+
+--- Iteration 6 ---
+    thinking done (5s)
+    write_solution 007_listwise_softmax.py
+    run_experiment 007_listwise_softmax.py done (77s)
+<span class="ok">  GAUC 0.670355 | nDCG@5 0.536762 | primary 0.603559</span>
+<span class="dim">  Best so far: valid primary 0.604826</span>
+
+--- Iteration 7 ---
+    thinking done (3s)
+    run_experiment 008_time_residual.py [412s]</pre>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

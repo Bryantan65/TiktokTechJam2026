@@ -14,6 +14,17 @@ const VERDICT_COLOR = {
   duplicate: 'var(--screen)'
 };
 
+/* Only events worth interrupting a scroll for. web_search is deliberately out:
+   one run logs 171 of them and the rail would be a solid purple line. */
+const TICK_KIND = {
+  solution_error: 'var(--failed)',
+  crash: 'var(--failed)',
+  solution_recovered: 'var(--kept)',
+  converged: 'var(--accent)',
+  budget_stop: 'var(--worse)',
+  interrupted: 'var(--worse)'
+};
+
 const state = {
   runs: [], run: null, runId: null, cursor: 0, timer: null, animate: false,
   live: { records: [], events: [], runId: null, dataset: 'pure', done: false }
@@ -88,12 +99,10 @@ async function selectRun(id) {
   const sc = $('#scrubber');
   sc.max = n; sc.value = 0; sc.disabled = false;
   ['#btn-play', '#btn-step', '#btn-reset'].forEach(b => $(b).disabled = false);
+  renderVerdicts(data.iterations);
   draw();
 }
 
-/* Lay the run out as the tree it actually is: every record carries a parent,
- * so a run is a search tree and not a list. Depth left to right, children
- * stacked vertically, parents centred on their children. */
 /* Lay the run out as a search trajectory.
  *
  * X is the iteration, so time runs left to right. Y is the node's RANK among
@@ -583,6 +592,37 @@ function renderEvents(sel, events, upto, cutoffTs) {
   ).join('');
   box._count = shown.length;
   box.scrollTop = box.scrollHeight;
+  renderTicks('#event-ticks', shown.map(e => TICK_KIND[e.kind] || null));
+}
+
+/* Place a mark per notable row at its position down the list. Rows are a fixed
+   height, so index/count is the row's scroll position - no measuring needed. */
+function renderTicks(sel, colours) {
+  const box = $(sel);
+  if (!box) return;
+  const n = colours.length;
+  if (!n) { box.innerHTML = ''; return; }
+  const want = colours
+    .map((c, i) => (c ? { c, top: ((i + 0.5) / n) * 100 } : null))
+    .filter(Boolean);
+  // Rebuild only when the set changed, so the tick-in animation does not
+  // replay on every unrelated redraw.
+  const key = want.map(t => t.c + '@' + t.top.toFixed(2)).join('|');
+  if (box._key === key) return;
+  box._key = key;
+  box.innerHTML = want.map(t =>
+    `<div class="tick" style="top:${t.top.toFixed(2)}%; background:${t.c}"></div>`
+  ).join('');
+}
+
+/* One mark per iteration on the scrubber track, coloured by verdict. */
+function renderVerdicts(recs) {
+  const box = $('#verdicts');
+  if (!box) return;
+  box.innerHTML = recs.map(r =>
+    `<i style="background:${VERDICT_COLOR[r.verdict] || 'var(--noise)'}"
+        title="#${r.iteration} ${esc(r.verdict || '')}"></i>`
+  ).join('');
 }
 
 function draw() {
@@ -774,7 +814,10 @@ $('#btn-confirm').addEventListener('click', async () => {
     $('#btn-confirm').disabled = false;
     return;
   }
-  state.live = { records: [], events: [], runId: r.run_id, dataset: o.dataset, done: false };
+  state.live = { records: [], events: [], runId: r.run_id, dataset: o.dataset,
+                 done: false, lines: 0, ticks: [] };
+  $('#console-ticks').innerHTML = '';
+  $('#console-ticks')._key = null;
   $('#live-title').textContent = 'Running ' + r.run_id;
   $('#live-meta').textContent = r.cmd;
   $('#console').textContent = '';
@@ -791,6 +834,19 @@ $('#btn-stop').addEventListener('click', async () => {
   await fetch('/api/stop', { method: 'POST' });
 });
 $('#btn-newrun').addEventListener('click', () => { showStep('step-settings'); loadRuns(); });
+
+function drawConsoleTicks() {
+  const box = $('#console-ticks');
+  const n = state.live.lines || 0;
+  const ticks = state.live.ticks || [];
+  if (!box || !n || !ticks.length) return;
+  const key = ticks.map(t => t.colour + '@' + t.line).join('|') + '/' + n;
+  if (box._key === key) return;
+  box._key = key;
+  box.innerHTML = ticks.map(t =>
+    `<div class="tick" style="top:${((t.line - 0.5) / n * 100).toFixed(2)}%;
+      background:${t.colour}"></div>`).join('');
+}
 
 function drawLive() {
   const recs = state.live.records;
@@ -813,6 +869,7 @@ function connectStream() {
     if (m.type === 'stdout') {
       const c = $('#console');
       c.textContent += m.line + '\n';
+      state.live.lines = (state.live.lines || 0) + 1;
       if ($('#follow').checked) c.scrollTop = c.scrollHeight;
     } else if (m.type === 'iteration') {
       const recs = state.live.records;
@@ -824,6 +881,15 @@ function connectStream() {
       state.live.events.push(m.event);
       const c = $('#console');
       c.textContent += `  << ${m.event.kind}: ${String(m.event.detail).slice(0, 160)}\n`;
+      state.live.lines = (state.live.lines || 0) + 1;
+      // The event's own line index is known exactly here, so the console rail
+      // needs no pattern-matching over stdout to find the failures.
+      const colour = TICK_KIND[m.event.kind];
+      if (colour) {
+        state.live.ticks = state.live.ticks || [];
+        state.live.ticks.push({ line: state.live.lines, colour: colour });
+      }
+      drawConsoleTicks();
       if ($('#follow').checked) c.scrollTop = c.scrollHeight;
       drawLive();
     } else if (m.type === 'exit') {
