@@ -12,6 +12,14 @@ checkpoints/
 # Prediction cache — per-member predictions saved by ensemble solutions
 pred_cache/
 
+# Prediction arrays belong in pred_cache/. A solution run by hand with
+# --out _029.npy drops an 80MB byproduct in the repo root instead.
+*.npy
+
+# 1k test is 4.1M rows -> 118MB, over GitHub's 100MB per-file limit.
+# Regenerate with harness/make_submission.py; see docs/results.md.
+submission_1k.csv
+
 # Python
 __pycache__/
 *.py[cod]
@@ -21,6 +29,7 @@ venv/
 
 # Secrets
 .env
+.env.bak*
 
 # Local
 firebase-debug.log

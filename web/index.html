@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent console</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <span>agent console</span>
+    <span class="sub">TechJam 2026 &middot; Track 2</span>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-screen="replay">Runs</button>
+    <button class="tab" data-screen="agent">Agent</button>
+    <button class="tab" data-screen="launch">Launch</button>
+  </nav>
+  <div class="livepill" id="livepill" hidden>
+    <span class="pulse"></span><span id="livepill-text">running</span>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<!-- REPLAY                                                               -->
+<!-- ==================================================================== -->
+<main class="screen active" id="screen-replay">
+  <aside class="runlist">
+    <div class="runlist-head">
+      <h2>Recorded runs</h2>
+      <div class="filters">
+        <label><input type="checkbox" id="filter-real" checked> substantive only</label>
+      </div>
+    </div>
+    <div id="runs"></div>
+  </aside>
+
+  <section class="stage">
+    <div class="stage-head">
+      <div>
+        <h1 id="run-title">Pick a run</h1>
+        <div class="meta" id="run-meta"></div>
+      </div>
+      <div class="transport">
+        <button id="btn-play" class="primary" disabled>Play</button>
+        <button id="btn-step" disabled>Step</button>
+        <button id="btn-reset" disabled>Reset</button>
+        <select id="speed">
+          <option value="900">1&times;</option>
+          <option value="450" selected>2&times;</option>
+          <option value="180">5&times;</option>
+          <option value="60">15&times;</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="scrub">
+      <input type="range" id="scrubber" min="0" max="0" value="0" disabled>
+      <div class="scrub-label" id="scrub-label">&mdash;</div>
+    </div>
+
+    <div class="panes">
+      <div class="pane treepane">
+        <div class="pane-head">
+          <span>Search tree</span>
+          <span class="legend">
+            <i class="k-KEPT"></i>kept
+            <i class="k-noise"></i>noise
+            <i class="k-worse"></i>worse
+            <i class="k-failed"></i>failed
+            <i class="k-noop"></i>no-op
+            <i class="k-screen"></i>screen
+          </span>
+        </div>
+        <div class="treewrap"><svg id="tree"></svg></div>
+        <div class="pane-head"><span>Validation primary</span></div>
+        <div class="chartwrap"><svg id="chart"></svg></div>
+      </div>
+
+      <div class="pane detailpane">
+        <div class="pane-head"><span id="detail-title">Iteration</span>
+          <span id="detail-verdict" class="verdict"></span></div>
+        <div class="detail" id="detail">
+          <p class="empty">Press Play, or click any node in the tree.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane eventpane">
+      <div class="pane-head"><span>Run log &mdash; events.jsonl</span></div>
+      <div class="events" id="events"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ==================================================================== -->
+<!-- AGENT / PROMPT EDITOR                                                -->
+<!-- ==================================================================== -->
+<main class="screen" id="screen-agent">
+  <section class="editorwrap">
+    <div class="editor-head">
+      <div>
+        <h1>The agent's system prompt</h1>
+        <p class="lede">This is the real string
+          <code>agent/prompt.py</code> hands the model every turn. Edits are
+          saved to <code>agent/prompt_override.txt</code> &mdash; never to the
+          Python file &mdash; so a bad edit can't break the agent, and deleting
+          the override restores the shipped prompt exactly.</p>
+      </div>
+      <div class="promptstat" id="promptstat"></div>
+    </div>
+
+    <div class="editor-bar">
+      <button id="btn-save-prompt" class="primary">Save</button>
+      <button id="btn-reset-prompt">Revert to shipped</button>
+      <span class="hint">Placeholders <code>{ds_name}</code>
+        <code>{baseline}</code> <code>{target}</code> <code>{suffix}</code>
+        <code>{data_rel}</code> are filled per dataset. Any other literal brace
+        must be doubled.</span>
+      <span id="prompt-msg" class="msg"></span>
+    </div>
+
+    <textarea id="prompt" spellcheck="false"></textarea>
+  </section>
+</main>
+
+<!-- ==================================================================== -->
+<!-- LAUNCH: settings -> review -> confirm -> live                        -->
+<!-- ==================================================================== -->
+<main class="screen" id="screen-launch">
+
+  <!-- step 1: settings -->
+  <section class="step active" id="step-settings">
+    <h1>Configure a run</h1>
+    <p class="lede">These map one-to-one onto the environment variables and CLI
+      flags the agent already reads. Nothing here is a console-only setting.</p>
+
+    <div class="presets">
+      <button class="preset" data-preset="demo">
+        <strong>Demo</strong><span>3 iterations &middot; ~5 min &middot; ~$0.40</span>
+      </button>
+      <button class="preset" data-preset="short">
+        <strong>Short</strong><span>10 iterations &middot; ~20 min &middot; ~$1.50</span>
+      </button>
+      <button class="preset" data-preset="full">
+        <strong>Full record run</strong><span>to convergence &middot; ~1 h &middot; ~$4.50</span>
+      </button>
+    </div>
+
+    <div class="form">
+      <label>Dataset
+        <select id="opt-dataset">
+          <option value="pure">KuaiRand-Pure &mdash; the required benchmark</option>
+          <option value="1k">KuaiRand-1k &mdash; bonus</option>
+        </select>
+      </label>
+      <label>Model <input id="opt-model" placeholder="gpt-5.5"></label>
+      <label>Max iterations <input id="opt-max-iter" type="number" min="1" max="200" value="3"></label>
+      <label>Max experiments <input id="opt-max-experiments" type="number" min="1" value="50"></label>
+      <label>Wall-clock ceiling (hours) <input id="opt-max-wall" type="number" min="0.1" step="0.1" value="6"></label>
+      <label>Cost ceiling (USD, 0 = off) <input id="opt-max-cost" type="number" min="0" step="0.5" value="0"></label>
+      <label>Run folder name <input id="opt-run-name" value="web-run"></label>
+    </div>
+
+    <div class="actions">
+      <button id="btn-review" class="primary big">Review before running &rarr;</button>
+    </div>
+  </section>
+
+  <!-- step 2: preflight -->
+  <section class="step" id="step-review">
+    <div class="review-head">
+      <div>
+        <h1>Review before running</h1>
+        <p class="lede">Everything below is assembled by the agent's own
+          <code>system_prompt()</code> and <code>build_user_message()</code>.
+          It is what the model receives on turn one &mdash; not a summary of it.</p>
+      </div>
+      <button id="btn-back" class="ghost">&larr; Change settings</button>
+    </div>
+
+    <div class="factgrid" id="review-facts"></div>
+
+    <div class="warnbox" id="review-warn" hidden></div>
+
+    <details class="revblock" open>
+      <summary>System prompt <span id="rev-sys-meta"></span></summary>
+      <pre id="rev-system"></pre>
+    </details>
+
+    <details class="revblock">
+      <summary>First user message <span id="rev-user-meta"></span></summary>
+      <pre id="rev-user"></pre>
+    </details>
+
+    <details class="revblock">
+      <summary>Tools the agent may call <span id="rev-tools-meta"></span></summary>
+      <div id="rev-tools" class="toolgrid"></div>
+    </details>
+
+    <div class="confirmbar">
+      <label class="ack"><input type="checkbox" id="ack">
+        I have read the prompt and settings above.</label>
+      <button id="btn-confirm" class="primary big" disabled>Confirm and run</button>
+    </div>
+    <p class="finehint" id="confirm-hint"></p>
+  </section>
+
+  <!-- step 3: live -->
+  <section class="step" id="step-live">
+    <div class="live-head">
+      <div>
+        <h1 id="live-title">Running</h1>
+        <div class="meta" id="live-meta"></div>
+      </div>
+      <div>
+        <button id="btn-stop" class="danger">Stop run</button>
+        <button id="btn-newrun" class="ghost" hidden>Configure another run</button>
+      </div>
+    </div>
+
+    <div class="panes">
+      <div class="pane treepane">
+        <div class="pane-head"><span>Search tree &mdash; live</span></div>
+        <div class="treewrap"><svg id="live-tree"></svg></div>
+        <div class="pane-head"><span>Validation primary</span></div>
+        <div class="chartwrap"><svg id="live-chart"></svg></div>
+      </div>
+      <div class="pane detailpane">
+        <div class="pane-head"><span>Latest iteration</span>
+          <span id="live-verdict" class="verdict"></span></div>
+        <div class="detail" id="live-detail">
+          <p class="empty">Waiting for the first experiment to finish&hellip;</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane consolepane">
+      <div class="pane-head"><span>stdout</span>
+        <label class="follow"><input type="checkbox" id="follow" checked> follow</label>
+      </div>
+      <pre class="console" id="console"></pre>
+    </div>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
