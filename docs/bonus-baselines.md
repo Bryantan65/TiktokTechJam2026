@@ -88,11 +88,58 @@ logs looks wrong.
 
 ## KuaiRand-27k
 
-Not measured. 322M interactions, 9.21 GB compressed, and the kit's loader builds
-Python lists of tuples, so it would need a streaming rewrite before it could open
-the file. See `HANDOFF.md` for why we stopped short: the mechanism 27k would
-supply — deep per-user history — was tested at 27k's own depth using 1k
-(11,713 vs 11,812 interactions per user) and moved GAUC by +0.00073, t = 0.33.
+Measured, with a caveat that has to travel with the number.
+
+```
+GAUC     0.688589
+nDCG@5   0.641569
+primary  0.665079      validation, seed 0, early stop at epoch 7 (peak epoch 3)
+```
+
+**Measured with the PyTorch port, not the kit's `baseline.py`.** That is a
+weaker provenance claim than 1k's and the difference is not neutral. The port
+reproduces the kit to 0.0001 on Pure (0.6015 vs 0.6016) but lands **0.0017
+below** it on 1k (0.643428 vs 0.6451). A baseline biased low inflates every
+delta measured against it, so this gap favours us. Any 27k result reported
+against this number must say so.
+
+The kit's own numpy script would settle it, at roughly 28 h of CPU: ~10 min per
+epoch on 1k's 5M training rows, against 27k's ~139M. Worth doing if a 27k result
+is ever submitted.
+
+**Two things had to change before it would run at all.** 322M rows as Python
+tuples need ~110 GB, against a container limit of 116 GB — the first attempt
+reached 85 GB, kept climbing, and was killed with no traceback, because an OOM
+kill leaves none. Note `free` reports the *host's* 503 GB rather than the
+container's limit, so the failure looks impossible right up until it happens.
+
+`data.load(only=['train','valid'])` now skips rows outside the requested splits
+as the CSVs are read instead of building and discarding them. That is 208M rows,
+~71 GB, and it fits. A baseline needs no test split: Deliverable 4 asks for the
+validation-best score, and the hidden test is the organisers' to score.
+
+```
+loaded in 26 min   train 136,296,576   valid 71,149,570
+                   322,278,385 rows seen, 207,446,146 kept
+train 124 min      12.4 min per epoch on an RTX 4090
+total 150 min
+```
+
+**On whether a 27k agent run is viable.** One full-data experiment costs about
+two hours — 26 min to load, ~12 to encode, ~87 to train — against a 6 h ceiling,
+so a run fits three experiments. Every good result we have arrived at experiment
+23 (Pure) or 40 (1k). With the parsed-data cache, a training subsample and fewer
+epochs it comes down to roughly 18, which is still short of that. The earlier
+reasoning for setting 27k aside also still stands: it is wider than 1k rather
+than deeper (11,713 vs 11,812 interactions per user), and the one mechanism it
+could uniquely supply was tested at 27k's own depth using 1k and moved GAUC by
++0.00073, t = 0.33.
+
+Reproduce with:
+
+```
+python harness/measure_baseline.py   --data_dir rec_datasets/KuaiRand-27K/data --device cuda --seed 0
+```
 
 ## Reproducing
 

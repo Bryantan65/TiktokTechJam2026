@@ -145,7 +145,11 @@ def setup_control_row(run_dir: str, logs_root: str = None):
 BASELINES = {
     'pure': 0.6015,
     '1k': 0.6451,    # kit FM on 1k, best epoch. docs/bonus-baselines.md
-    '27k': None,
+    # Measured 2026-08-31 with the PyTorch port rather than the kit's numpy
+    # baseline.py, which needs ~28 h of CPU on 322M rows. The port reads 0.0017
+    # LOW against the kit on 1k, so a delta measured against this is inflated by
+    # roughly that much and must be disclosed. See docs/bonus-baselines.md.
+    '27k': 0.665079,
 }
 
 BASELINE_VALID = BASELINES['pure']
