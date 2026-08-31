@@ -91,6 +91,27 @@ _CACHE_DIR = os.environ.get('HARNESS_CACHE_DIR') or os.path.join(
 # cost before trusting a run that uses this.
 TRAIN_FRACTION = float(os.environ.get('HARNESS_TRAIN_FRACTION', 1.0))
 
+# Splits to load when a caller does not name any. Empty means all of them, which
+# is the behaviour everywhere except 27k.
+#
+# An agent run never needs the test split - run_experiment refuses anything but
+# valid and the dev holdout - but solutions call load(data_dir) with no filter,
+# so they would build all 322M rows of 27k and be OOM-killed at ~26 minutes in,
+# with no traceback. Setting HARNESS_LOAD_SPLITS=train,valid makes every
+# solution in a run skip the test rows as the CSVs are read.
+#
+# Opt-in rather than automatic: it changes what enc['test'] contains, and a
+# solution written to look there would get an empty array rather than an error.
+_ENV_SPLITS = [x.strip() for x in
+               os.environ.get('HARNESS_LOAD_SPLITS', '').split(',') if x.strip()]
+
+# Above this many rows, do not cache the encoding. Fingerprinting the splits
+# means serialising them, which needs a second copy in memory - fine at Pure and
+# 1k scale, fatal at 27k where the splits are already ~71 GB against a 116 GB
+# limit. The load cache still applies and is the larger saving anyway.
+_ENCODE_CACHE_MAX_ROWS = int(os.environ.get('HARNESS_ENCODE_CACHE_MAX_ROWS',
+                                            30_000_000))
+
 
 def _subsample_train(splits):
     """Keep every Nth training row. Deterministic, and valid/test untouched."""
@@ -181,6 +202,9 @@ def encode(splits):
     price of that guarantee, and it is far below the cost of encoding.
     """
     if not _CACHE_ON:
+        return _kit_encode(splits)
+    if sum(len(v) for v in splits.values()) > _ENCODE_CACHE_MAX_ROWS:
+        # Serialising to fingerprint would need a second copy of the splits.
         return _kit_encode(splits)
     try:
         blob = pickle.dumps(splits, protocol=pickle.HIGHEST_PROTOCOL)
@@ -313,6 +337,8 @@ def load(data_dir, only=None):
     Cache-invalidating on source mtime rather than on a content hash: reading
     every CSV to hash it would cost what the parse costs and save nothing.
     """
+    if only is None and _ENV_SPLITS:
+        only = _ENV_SPLITS
     tag = _dir_tag(data_dir)
     if only:
         tag += '_' + '-'.join(sorted(only))
