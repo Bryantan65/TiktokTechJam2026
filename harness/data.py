@@ -12,10 +12,37 @@ differs from the kit's only in which filenames it opens.
 
 Everything else - LABEL, FIELDS, SPLITS, encode, the duration bucketing - is
 re-exported from the kit unchanged, so solutions see exactly one implementation.
+
+Both `load` and `encode` are cached on disk. Neither changes what it returns;
+they only avoid recomputing it. Measured cost of a cold call, this machine:
+
+    Pure   1,436,609 rows   load  3.9s + encode  6.4s =  10.3s
+    1k    11,713,045 rows   load 48.7s + encode 54.1s = 102.8s
+
+That is paid by every seed of every experiment, and every seed runs in its own
+subprocess, so a three-seed experiment pays it three times over. Against the
+archive's per-experiment compute it is 4.1% of all Pure time and roughly a
+third of all 1k time - on 1k no experiment finishes in under 60s, and the
+median one spends a third of itself here before a model exists.
+
+Correctness comes first, because a stale or mismatched cache would not crash -
+it would train on the wrong thing and report a plausible number.
+
+  - `load` is keyed on the directory and invalidated by source mtime. Its only
+    input is `data_dir`, so this is exact.
+  - `encode` is keyed on a hash of the splits it was actually handed, not on
+    the directory. Solutions are free to filter or augment splits before
+    encoding, and a directory-keyed cache would silently hand such a solution
+    the canonical encoding instead. Hashing costs a fraction of encoding.
+
+Set HARNESS_CACHE=0 to bypass both, HARNESS_CACHE_DIR to relocate them.
 """
 import csv
+import hashlib
 import importlib.util as _il
 import os
+import pickle
+import tempfile
 
 _KIT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     'kuairand-starter-kit')
@@ -30,12 +57,109 @@ _spec.loader.exec_module(_kit)
 LABEL = _kit.LABEL
 SPLITS = _kit.SPLITS
 FIELDS = _kit.FIELDS
-encode = _kit.encode
+_kit_encode = _kit.encode
 _bucket_edges = _kit._bucket_edges
 
 # Suffix used in every filename of a variant. Pure is the required benchmark;
 # 1k and 27k are the bonus ones. 27k ships its standard logs in two parts.
 _VARIANTS = ('pure', '1k', '27k')
+
+
+# Bump when the cached payload's meaning changes; old files then simply miss.
+_SCHEMA = 1
+_CACHE_ON = os.environ.get('HARNESS_CACHE', '1') != '0'
+_CACHE_DIR = os.environ.get('HARNESS_CACHE_DIR') or os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.cache')
+
+
+def _cache_path(name):
+    return os.path.join(_CACHE_DIR, '%s_v%d.pkl' % (name, _SCHEMA))
+
+
+def _cache_get(path, newer_than=()):
+    """Return the cached object, or None if absent, stale or unreadable.
+
+    `newer_than` are source files the cache must post-date. A corrupt or
+    half-written file is treated as a miss rather than an error: the cache is
+    an optimisation and must never be able to fail a run.
+    """
+    if not _CACHE_ON or not os.path.isfile(path):
+        return None
+    try:
+        stamp = os.path.getmtime(path)
+        for src_file in newer_than:
+            if os.path.getmtime(src_file) > stamp:
+                return None
+        with open(path, 'rb') as fh:
+            return pickle.load(fh)
+    except Exception:
+        return None
+
+
+def _cache_put(path, obj):
+    """Write atomically, because the seeds of one experiment race here.
+
+    Every seed is a separate subprocess and they start together, so on a cold
+    cache all of them compute the same value and all try to store it. Writing
+    to a temporary file and renaming means a reader never observes a partial
+    file; the writers are interchangeable, so last-one-wins is correct.
+    """
+    if not _CACHE_ON:
+        return
+    try:
+        os.makedirs(_CACHE_DIR, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=_CACHE_DIR, suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'wb') as fh:
+                pickle.dump(obj, fh, protocol=pickle.HIGHEST_PROTOCOL)
+            os.replace(tmp, path)
+        except Exception:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            raise
+    except Exception:
+        pass        # an unwritable cache is a slow run, not a broken one
+
+
+def _sources(data_dir):
+    """Files whose modification invalidates a cached load of `data_dir`."""
+    v = variant(data_dir)
+    out = [os.path.join(data_dir, 'video_features_basic_%s.csv' % v)]
+    try:
+        out += _log_files(data_dir, v)
+    except FileNotFoundError:
+        pass
+    return [p for p in out if os.path.isfile(p)]
+
+
+def _dir_tag(data_dir):
+    h = hashlib.blake2b(os.path.abspath(data_dir).encode('utf-8'),
+                        digest_size=6).hexdigest()
+    return '%s_%s' % (variant(data_dir), h)
+
+
+def encode(splits):
+    """The kit's encode, memoised on the content of `splits`.
+
+    Keyed on the splits themselves rather than on the data directory: a
+    solution may hand this filtered or augmented splits, and those must not
+    collide with the canonical encoding. Hashing the pickled splits is the
+    price of that guarantee, and it is far below the cost of encoding.
+    """
+    if not _CACHE_ON:
+        return _kit_encode(splits)
+    try:
+        blob = pickle.dumps(splits, protocol=pickle.HIGHEST_PROTOCOL)
+        tag = hashlib.blake2b(blob, digest_size=16).hexdigest()
+    except Exception:
+        return _kit_encode(splits)      # unpicklable splits: just encode
+    path = _cache_path('encode_%s' % tag)
+    hit = _cache_get(path)
+    if hit is not None:
+        return hit
+    out = _kit_encode(splits)
+    _cache_put(path, out)
+    return out
 
 
 def variant(data_dir):
@@ -72,7 +196,7 @@ def _log_files(data_dir, v):
     return out
 
 
-def load(data_dir):
+def _load_uncached(data_dir):
     """Splits dict for whichever variant `data_dir` holds.
 
     Pure goes through the kit's own loader untouched. The bonus variants use the
@@ -129,3 +253,18 @@ def load(data_dir):
 
     return {name: [x for x in rows if lo <= x[0] <= hi]
             for name, (lo, hi) in SPLITS.items()}
+
+
+def load(data_dir):
+    """Splits dict for `data_dir`, reusing a cached parse when one is current.
+
+    Cache-invalidating on source mtime rather than on a content hash: reading
+    every CSV to hash it would cost what the parse costs and save nothing.
+    """
+    path = _cache_path('load_%s' % _dir_tag(data_dir))
+    hit = _cache_get(path, newer_than=_sources(data_dir))
+    if hit is not None:
+        return hit
+    out = _load_uncached(data_dir)
+    _cache_put(path, out)
+    return out

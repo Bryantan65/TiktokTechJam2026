@@ -41,3 +41,6 @@ models/*.pt
 bash.exe.stackdump
 # Per-member prediction cache written by solutions; regenerable, never committed.
 pred_cache/
+
+# Parsed-data cache (harness/data.py). Regenerated on demand; never a source of truth.
+.cache/
