@@ -24,6 +24,11 @@ pred_cache/
 # Regenerate from scratch with the commands in docs/results.md.
 submission_1k.csv
 
+# The seeded design canvas is a 2.4MB bundled editor payload, rebuilt from
+# the design/*.dc.html sources by the design skill. Source is tracked, not it.
+design/*.html
+!design/*.dc.html
+
 # Python
 __pycache__/
 *.py[cod]
