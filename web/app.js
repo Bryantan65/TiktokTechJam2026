@@ -625,6 +625,153 @@ function renderVerdicts(recs) {
   ).join('');
 }
 
+/* ---------------------------------------------------------- resizable panels */
+/* Three splitters on the replay screen. Each one only ever writes a CSS custom
+ * property on :root, so the layout stays in the stylesheet and no element gets
+ * an inline width - which means a reset is one property removal, not a rebuild.
+ *
+ * Pointer events, not mouse: setPointerCapture keeps the drag alive when the
+ * pointer leaves the 7px handle, which it does immediately, and the same code
+ * then works for touch and pen without a second path.
+ */
+const LAYOUT_KEY = 'agent-console-layout';
+const LAYOUT_DEFAULTS = {
+  '--runlist-w': '268px',
+  '--tree-w': '56%',
+  '--events-h': '168px'
+};
+
+function loadLayout() {
+  try { return JSON.parse(localStorage.getItem(LAYOUT_KEY)) || {}; }
+  catch (e) { return {}; }          // private window, or site data blocked
+}
+
+function saveLayout(patch) {
+  try {
+    localStorage.setItem(LAYOUT_KEY,
+      JSON.stringify(Object.assign(loadLayout(), patch)));
+  } catch (e) { /* sizes just do not persist; the session still works */ }
+}
+
+function applyLayout() {
+  const L = loadLayout();
+  Object.keys(LAYOUT_DEFAULTS).forEach(v => {
+    if (typeof L[v] === 'string' && L[v]) {
+      document.documentElement.style.setProperty(v, L[v]);
+    }
+  });
+}
+
+function makeSplitter(sel, opts) {
+  const el = $(sel);
+  if (!el) return;
+  SPLITTERS.push(opts);
+  const root = document.documentElement;
+  const axis = opts.axis;
+  let origin = 0, startSize = 0, raf = null, active = false;
+
+  const measure = () => {
+    const t = opts.target();
+    if (!t) return 0;
+    const r = t.getBoundingClientRect();
+    return axis === 'x' ? r.width : r.height;
+  };
+
+  // The chart reads its own container width, so a resize needs a redraw. One
+  // per frame at most - a pointermove can fire far more often than that.
+  const redraw = () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = null;
+      if (state.run) draw();
+      if (state.live && state.live.records.length) drawLive();
+    });
+  };
+
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    active = true;
+    origin = axis === 'x' ? e.clientX : e.clientY;
+    startSize = measure();
+    el.classList.add('dragging');
+    document.body.classList.add(axis === 'x' ? 'resizing-x' : 'resizing-y');
+    try { el.setPointerCapture(e.pointerId); } catch (err) { /* no capture */ }
+  });
+
+  el.addEventListener('pointermove', e => {
+    if (!active) return;
+    const now = axis === 'x' ? e.clientX : e.clientY;
+    // The run log grows upwards, so its handle moves opposite to its size.
+    const delta = (now - origin) * (opts.invert ? -1 : 1);
+    const max = opts.max ? opts.max() : Infinity;
+    const next = Math.round(
+      Math.max(opts.min, Math.min(startSize + delta, Math.max(opts.min, max))));
+    root.style.setProperty(opts.varName, next + 'px');
+    redraw();
+  });
+
+  const end = e => {
+    if (!active) return;
+    active = false;
+    el.classList.remove('dragging');
+    document.body.classList.remove('resizing-x', 'resizing-y');
+    if (e && e.pointerId != null) {
+      try { el.releasePointerCapture(e.pointerId); } catch (err) { /* gone */ }
+    }
+    saveLayout({ [opts.varName]: root.style.getPropertyValue(opts.varName) });
+    if (state.run) draw();
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  el.addEventListener('lostpointercapture', end);
+
+  // Dragging back to a sensible default is fiddly; double-click just does it.
+  el.addEventListener('dblclick', () => {
+    root.style.setProperty(opts.varName, LAYOUT_DEFAULTS[opts.varName]);
+    saveLayout({ [opts.varName]: LAYOUT_DEFAULTS[opts.varName] });
+    if (state.run) draw();
+  });
+}
+
+const SPLITTERS = [];
+
+/* A max is only true for the window size it was measured in. Shrink the window
+ * after a drag and a stored px width can exceed what now fits, so re-apply the
+ * bounds on resize rather than letting a pane overflow its grid. */
+function reclampLayout() {
+  const root = document.documentElement;
+  SPLITTERS.forEach(o => {
+    const cur = parseFloat(root.style.getPropertyValue(o.varName));
+    if (!Number.isFinite(cur)) return;          // still on the % default
+    const max = o.max ? o.max() : Infinity;
+    const next = Math.max(o.min, Math.min(cur, Math.max(o.min, max)));
+    if (Math.round(next) !== Math.round(cur)) {
+      root.style.setProperty(o.varName, Math.round(next) + 'px');
+    }
+  });
+}
+
+function initSplitters() {
+  applyLayout();
+  makeSplitter('#split-runlist', {
+    axis: 'x', varName: '--runlist-w', min: 170,
+    target: () => $('.runlist'),
+    max: () => Math.min(560, window.innerWidth - 480)
+  });
+  makeSplitter('#split-panes', {
+    axis: 'x', varName: '--tree-w', min: 240,
+    target: () => $('.treepane'),
+    // leave the iteration panel readable: it needs room for a diff
+    max: () => ($('.panes') ? $('.panes').clientWidth - 300 : Infinity)
+  });
+  makeSplitter('#split-events', {
+    axis: 'y', varName: '--events-h', min: 56, invert: true,
+    target: () => $('.eventpane'),
+    // the tree and iteration panes above must keep a usable height
+    max: () => ($('.stage') ? $('.stage').clientHeight - 300 : Infinity)
+  });
+}
+
 function draw() {
   const run = state.run;
   if (!run) return;
@@ -912,6 +1059,7 @@ function connectStream() {
   const first = pure.sort((a, b) => b.iterations - a.iterations)[0]
     || state.runs.filter(substantive)[0];
   if (first) selectRun(first.id);
+  initSplitters();
   connectStream();
   const st = await fetch('/api/status').then(x => x.json());
   if (st.running) {
@@ -920,5 +1068,8 @@ function connectStream() {
     $('#livepill').hidden = false;
     $('#console').textContent = (st.lines || []).join('\n') + '\n';
   }
-  window.addEventListener('resize', () => { if (state.run) draw(); });
+  window.addEventListener('resize', () => {
+    reclampLayout();
+    if (state.run) draw();
+  });
 })();

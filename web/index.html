@@ -38,6 +38,9 @@
     <div id="runs"></div>
   </aside>
 
+  <div class="splitter col" id="split-runlist"
+       title="drag to resize the run list &middot; double-click to reset"></div>
+
   <section class="stage">
     <div class="stage-head">
       <div>
@@ -84,6 +87,9 @@
         <div class="chartwrap"><svg id="chart"></svg></div>
       </div>
 
+      <div class="splitter col" id="split-panes"
+           title="drag to resize &middot; double-click to reset"></div>
+
       <div class="pane detailpane">
         <div class="pane-head"><span id="detail-title">Iteration</span>
           <span id="detail-verdict" class="verdict"></span></div>
@@ -92,6 +98,9 @@
         </div>
       </div>
     </div>
+
+    <div class="splitter row" id="split-events"
+         title="drag to resize the run log &middot; double-click to reset"></div>
 
     <div class="pane eventpane">
       <div class="pane-head"><span>Run log &mdash; events.jsonl</span>
