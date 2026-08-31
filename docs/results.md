@@ -85,17 +85,76 @@ supporting measurements is in the README's limitations section.
 
 ## Bonus benchmarks
 
-**KuaiRand-1k — attempted.** The organisers published a baseline for
-KuaiRand-Pure only, so we measured one by running the kit's own `baseline.py`
-unmodified on 1k data (see `docs/bonus-baselines.md`):
+**KuaiRand-1k — attempted, `logs-1k/record-run-4`.** The organisers published a
+baseline for KuaiRand-Pure only, so we measured one by running the kit's own
+`baseline.py` unmodified on 1k data (see `docs/bonus-baselines.md`). Deltas are
+per metric, equal-weighted, as the judging formula specifies.
 
-| KuaiRand-1k, kit FM | GAUC | nDCG@5 | primary |
+### Validation-best
+
+| metric | ours | kit FM baseline | delta |
 | --- | --- | --- | --- |
-| validation | 0.6749 | 0.6153 | 0.6451 |
-| test | 0.6730 | 0.6049 | 0.6390 |
+| GAUC | 0.702723 | 0.6749 | **+0.027823** |
+| nDCG@5 | 0.663265 | 0.6153 | **+0.047965** |
+| primary | 0.682994 | 0.6451 | +0.037894 |
+| **equal-weighted delta** | | | **+0.037894** |
 
-Agent results for 1k are pending a label-leakage verification and are not
-reported here until that check is complete.
+### Test
+
+| metric | ours | kit FM baseline | delta |
+| --- | --- | --- | --- |
+| GAUC | 0.701692 | 0.6730 | **+0.028692** |
+| nDCG@5 | 0.654918 | 0.6049 | **+0.050018** |
+| primary | 0.678305 | 0.6390 | +0.039305 |
+| **equal-weighted delta** | | | **+0.039355** |
+
+Predictions: `submission_1k.csv`, 4,132,081 rows, validated with the kit's own
+`submit.py --check`. Winner: `logs-1k/record-run-4/solutions/040_light_context_member.py`.
+
+`submission_1k.csv` is **not in the repository**: 4.1M rows is 118MB, over
+GitHub's 100MB per-file limit. The Pure submission is small enough to track and
+is. Rebuild it from the winning solution, which is tracked:
+
+```
+python harness/make_submission.py \
+    logs-1k/record-run-4/solutions/040_light_context_member.py \
+    --split test --out submission_1k.csv \
+    --data_dir rec_datasets/KuaiRand-1K/data
+```
+
+**The 1k delta is ten times the Pure delta** (+0.0394 against +0.0039), which is
+what the structural analysis predicts: 33.70% of 1k validation rows involve a
+(user, creator) pair seen in training, against 3.38% on Pure. Personalisation is
+available on 1k and very nearly unavailable on Pure.
+
+### Reproducing it - read this before trying
+
+The winner is **not** self-contained. It loads six member predictions from
+`pred_cache/` that iteration 29 produced, and on a cache miss it substitutes
+cheaper stand-in models rather than retraining them. It then still runs, still
+prints a plausible score, and is no longer the model that was measured. Since
+`pred_cache/` is gitignored, a fresh checkout hits exactly that path.
+
+Run iteration 29 first, for each split you want:
+
+```
+PYTHONPATH=harness python logs-1k/record-run-4/solutions/029_aux_soft_multitask.py   --data_dir rec_datasets/KuaiRand-1K/data --split valid --seed 0 --out /tmp/x.npy
+
+PYTHONPATH=harness python logs-1k/record-run-4/solutions/040_light_context_member.py   --data_dir rec_datasets/KuaiRand-1K/data --split valid --seed 0 --out preds.npy
+```
+
+Rebuilt this way the winner reproduces at **0.682994** against the ledger's
+0.682683 - a gap of +0.000311, inside 1k's own seed spread of 0.00058 - with
+zero fallback members used on either split. That check is what this number rests
+on.
+
+**Label-leakage check.** The winner's 26-solution lineage was traced by parent
+pointer. No solution reads the label by index from the split it predicts; one
+(`029`) opens a raw CSV, and only `log_standard_4_08_to_4_21`, the training
+window, using the auxiliary feedback signals as training targets and sample
+weights. The detector was validated against `logs-1k/record-run-2`, whose winner
+is a deliberate label oracle scoring 0.997444 - it flags that run in 16 places,
+including the winner.
 
 **KuaiRand-27k — not attempted.** Assessed and set aside deliberately: it is
 wider than 1k rather than deeper (~11,800 impressions per user in both), and the
