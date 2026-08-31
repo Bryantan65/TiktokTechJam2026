@@ -17,7 +17,11 @@ pred_cache/
 *.npy
 
 # 1k test is 4.1M rows -> 118MB, over GitHub's 100MB per-file limit.
-# Regenerate with harness/make_submission.py; see docs/results.md.
+# The 1k predictions are 123 MB raw - past GitHub's 100 MB hard block - so the
+# gzip is committed instead and the plain CSV stays ignored. Deliverable 4 asks
+# for the bonus benchmark's output, so it has to be in the repo somewhere;
+# `gzip -dc submission_1k.csv.gz > submission_1k.csv` restores it byte-identical.
+# Regenerate from scratch with the commands in docs/results.md.
 submission_1k.csv
 
 # Python
