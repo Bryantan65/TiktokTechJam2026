@@ -1,0 +1,65 @@
+{
+  "iteration": 14,
+  "solution": "logs/record-run-14/solutions/014_time_bpr_seed_ensemble.py",
+  "hypothesis": "improve 13: the BPR-only time model is seed-noisy but each seed is strong; average five independent unchanged BPR members with per-user z-score fusion so variance drops and nDCG@5 benefits from consensus top-5 ordering.",
+  "parent": "13",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T03:25:20+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603984,
+  "GAUC": 0.670636,
+  "nDCG@5": 0.537333,
+  "source_hash": "ea64ea605356",
+  "stdout_tail": "bpr seed=204 epoch=5 valid_primary=0.596234\nbpr seed=204 epoch=6 valid_primary=0.593760\nbpr seed=305 epoch=1 valid_primary=0.602090\nbpr seed=305 epoch=2 valid_primary=0.602964\nbpr seed=305 epoch=3 valid_primary=0.600919\nbpr seed=305 epoch=4 valid_primary=0.599030\nbpr seed=305 epoch=5 valid_primary=0.596491\nbpr seed=305 epoch=6 valid_primary=0.592484\nbpr seed=406 epoch=1 valid_primary=0.601381\nbpr seed=406 epoch=2 valid_primary=0.602050\nbpr seed=406 epoch=3 valid_primary=0.598904\nbpr seed=406 epoch=4 valid_primary=0.598025\nbpr seed=406 epoch=5 valid_primary=0.594061\nbpr seed=406 epoch=6 valid_primary=0.591507\nensemble_members=5 done in 272.9s",
+  "predictions_hash": "39b9f115fc97",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000488,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670599,
+      "nDCG@5": 0.536901,
+      "primary": 0.60375
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670099,
+      "nDCG@5": 0.537217,
+      "primary": 0.603658
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671209,
+      "nDCG@5": 0.537881,
+      "primary": 0.604545
+    }
+  ],
+  "seconds": 282.4,
+  "verdict": "KEPT",
+  "delta": 0.002484,
+  "tokens_in": 47853,
+  "tokens_out": 4534,
+  "tokens_cached": 35712,
+  "cost_usd": 0.093549,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 326.5,
+  "recovery_events": []
+}

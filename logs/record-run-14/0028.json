@@ -1,0 +1,65 @@
+{
+  "iteration": 28,
+  "solution": "logs/record-run-14/solutions/028_watchtime_weighted_bpr.py",
+  "hypothesis": "draft watch-time weighting: implicit-feedback ranking commonly weights pairwise positives by confidence/engagement strength (BPR implicit feedback; Rendle 2009 https://arxiv.org/abs/1205.2618). Train a readable 30% BPR member whose positive pairs are weighted by clipped sqrt(log1p(play_time_ms)) rather than treating all long views equally.",
+  "parent": "27",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T04:52:40+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604587,
+  "GAUC": 0.671426,
+  "nDCG@5": 0.537747,
+  "source_hash": "d283a9bdc8a8",
+  "stdout_tail": "bpr balanced=True watch=True seed=204 ep=4 p=0.598539\nbpr balanced=True watch=True seed=204 ep=5 p=0.597247\nbpr balanced=True watch=True seed=204 ep=6 p=0.593143\nbpr balanced=True watch=True seed=305 ep=1 p=0.601548\nbpr balanced=True watch=True seed=305 ep=2 p=0.601734\nbpr balanced=True watch=True seed=305 ep=3 p=0.600662\nbpr balanced=True watch=True seed=305 ep=4 p=0.597636\nbpr balanced=True watch=True seed=305 ep=5 p=0.594607\nbpr balanced=True watch=True seed=305 ep=6 p=0.591782\nbpr balanced=True watch=True seed=406 ep=1 p=0.602177\nbpr balanced=True watch=True seed=406 ep=2 p=0.601301\nbpr balanced=True watch=True seed=406 ep=3 p=0.597449\nbpr balanced=True watch=True seed=406 ep=4 p=0.595852\nbpr balanced=True watch=True seed=406 ep=5 p=0.594008\nwatchtime_weighted_bpr blend=0.30 alpha_mean=0.3124 total_time=422.2s",
+  "predictions_hash": "5518642b1e2b",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000121,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671349,
+      "nDCG@5": 0.537677,
+      "primary": 0.604513
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671304,
+      "nDCG@5": 0.537737,
+      "primary": 0.604521
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671624,
+      "nDCG@5": 0.537828,
+      "primary": 0.604726
+    }
+  ],
+  "seconds": 431.5,
+  "verdict": "KEPT",
+  "delta": 0.003087,
+  "tokens_in": 91920,
+  "tokens_out": 8389,
+  "tokens_cached": 70144,
+  "cost_usd": 0.173402,
+  "model": "gpt-5.5",
+  "agent_iteration": 26,
+  "wall_seconds": 505.7,
+  "recovery_events": []
+}

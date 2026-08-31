@@ -1,0 +1,65 @@
+{
+  "iteration": 26,
+  "solution": "logs/record-run-14/solutions/026_din5_sequence_ensemble.py",
+  "hypothesis": "improve 25: warm-DIN was stronger standalone but less complementary; instead reduce the random-init DIN variance that made node 24 promising by expanding its cached 3-member sequence block to the same five seeds as the FM members, keeping the readable 30% sequence weight.",
+  "parent": "25",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T04:41:15+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604619,
+  "GAUC": 0.671443,
+  "nDCG@5": 0.537795,
+  "source_hash": "128d6ea8c8b2",
+  "stdout_tail": "load pred_cache/021_time_mtbpr_aux_v1_valid_seed406.npy\nload pred_cache/024_din_histpos_v1_valid_seed2.npy\nload pred_cache/024_din_histpos_v1_valid_seed103.npy\nload pred_cache/024_din_histpos_v1_valid_seed204.npy\ndin seed=305 ep=1 p=0.601829\ndin seed=305 ep=2 p=0.599565\ndin seed=305 ep=3 p=0.595762\ndin seed=305 ep=4 p=0.591900\ndin seed=305 ep=5 p=0.584801\ndin seed=406 ep=1 p=0.601387\ndin seed=406 ep=2 p=0.600684\ndin seed=406 ep=3 p=0.596287\ndin seed=406 ep=4 p=0.590815\ndin seed=406 ep=5 p=0.583053\ndin5_sequence_ensemble parent=0.70 din=0.30 din_members=5 total_time=400.8s",
+  "predictions_hash": "3662fc968ffb",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000368,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671022,
+      "nDCG@5": 0.537639,
+      "primary": 0.604331
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671324,
+      "nDCG@5": 0.537659,
+      "primary": 0.604491
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671983,
+      "nDCG@5": 0.538086,
+      "primary": 0.605034
+    }
+  ],
+  "seconds": 412.2,
+  "verdict": "KEPT",
+  "delta": 0.003119,
+  "tokens_in": 86892,
+  "tokens_out": 9710,
+  "tokens_cached": 61312,
+  "cost_usd": 0.191706,
+  "model": "gpt-5.5",
+  "agent_iteration": 24,
+  "wall_seconds": 505.1,
+  "recovery_events": []
+}

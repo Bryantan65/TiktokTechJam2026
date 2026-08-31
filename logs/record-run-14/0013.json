@@ -1,0 +1,65 @@
+{
+  "iteration": 13,
+  "solution": "logs/record-run-14/solutions/013_time_bpr_only.py",
+  "hypothesis": "improve 10: node 10 stdout shows the BPR member alone peaked at 0.603036 before the BCE member blended it down; test the unchanged BPR member standalone with per-user z-normalisation, reusing the cached node-10 member when available.",
+  "parent": "10",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T03:23:35+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602954,
+  "GAUC": 0.669261,
+  "nDCG@5": 0.536646,
+  "source_hash": "a7925d8007b9",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} base_fields= ['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\ntime_aux raw_rows=1436609 missing_matches=1436609 extra_fields=8 dim=40777\ndone in 46.3s",
+  "predictions_hash": "980fd3623e29",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000209,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669372,
+      "nDCG@5": 0.536847,
+      "primary": 0.60311
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669015,
+      "nDCG@5": 0.536417,
+      "primary": 0.602716
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669396,
+      "nDCG@5": 0.536675,
+      "primary": 0.603036
+    }
+  ],
+  "seconds": 60.7,
+  "verdict": "noise",
+  "delta": 0.001454,
+  "tokens_in": 66892,
+  "tokens_out": 3942,
+  "tokens_cached": 48000,
+  "cost_usd": 0.11065,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 91.8,
+  "recovery_events": []
+}

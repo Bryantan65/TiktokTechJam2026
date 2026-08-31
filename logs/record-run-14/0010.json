@@ -1,0 +1,65 @@
+{
+  "iteration": 10,
+  "solution": "logs/record-run-14/solutions/010_time_fm.py",
+  "hypothesis": "draft time features: time-of-day and recency/order buckets are standard CTR ranking features (e.g. recommender feature-engineering overview https://arxiv.org/abs/1904.00548); add hour/date/order categorical FM fields and blend BPR+BCE so within-user drift can affect ranking.",
+  "parent": "1",
+  "uct_rank": 5,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T03:15:20+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602629,
+  "GAUC": 0.668925,
+  "nDCG@5": 0.536333,
+  "source_hash": "dad5fd1a60f5",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} base_fields= ['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\ntime_aux raw_rows=1436609 missing_matches=1436609 extra_fields=8 dim=40777\nbpr epoch=1 valid_primary=0.603036\nbpr epoch=2 valid_primary=0.601924\nbpr epoch=3 valid_primary=0.599571\nbpr epoch=4 valid_primary=0.596161\nbpr epoch=5 valid_primary=0.594404\nbce epoch=1 valid_primary=0.593664\nbce epoch=2 valid_primary=0.595225\nbce epoch=3 valid_primary=0.595790\nbce epoch=4 valid_primary=0.594341\nbce epoch=5 valid_primary=0.591324\nbce epoch=6 valid_primary=0.588446\nbce epoch=7 valid_primary=0.587391\ndone in 120.6s",
+  "predictions_hash": "689121270a70",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000507,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.668116,
+      "nDCG@5": 0.535976,
+      "primary": 0.602046
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669393,
+      "nDCG@5": 0.536361,
+      "primary": 0.602877
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669266,
+      "nDCG@5": 0.536663,
+      "primary": 0.602965
+    }
+  ],
+  "seconds": 130.0,
+  "verdict": "noise",
+  "delta": 0.001129,
+  "tokens_in": 73323,
+  "tokens_out": 6170,
+  "tokens_cached": 52736,
+  "cost_usd": 0.139536,
+  "model": "gpt-5.5",
+  "agent_iteration": 9,
+  "wall_seconds": 208.9,
+  "recovery_events": []
+}

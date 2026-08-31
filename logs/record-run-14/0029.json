@@ -1,0 +1,65 @@
+{
+  "iteration": 29,
+  "solution": "logs/record-run-14/solutions/029_lgbm_stat_ranker_blend.py",
+  "hypothesis": "improve 28: watch-time weighting itself looked weak, so replace that added member with a more orthogonal tree LambdaRank over leakage-safe online historical counts/rates and ID categoricals, blended at a readable 30%; this debugs whether the non-FM statistical signal, not watch-time weight, can complement node 27.",
+  "parent": "28",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T05:01:47+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604032,
+  "GAUC": 0.67075,
+  "nDCG@5": 0.537315,
+  "source_hash": "e20737c063fa",
+  "stdout_tail": "load pred_cache/016_time_bpr_ndcgbal_v1_valid_seed204.npy\nload pred_cache/016_time_bpr_ndcgbal_v1_valid_seed305.npy\nload pred_cache/016_time_bpr_ndcgbal_v1_valid_seed406.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed2.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed103.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed204.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed305.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed406.npy\nload pred_cache/024_din_histpos_v1_valid_seed2.npy\nload pred_cache/024_din_histpos_v1_valid_seed103.npy\nload pred_cache/024_din_histpos_v1_valid_seed204.npy\nload pred_cache/024_din_histpos_v1_valid_seed305.npy\nload pred_cache/024_din_histpos_v1_valid_seed406.npy\nfit lgbm (1141112, 28) groups 26210\nlgbm_stat_ranker_blend blend=0.30 alpha_mean=0.3124 total_time=222.7s",
+  "predictions_hash": "130109c0d6e1",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00047,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670609,
+      "nDCG@5": 0.537175,
+      "primary": 0.603892
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670252,
+      "nDCG@5": 0.537043,
+      "primary": 0.603648
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671389,
+      "nDCG@5": 0.537726,
+      "primary": 0.604557
+    }
+  ],
+  "seconds": 234.3,
+  "verdict": "KEPT",
+  "delta": 0.002532,
+  "tokens_in": 206209,
+  "tokens_out": 10979,
+  "tokens_cached": 170368,
+  "cost_usd": 0.284577,
+  "model": "gpt-5.5",
+  "agent_iteration": 27,
+  "wall_seconds": 350.2,
+  "recovery_events": []
+}

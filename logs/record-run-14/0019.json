@@ -1,0 +1,65 @@
+{
+  "iteration": 19,
+  "solution": "logs/record-run-14/solutions/019_lambdarank_member.py",
+  "hypothesis": "draft LambdaRank: Burges LambdaMART weights pairwise logistic gradients by metric deltas for NDCG (https://proceedings.mlr.press/v14/burges11a.html); add a readable 30% FM LambdaRank member to node 18 instead of another tiny ensemble tweak.",
+  "parent": "18",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T03:49:46+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.60405,
+  "GAUC": 0.670575,
+  "nDCG@5": 0.537525,
+  "source_hash": "016136346706",
+  "stdout_tail": "mode=lambda seed=2 epoch=6 valid_primary=0.594718\nmode=lambda seed=103 epoch=1 valid_primary=0.596964\nmode=lambda seed=103 epoch=2 valid_primary=0.597867\nmode=lambda seed=103 epoch=3 valid_primary=0.597343\nmode=lambda seed=103 epoch=4 valid_primary=0.595291\nmode=lambda seed=103 epoch=5 valid_primary=0.593440\nmode=lambda seed=103 epoch=6 valid_primary=0.591823\nmode=lambda seed=204 epoch=1 valid_primary=0.597020\nmode=lambda seed=204 epoch=2 valid_primary=0.597095\nmode=lambda seed=204 epoch=3 valid_primary=0.597599\nmode=lambda seed=204 epoch=4 valid_primary=0.597418\nmode=lambda seed=204 epoch=5 valid_primary=0.595702\nmode=lambda seed=204 epoch=6 valid_primary=0.594139\nmode=lambda seed=204 epoch=7 valid_primary=0.592368\nlambda_fusion parent=0.70 lambda=0.30 lambda_members=3 total_time=333.9s",
+  "predictions_hash": "1dcb46c9033f",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000623,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670002,
+      "nDCG@5": 0.537387,
+      "primary": 0.603695
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670167,
+      "nDCG@5": 0.537206,
+      "primary": 0.603686
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671556,
+      "nDCG@5": 0.537981,
+      "primary": 0.604769
+    }
+  ],
+  "seconds": 347.1,
+  "verdict": "KEPT",
+  "delta": 0.00255,
+  "tokens_in": 72046,
+  "tokens_out": 6187,
+  "tokens_cached": 55808,
+  "cost_usd": 0.130369,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 425.7,
+  "recovery_events": []
+}

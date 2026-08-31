@@ -1,0 +1,66 @@
+{
+  "iteration": 15,
+  "solution": "logs/record-run-14/solutions/015_watchtime_weighted_bpr_blend.py",
+  "hypothesis": "improve 14: add a genuinely different BPR member that weights positive-negative pairs by log play_time confidence, as in heterogeneous implicit-feedback BPR extensions (e.g. Adaptive BPR, https://www.sciencedirect.com/science/article/abs/pii/S0950705114003530); blend it 50/50 with the cached node-14 ensemble so its signal is readable.",
+  "parent": "14",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T03:31:43+00:00",
+  "status": "no-op",
+  "error": "no-op: identical GAUC and nDCG@5 as iteration 14 (014_time_bpr_seed_ensemble.py). Different code, same model - nothing was actually tested. Common cause: the new method ran but a \"keep the best checkpoint\" rule discarded its result, so the final model is the parent. Check that your change reaches the model that gets saved. This is NOT evidence about the technique.",
+  "valid_primary": 0.603984,
+  "GAUC": 0.670636,
+  "nDCG@5": 0.537333,
+  "source_hash": "d8e487a62a9f",
+  "stdout_tail": "load pred_cache/010_time_bpr_v1_valid_seed305.npy\nbpr seed=305 epoch=1 valid_primary=0.602090\nbpr seed=305 epoch=2 valid_primary=0.602964\nbpr seed=305 epoch=3 valid_primary=0.600919\nbpr seed=305 epoch=4 valid_primary=0.599030\nbpr seed=305 epoch=5 valid_primary=0.596491\nbpr seed=305 epoch=6 valid_primary=0.592484\nload pred_cache/010_time_bpr_v1_valid_seed406.npy\nbpr seed=406 epoch=1 valid_primary=0.601381\nbpr seed=406 epoch=2 valid_primary=0.602050\nbpr seed=406 epoch=3 valid_primary=0.598904\nbpr seed=406 epoch=4 valid_primary=0.598025\nbpr seed=406 epoch=5 valid_primary=0.594061\nbpr seed=406 epoch=6 valid_primary=0.591507\nblend old=0.5 play_weighted=0.5 members_each=5 done in 336.9s",
+  "predictions_hash": "a73c6f68f05f",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000488,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670599,
+      "nDCG@5": 0.536901,
+      "primary": 0.60375
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670099,
+      "nDCG@5": 0.537217,
+      "primary": 0.603658
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671209,
+      "nDCG@5": 0.537881,
+      "primary": 0.604545
+    }
+  ],
+  "no_op_twin": 14,
+  "seconds": 346.6,
+  "verdict": "no-op",
+  "delta": 0.002484,
+  "tokens_in": 65405,
+  "tokens_out": 8388,
+  "tokens_cached": 51712,
+  "cost_usd": 0.143968,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 447.1,
+  "recovery_events": []
+}

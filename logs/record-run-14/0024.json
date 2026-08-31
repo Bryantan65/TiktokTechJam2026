@@ -1,0 +1,65 @@
+{
+  "iteration": 24,
+  "solution": "logs/record-run-14/solutions/024_din_sequence_debug.py",
+  "hypothesis": "debug 23: the DIN draft crashed because Module.parameters iterators were passed directly into Adam; flatten attention/output parameters and rerun the same 30% sequence-member test.",
+  "parent": "23",
+  "uct_rank": null,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T04:19:43+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604676,
+  "GAUC": 0.671363,
+  "nDCG@5": 0.537988,
+  "source_hash": "3fa52fce2001",
+  "stdout_tail": "din seed=2 ep=2 p=0.598501\ndin seed=2 ep=3 p=0.596341\ndin seed=2 ep=4 p=0.593073\ndin seed=2 ep=5 p=0.584768\ndin seed=103 ep=1 p=0.600604\ndin seed=103 ep=2 p=0.599401\ndin seed=103 ep=3 p=0.596557\ndin seed=103 ep=4 p=0.591540\ndin seed=103 ep=5 p=0.585473\ndin seed=204 ep=1 p=0.601456\ndin seed=204 ep=2 p=0.598022\ndin seed=204 ep=3 p=0.594148\ndin seed=204 ep=4 p=0.589879\ndin seed=204 ep=5 p=0.584858\ndin_sequence_debug parent=0.70 din=0.30 din_members=3 total_time=544.7s",
+  "predictions_hash": "df13d2c20fd7",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000175,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671237,
+      "nDCG@5": 0.537885,
+      "primary": 0.604561
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671307,
+      "nDCG@5": 0.537871,
+      "primary": 0.604589
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671545,
+      "nDCG@5": 0.538208,
+      "primary": 0.604877
+    }
+  ],
+  "seconds": 555.2,
+  "verdict": "KEPT",
+  "delta": 0.003176,
+  "tokens_in": 71170,
+  "tokens_out": 7209,
+  "tokens_cached": 57216,
+  "cost_usd": 0.135588,
+  "model": "gpt-5.5",
+  "agent_iteration": 22,
+  "wall_seconds": 782.9,
+  "recovery_events": []
+}

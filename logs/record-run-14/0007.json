@@ -1,0 +1,65 @@
+{
+  "iteration": 7,
+  "solution": "logs/record-run-14/solutions/007_cross_bpr_fm.py",
+  "hypothesis": "improve 6: since the play_time_ms join failed and hard negatives alone traded nDCG for GAUC, add train-observed user-video/user-author/user-tab cross embeddings so BPR can memorize within-user preferences directly, with unseen crosses mapped to neutral OOV ids. This refines the same hard-negative BPR mechanism instead of adding another low-weight ensemble member.",
+  "parent": "6",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T03:05:34+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.598001,
+  "GAUC": 0.662726,
+  "nDCG@5": 0.533275,
+  "source_hash": "9c1c7818ca2b",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-Pure/data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+crosses\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "a5e395727612",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000537,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.661729,
+      "nDCG@5": 0.533143,
+      "primary": 0.597436
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.663405,
+      "nDCG@5": 0.533603,
+      "primary": 0.598504
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.663045,
+      "nDCG@5": 0.533078,
+      "primary": 0.598062
+    }
+  ],
+  "seconds": 86.6,
+  "verdict": "worse",
+  "delta": -0.003499,
+  "tokens_in": 87778,
+  "tokens_out": 6650,
+  "tokens_cached": 65024,
+  "cost_usd": 0.155897,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 169.1,
+  "recovery_events": []
+}

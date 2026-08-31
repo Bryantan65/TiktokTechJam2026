@@ -1,0 +1,65 @@
+{
+  "iteration": 27,
+  "solution": "logs/record-run-14/solutions/027_din_history_gated_fusion.py",
+  "hypothesis": "improve 26: the 5-seed DIN block is now cached, so test whether its complementarity is concentrated in users with real positive history; gate the sequence blend from 10% for cold users to 35% for users with at least eight prior positive watches.",
+  "parent": "26",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T04:49:30+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604688,
+  "GAUC": 0.671482,
+  "nDCG@5": 0.537894,
+  "source_hash": "6de3cf9d58e4",
+  "stdout_tail": "load pred_cache/016_time_bpr_ndcgbal_v1_valid_seed103.npy\nload pred_cache/016_time_bpr_ndcgbal_v1_valid_seed204.npy\nload pred_cache/016_time_bpr_ndcgbal_v1_valid_seed305.npy\nload pred_cache/016_time_bpr_ndcgbal_v1_valid_seed406.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed2.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed103.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed204.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed305.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed406.npy\nload pred_cache/024_din_histpos_v1_valid_seed2.npy\nload pred_cache/024_din_histpos_v1_valid_seed103.npy\nload pred_cache/024_din_histpos_v1_valid_seed204.npy\nload pred_cache/024_din_histpos_v1_valid_seed305.npy\nload pred_cache/024_din_histpos_v1_valid_seed406.npy\ndin_history_gated_fusion alpha_mean=0.3124 alpha_min=0.1000 alpha_max=0.3500 total_time=106.5s",
+  "predictions_hash": "f370266b8f88",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00028,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671116,
+      "nDCG@5": 0.537731,
+      "primary": 0.604424
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671473,
+      "nDCG@5": 0.537844,
+      "primary": 0.604659
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671856,
+      "nDCG@5": 0.538108,
+      "primary": 0.604982
+    }
+  ],
+  "seconds": 115.7,
+  "verdict": "KEPT",
+  "delta": 0.003188,
+  "tokens_in": 69606,
+  "tokens_out": 8932,
+  "tokens_cached": 49024,
+  "cost_usd": 0.165287,
+  "model": "gpt-5.5",
+  "agent_iteration": 25,
+  "wall_seconds": 198.0,
+  "recovery_events": []
+}

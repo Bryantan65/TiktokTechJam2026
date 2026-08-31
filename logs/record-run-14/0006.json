@@ -1,0 +1,65 @@
+{
+  "iteration": 6,
+  "solution": "logs/record-run-14/solutions/006_hard_watch_bpr.py",
+  "hypothesis": "improve 2: the BPR draft helped slightly but sampled easy random negatives; make the ranking signal sharper by drawing same-user same-tab negatives 60% of the time and weighting positive pairs by log play_time_ms as an auxiliary strength signal. This keeps the node-2 mechanism but targets the top-of-list boundary more directly.",
+  "parent": "2",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T03:02:30+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601775,
+  "GAUC": 0.66794,
+  "nDCG@5": 0.535611,
+  "source_hash": "8eaf5d4b46a2",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-Pure/data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nplay_time_ms missing for 1141112/1141112 train rows; using weight 1 there\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "083c46c747db",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000348,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667392,
+      "nDCG@5": 0.535726,
+      "primary": 0.601559
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.667866,
+      "nDCG@5": 0.535315,
+      "primary": 0.60159
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.668561,
+      "nDCG@5": 0.535792,
+      "primary": 0.602177
+    }
+  ],
+  "seconds": 100.9,
+  "verdict": "noise",
+  "delta": 0.000275,
+  "tokens_in": 121787,
+  "tokens_out": 6275,
+  "tokens_cached": 98048,
+  "cost_usd": 0.171122,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 178.0,
+  "recovery_events": []
+}

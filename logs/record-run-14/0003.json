@@ -1,0 +1,65 @@
+{
+  "iteration": 3,
+  "solution": "logs/record-run-14/solutions/003_warm_bpr_fm.py",
+  "hypothesis": "improve 2: BPR from scratch may waste capacity learning the baseline popularity/calibration structure, so warm-start with 6 BCE epochs then checkpoint only during BPR fine-tuning. This keeps the BPR signal readable while avoiding a no-op warmup checkpoint.",
+  "parent": "2",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T02:54:26+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.600936,
+  "GAUC": 0.666447,
+  "nDCG@5": 0.535425,
+  "source_hash": "886a0eea212d",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-Pure/data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "d7ace5e8a2dd",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000287,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.666443,
+      "nDCG@5": 0.535498,
+      "primary": 0.600971
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.66683,
+      "nDCG@5": 0.535578,
+      "primary": 0.601204
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.666067,
+      "nDCG@5": 0.5352,
+      "primary": 0.600634
+    }
+  ],
+  "seconds": 96.5,
+  "verdict": "noise",
+  "delta": -0.000564,
+  "tokens_in": 43656,
+  "tokens_out": 3145,
+  "tokens_cached": 38784,
+  "cost_usd": 0.063022,
+  "model": "gpt-5.5",
+  "agent_iteration": 2,
+  "wall_seconds": 126.5,
+  "recovery_events": []
+}

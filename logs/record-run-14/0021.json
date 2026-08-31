@@ -1,0 +1,65 @@
+{
+  "iteration": 21,
+  "solution": "logs/record-run-14/solutions/021_multitask_aux_bpr.py",
+  "hypothesis": "draft multi-task: auxiliary feedback heads can regularize sparse CTR representations (e.g. AT4CTR, AAAI 2024 https://ojs.aaai.org/index.php/AAAI/article/view/28725); add a 30% BPR member sharing FM embeddings with non-label raw feedback heads so the signal is readable.",
+  "parent": "18",
+  "uct_rank": 2,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T04:06:41+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604407,
+  "GAUC": 0.671058,
+  "nDCG@5": 0.537755,
+  "source_hash": "b99872b267e4",
+  "stdout_tail": "mtbpr seed=2 epoch=2 valid_primary=0.602263\nmtbpr seed=2 epoch=3 valid_primary=0.600627\nmtbpr seed=2 epoch=4 valid_primary=0.597011\nmtbpr seed=2 epoch=5 valid_primary=0.595113\nmtbpr seed=103 epoch=1 valid_primary=0.602603\nmtbpr seed=103 epoch=2 valid_primary=0.601431\nmtbpr seed=103 epoch=3 valid_primary=0.598998\nmtbpr seed=103 epoch=4 valid_primary=0.595435\nmtbpr seed=103 epoch=5 valid_primary=0.591144\nmtbpr seed=204 epoch=1 valid_primary=0.601977\nmtbpr seed=204 epoch=2 valid_primary=0.601915\nmtbpr seed=204 epoch=3 valid_primary=0.598908\nmtbpr seed=204 epoch=4 valid_primary=0.596661\nmtbpr seed=204 epoch=5 valid_primary=0.593834\nmultitask_aux_fusion parent=0.70 mtbpr=0.30 mt_members=3 total_time=248.6s",
+  "predictions_hash": "328be185e910",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00029,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670686,
+      "nDCG@5": 0.537521,
+      "primary": 0.604104
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671069,
+      "nDCG@5": 0.537797,
+      "primary": 0.604433
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67142,
+      "nDCG@5": 0.537947,
+      "primary": 0.604683
+    }
+  ],
+  "seconds": 268.5,
+  "verdict": "KEPT",
+  "delta": 0.002907,
+  "tokens_in": 74039,
+  "tokens_out": 6918,
+  "tokens_cached": 56832,
+  "cost_usd": 0.140614,
+  "model": "gpt-5.5",
+  "agent_iteration": 20,
+  "wall_seconds": 336.8,
+  "recovery_events": []
+}

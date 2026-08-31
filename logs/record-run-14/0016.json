@@ -1,0 +1,65 @@
+{
+  "iteration": 16,
+  "solution": "logs/record-run-14/solutions/016_ndcg_balanced_bpr_blend.py",
+  "hypothesis": "improve 14: node 14 is GAUC-strong but nDCG is still the bottleneck, so train a complementary BPR member with per-user positive-count capped weights to approximate the unweighted per-user nDCG objective, then blend it at 35% so the signal is readable.",
+  "parent": "14",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T03:38:32+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604112,
+  "GAUC": 0.670788,
+  "nDCG@5": 0.537436,
+  "source_hash": "61ef1d13c0c8",
+  "stdout_tail": "bpr balanced=True seed=305 epoch=1 valid_primary=0.602208\nbpr balanced=True seed=305 epoch=2 valid_primary=0.602764\nbpr balanced=True seed=305 epoch=3 valid_primary=0.600061\nbpr balanced=True seed=305 epoch=4 valid_primary=0.598379\nbpr balanced=True seed=305 epoch=5 valid_primary=0.596010\nbpr balanced=True seed=305 epoch=6 valid_primary=0.592707\nload pred_cache/010_time_bpr_v1_valid_seed406.npy\nbalanced_pair_weights n=382579 min=0.965 max=4.825 mean=1.000\nbpr balanced=True seed=406 epoch=1 valid_primary=0.600882\nbpr balanced=True seed=406 epoch=2 valid_primary=0.602050\nbpr balanced=True seed=406 epoch=3 valid_primary=0.599098\nbpr balanced=True seed=406 epoch=4 valid_primary=0.596495\nbpr balanced=True seed=406 epoch=5 valid_primary=0.593541\nbpr balanced=True seed=406 epoch=6 valid_primary=0.591447\nblend old=0.65 ndcg_balanced=0.35 members_each=5 done in 345.2s",
+  "predictions_hash": "79f88bbddbf8",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000719,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670054,
+      "nDCG@5": 0.53672,
+      "primary": 0.603387
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670664,
+      "nDCG@5": 0.537586,
+      "primary": 0.604125
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671647,
+      "nDCG@5": 0.538001,
+      "primary": 0.604824
+    }
+  ],
+  "seconds": 354.7,
+  "verdict": "KEPT",
+  "delta": 0.002612,
+  "tokens_in": 78360,
+  "tokens_out": 5887,
+  "tokens_cached": 60928,
+  "cost_usd": 0.132914,
+  "model": "gpt-5.5",
+  "agent_iteration": 15,
+  "wall_seconds": 416.8,
+  "recovery_events": []
+}

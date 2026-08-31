@@ -1,0 +1,65 @@
+{
+  "iteration": 20,
+  "solution": "logs/record-run-14/solutions/020_lambdarank_warm.py",
+  "hypothesis": "debug 19: LambdaRank from scratch was only ~0.597, so warm-start with balanced BPR and then save only the LambdaRank fine-tune checkpoints to ensure the metric-weighted loss actually reaches the final member.",
+  "parent": "19",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T03:56:21+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.603859,
+  "GAUC": 0.670297,
+  "nDCG@5": 0.537421,
+  "source_hash": "5d4e1d026903",
+  "stdout_tail": "mode=lambda_warm phase=lambda seed=103 epoch=5 valid_primary=0.575310\nmode=lambda_warm phase=warm seed=204 epoch=1 valid_primary=0.601557\nmode=lambda_warm phase=warm seed=204 epoch=2 valid_primary=0.603638\nmode=lambda_warm phase=warm seed=204 epoch=3 valid_primary=0.599947\nmode=lambda_warm phase=warm seed=204 epoch=4 valid_primary=0.599511\nmode=lambda_warm phase=warm seed=204 epoch=5 valid_primary=0.596370\nmode=lambda_warm phase=warm seed=204 epoch=6 valid_primary=0.593324\nmode=lambda_warm phase=warm seed=204 epoch=7 valid_primary=0.589056\nmode=lambda_warm phase=warm seed=204 epoch=8 valid_primary=0.584943\nmode=lambda_warm phase=lambda seed=204 epoch=1 valid_primary=0.583229\nmode=lambda_warm phase=lambda seed=204 epoch=2 valid_primary=0.581903\nmode=lambda_warm phase=lambda seed=204 epoch=3 valid_primary=0.579717\nmode=lambda_warm phase=lambda seed=204 epoch=4 valid_primary=0.578405\nmode=lambda_warm phase=lambda seed=204 epoch=5 valid_primary=0.577777\nlambda_warm_fusion parent=0.70 lambda_warm=0.30 lambda_members=3 total_time=541.4s",
+  "predictions_hash": "071e2ebbdc62",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000479,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670139,
+      "nDCG@5": 0.537315,
+      "primary": 0.603727
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669901,
+      "nDCG@5": 0.53702,
+      "primary": 0.60346
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670852,
+      "nDCG@5": 0.537929,
+      "primary": 0.60439
+    }
+  ],
+  "seconds": 551.1,
+  "verdict": "KEPT",
+  "delta": 0.002359,
+  "tokens_in": 55709,
+  "tokens_out": 5088,
+  "tokens_cached": 40832,
+  "cost_usd": 0.108489,
+  "model": "gpt-5.5",
+  "agent_iteration": 19,
+  "wall_seconds": 599.0,
+  "recovery_events": []
+}

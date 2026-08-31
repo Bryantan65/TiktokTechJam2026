@@ -1,0 +1,65 @@
+{
+  "iteration": 9,
+  "solution": "logs/record-run-14/solutions/009_hash_cross_fm.py",
+  "hypothesis": "improve 8: the hand-smoothed historical scores were weak; expose user-video/user-author/user-tab as hashed FM fields so training learns the amount of memorisation instead of fixed target-encoding weights.",
+  "parent": "8",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T03:11:58+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.598117,
+  "GAUC": 0.662558,
+  "nDCG@5": 0.533675,
+  "source_hash": "ceb70eda6ca7",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-Pure/data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+hashed_crosses\nbuilt cross-FM blend in 112.0s\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "1afd833dcaff",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000291,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.66201,
+      "nDCG@5": 0.533711,
+      "primary": 0.597861
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.662873,
+      "nDCG@5": 0.533239,
+      "primary": 0.598056
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.662792,
+      "nDCG@5": 0.534074,
+      "primary": 0.598433
+    }
+  ],
+  "seconds": 124.5,
+  "verdict": "worse",
+  "delta": -0.003383,
+  "tokens_in": 54407,
+  "tokens_out": 5176,
+  "tokens_cached": 39808,
+  "cost_usd": 0.108161,
+  "model": "gpt-5.5",
+  "agent_iteration": 8,
+  "wall_seconds": 184.1,
+  "recovery_events": []
+}

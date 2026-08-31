@@ -1,0 +1,65 @@
+{
+  "iteration": 12,
+  "solution": "logs/record-run-14/solutions/012_time_hist_bpr.py",
+  "hypothesis": "improve 10: after debugging, real hour/order fields were noisy; keep node 10's successful coarse date/tab-date defaults and add causal train-history count/rate bins as FM fields so repeated user-item/author/tab behavior can interact with recency.",
+  "parent": "10",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T03:21:16+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601171,
+  "GAUC": 0.667,
+  "nDCG@5": 0.535341,
+  "source_hash": "4d36e580ea3a",
+  "stdout_tail": "{'train': 1141112, 'valid': 124909, 'test': 170588} base_fields= ['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\ntime_default_hist extra_fields=22 dim=40856\nbpr epoch=1 valid_primary=0.601028\nbpr epoch=2 valid_primary=0.600796\nbpr epoch=3 valid_primary=0.600072\nbpr epoch=4 valid_primary=0.598545\nbpr epoch=5 valid_primary=0.595344\ndone in 98.4s",
+  "predictions_hash": "2150f0faf2d5",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000514,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.666182,
+      "nDCG@5": 0.535306,
+      "primary": 0.600744
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.668008,
+      "nDCG@5": 0.535475,
+      "primary": 0.601742
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.666811,
+      "nDCG@5": 0.535243,
+      "primary": 0.601027
+    }
+  ],
+  "seconds": 108.7,
+  "verdict": "noise",
+  "delta": -0.000329,
+  "tokens_in": 111462,
+  "tokens_out": 6371,
+  "tokens_cached": 92928,
+  "cost_usd": 0.156509,
+  "model": "gpt-5.5",
+  "agent_iteration": 11,
+  "wall_seconds": 188.2,
+  "recovery_events": []
+}

@@ -1,0 +1,65 @@
+{
+  "iteration": 5,
+  "solution": "logs/record-run-14/solutions/005_lgbm_rank_fm_blend.py",
+  "hypothesis": "draft model: branch from best BPR/FM direction but test a readable new mechanism, LightGBM LambdaRank with user_id query groups and native categorical features per docs https://github.com/lightgbm-org/LightGBM/blob/main/docs/Advanced-Topics.rst. The ranker uses train-only historical item/user-cross target stats and is blended 50/50 with the FM after per-user z-scoring, so its signal is not drowned out.",
+  "parent": "2",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T02:59:32+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.57663,
+  "GAUC": 0.634395,
+  "nDCG@5": 0.518866,
+  "source_hash": "09d025876eaa",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-Pure/data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\ntrained FM in 33.8s\ntrained LGBM ranker in 49.3s\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8823db9c0244",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.004419,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.635761,
+      "nDCG@5": 0.520533,
+      "primary": 0.578147
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.63932,
+      "nDCG@5": 0.520863,
+      "primary": 0.580091
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.628103,
+      "nDCG@5": 0.515202,
+      "primary": 0.571653
+    }
+  ],
+  "seconds": 99.1,
+  "verdict": "worse",
+  "delta": -0.02487,
+  "tokens_in": 75186,
+  "tokens_out": 7806,
+  "tokens_cached": 59520,
+  "cost_usd": 0.146985,
+  "model": "gpt-5.5",
+  "agent_iteration": 4,
+  "wall_seconds": 201.0,
+  "recovery_events": []
+}

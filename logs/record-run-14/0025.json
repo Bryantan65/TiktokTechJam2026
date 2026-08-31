@@ -1,0 +1,65 @@
+{
+  "iteration": 25,
+  "solution": "logs/record-run-14/solutions/025_warm_din_sequence.py",
+  "hypothesis": "improve 24: the DIN member overfit immediately from random init; warm-start it from the strong balanced BPR FM and train a low-LR sequence residual so the attention mechanism has a useful base ranking instead of relearning FM from scratch.",
+  "parent": "24",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T04:30:16+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604574,
+  "GAUC": 0.671254,
+  "nDCG@5": 0.537895,
+  "source_hash": "fe3f3650e20d",
+  "stdout_tail": "warmdin seed=2 ep=7 p=0.603378\nwarmdin seed=2 ep=8 p=0.603709\nbpr balanced=True seed=103 ep=1 p=0.601753\nbpr balanced=True seed=103 ep=2 p=0.601662\nbpr balanced=True seed=103 ep=3 p=0.599352\nbpr balanced=True seed=103 ep=4 p=0.595466\nbpr balanced=True seed=103 ep=5 p=0.591829\nwarmdin seed=103 ep=0 p=0.601753\nwarmdin seed=103 ep=1 p=0.602700\nwarmdin seed=103 ep=2 p=0.603140\nwarmdin seed=103 ep=3 p=0.603800\nwarmdin seed=103 ep=4 p=0.603759\nwarmdin seed=103 ep=5 p=0.603542\nwarmdin seed=103 ep=6 p=0.603576\nwarm_din_sequence parent=0.70 warmdin=0.30 members=2 total_time=556.0s",
+  "predictions_hash": "45f2f05294d2",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.00046,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.670981,
+      "nDCG@5": 0.537738,
+      "primary": 0.604359
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.670992,
+      "nDCG@5": 0.537531,
+      "primary": 0.604261
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671789,
+      "nDCG@5": 0.538416,
+      "primary": 0.605103
+    }
+  ],
+  "seconds": 565.5,
+  "verdict": "KEPT",
+  "delta": 0.003074,
+  "tokens_in": 134174,
+  "tokens_out": 8600,
+  "tokens_cached": 100864,
+  "cost_usd": 0.219707,
+  "model": "gpt-5.5",
+  "agent_iteration": 23,
+  "wall_seconds": 644.2,
+  "recovery_events": []
+}

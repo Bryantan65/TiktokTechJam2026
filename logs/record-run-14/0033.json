@@ -1,0 +1,65 @@
+{
+  "iteration": 33,
+  "solution": "logs/record-run-14/solutions/033_statprior_uv_rank_debug.py",
+  "hypothesis": "debug 32: node 32 crashed only because the imported base lacked percentile/RRF helpers; define them locally and rerun the same user-video/stat-prior rank fusion so the change actually scores.",
+  "parent": "32",
+  "uct_rank": null,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-31T05:15:24+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604698,
+  "GAUC": 0.671537,
+  "nDCG@5": 0.537859,
+  "source_hash": "6477f3c7dad7",
+  "stdout_tail": "load pred_cache/016_time_bpr_ndcgbal_v1_valid_seed103.npy\nload pred_cache/016_time_bpr_ndcgbal_v1_valid_seed204.npy\nload pred_cache/016_time_bpr_ndcgbal_v1_valid_seed305.npy\nload pred_cache/016_time_bpr_ndcgbal_v1_valid_seed406.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed2.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed103.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed204.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed305.npy\nload pred_cache/021_time_mtbpr_aux_v1_valid_seed406.npy\nload pred_cache/024_din_histpos_v1_valid_seed2.npy\nload pred_cache/024_din_histpos_v1_valid_seed103.npy\nload pred_cache/024_din_histpos_v1_valid_seed204.npy\nload pred_cache/024_din_histpos_v1_valid_seed305.npy\nload pred_cache/024_din_histpos_v1_valid_seed406.npy\ndebug32_fixed_seed27_plus_uv_rank_statprior stat_weight=0.125",
+  "predictions_hash": "9eed4f61b581",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671537,
+      "nDCG@5": 0.537859,
+      "primary": 0.604698
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671537,
+      "nDCG@5": 0.537859,
+      "primary": 0.604698
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671537,
+      "nDCG@5": 0.537859,
+      "primary": 0.604698
+    }
+  ],
+  "seconds": 134.5,
+  "verdict": "KEPT",
+  "delta": 0.003198,
+  "tokens_in": 49722,
+  "tokens_out": 2505,
+  "tokens_cached": 37760,
+  "cost_usd": 0.073835,
+  "model": "gpt-5.5",
+  "agent_iteration": 31,
+  "wall_seconds": 157.0,
+  "recovery_events": []
+}
