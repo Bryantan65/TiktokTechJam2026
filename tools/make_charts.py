@@ -84,68 +84,108 @@ def finish(fig, ax, name, title, sub=None):
     print('  wrote %s' % os.path.relpath(p, ROOT))
 
 
-# ---------------------------------------------------------------- 1. climb
-def chart_trajectory(run='logs/record-run-9'):
-    recs = load(run)
-    sc = scored(recs)
-    fig, ax = plt.subplots(figsize=(9, 5))
+# ------------------------------------------------------------------ 1. tree
+def chart_tree(run='logs/record-run-9'):
+    """The run as the search tree it is: x is the experiment, y is its score.
 
+    Same shape as the console's tree, but on a real score axis rather than a
+    rank one - a static image has no hover, so the y-axis has to carry units.
+    """
+    recs = load(run)
+    by = {r['iteration']: r for r in recs}
+    sc = scored(recs)
+    top_rec = max(sc, key=lambda r: r['valid_primary'])
+    top = top_rec['valid_primary']
+    lo, hi = BASELINE - 0.0011, top + 0.0007
+
+    def parent_of(r):
+        try:
+            p = int(r.get('parent'))
+        except (TypeError, ValueError):
+            return None
+        return p if p in by else None
+
+    # An experiment that never scored has no height of its own, so it sits
+    # level with the node it came from - a dead end reads as a flat stub.
+    ypos = {}
+    for r in sorted(recs, key=lambda r: r['iteration']):
+        v = r.get('valid_primary')
+        if v is not None and r.get('verdict') not in ('screen', 'duplicate'):
+            ypos[r['iteration']] = v
+        else:
+            p = parent_of(r)
+            ypos[r['iteration']] = ypos.get(p, BASELINE)
+
+    # the chain of parents that actually produced the result
+    winning, cur = set(), top_rec['iteration']
+    while cur is not None and cur not in winning:
+        winning.add(cur)
+        cur = parent_of(by[cur]) if cur in by else None
+
+    fig, ax = plt.subplots(figsize=(9.5, 5.2))
+    ax.set_ylim(lo, hi)
     ax.axhline(BASELINE, color=YELLOW, lw=1.6, ls='--', zorder=1)
-    ax.text(len(recs) * 0.995, BASELINE - 0.00028, 'official FM baseline  0.6016',
-            color=YELLOW, ha='right', va='top', fontsize=12)
+    ax.text(0.4, BASELINE + 0.00010, 'official FM baseline  0.6016',
+            color=YELLOW, ha='left', va='bottom', fontsize=12)
     ax.axhline(TARGET, color=BLUE, lw=1.3, ls=':', zorder=1)
-    ax.text(len(recs) * 0.995, TARGET + 0.00012, 'target  +0.002',
+    ax.text(len(recs) + 0.4, TARGET + 0.00010, 'target  +0.002',
             color=BLUE, ha='right', va='bottom', fontsize=12)
 
-    # A single collapse to 0.5966 stretches the axis so the climb - the actual
-    # subject - lives in the top third. Clip to a readable window and mark what
-    # falls outside it, rather than hiding it or letting it own the chart.
-    top = max(r['valid_primary'] for r in sc)
-    lo, hi = BASELINE - 0.0011, top + 0.0006
-    ax.set_ylim(lo, hi)
-
-    best, xs, ys = -1, [], []
-    for r in sc:
-        best = max(best, r['valid_primary'])
-        xs.append(r['iteration']); ys.append(best)
-    ax.step(xs, ys, where='post', color=BLUE, lw=2.6, zorder=3)
+    clip = lambda y: max(lo + 0.00007, min(y, hi))
+    for r in recs:
+        p = parent_of(r)
+        if p is None:
+            continue
+        on = r['iteration'] in winning and p in winning
+        ax.plot([p, r['iteration']], [clip(ypos[p]), clip(ypos[r['iteration']])],
+                color=BLUE if on else '#2b4straight'[:7] if False else '#2b4463',
+                lw=2.4 if on else 1.1, zorder=3 if on else 2,
+                alpha=1.0 if on else 0.9, solid_capstyle='round')
 
     below = 0
-    for r in sc:
-        v = r['valid_primary']
-        if v < lo:
-            below += 1
-            ax.scatter(r['iteration'], lo + 0.00006, marker='v', s=64, zorder=4,
-                       color=VERDICT_COLOR.get(r.get('verdict'), GREY),
-                       edgecolor=BG, linewidth=1.0)
+    for r in recs:
+        it, y = r['iteration'], ypos[r['iteration']]
+        col = VERDICT_COLOR.get(r.get('verdict'), GREY)
+        if r.get('status') == 'error':
+            ax.scatter(it, clip(y), marker='x', s=85, color=RED, zorder=6,
+                       linewidth=2.4)
             continue
-        ax.scatter(r['iteration'], v, s=46, zorder=4,
-                   color=VERDICT_COLOR.get(r.get('verdict'), GREY),
-                   edgecolor=BG, linewidth=1.2)
-    fails = [r['iteration'] for r in recs if r.get('status') == 'error']
-    for it in fails:
-        ax.scatter(it, lo + 0.00006, marker='x', s=78, color=RED, zorder=5,
-                   linewidth=2.2)
+        if y < lo:
+            below += 1
+            ax.scatter(it, lo + 0.00007, marker='v', s=66, color=col,
+                       edgecolor=BG, linewidth=1.0, zorder=5)
+            continue
+        ax.scatter(it, y, s=62 if it in winning else 46, color=col,
+                   edgecolor=BG, linewidth=1.3, zorder=5)
 
-    notes = []
-    if fails:
-        notes.append('%d crashed' % len(fails))
-    if below:
-        notes.append('%d fell below this axis' % below)
-    if notes:
-        ax.text(0.015, 0.03, '  ·  '.join(notes), transform=ax.transAxes,
-                color=FAINT, fontsize=11.5, ha='left')
+    ax.scatter([top_rec['iteration']], [top], s=230, facecolor='none',
+               edgecolor=GREEN, linewidth=2.0, zorder=6)
+    ax.annotate('0.6057', xy=(top_rec['iteration'], top), xytext=(-10, 15),
+                textcoords='offset points', color=GREEN, fontsize=14,
+                fontweight='bold', ha='right')
 
-    fin = max(r['valid_primary'] for r in sc)
-    ax.annotate('0.6057', xy=(xs[-1], fin), xytext=(-6, 12),
-                textcoords='offset points', color=GREEN,
-                fontsize=14, fontweight='bold', ha='right')
-    ax.set_xlabel('experiment')
+    ax.set_xlabel('experiment', labelpad=2)
     ax.set_ylabel('validation score')
+    ax.set_xlim(0, len(recs) + 1)
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, p: '%.3f' % v))
-    finish(fig, ax, 'climb.png', 'One run, 33 experiments',
-           'Each dot is an experiment. The line is the best result so far — '
-           'the number convergence watches.')
+
+    key = [('kept', GREEN), ('within noise', GREY), ('worse', YELLOW),
+           ('same model', '#a97bd8'), ('crashed', RED)]
+    for i, (lab, col) in enumerate(key):
+        ax.scatter([], [], color=col, s=52, label=lab)
+    # below the x label, not on top of it
+    leg = ax.legend(loc='upper center', frameon=False, ncol=5, fontsize=11.5,
+                    handletextpad=0.25, columnspacing=1.6,
+                    bbox_to_anchor=(0.5, -0.155))
+    for t in leg.get_texts():
+        t.set_color(DIM)
+    if below:
+        ax.text(0.985, 0.03, '%d fell below this axis' % below,
+                transform=ax.transAxes, color=FAINT, fontsize=11.5, ha='right')
+
+    finish(fig, ax, 'climb.png', 'One run, as the tree it actually is',
+           'Every experiment names a parent. The blue path is the line of '
+           'descent that produced the result.')
 
 
 # ------------------------------------------------------ 2. is it repeatable
@@ -247,7 +287,7 @@ def chart_overlap():
 
 if __name__ == '__main__':
     print('rendering charts from the run records:')
-    chart_trajectory()
+    chart_tree()
     chart_consistency()
     chart_margin()
     chart_overlap()
