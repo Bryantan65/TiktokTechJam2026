@@ -111,18 +111,25 @@ per metric, equal-weighted, as the judging formula specifies.
 Predictions: `submission_1k.csv`, 4,132,081 rows, validated with the kit's own
 `submit.py --check`. Winner: `logs-1k/record-run-4/solutions/040_light_context_member.py`.
 
-`submission_1k.csv` is **not in the repository**: 4.1M rows is 118MB, over
-GitHub's 100MB per-file limit. The Pure submission is small enough to track and
-is. Rebuild it from the winning solution, which is tracked:
+`submission_1k.csv.gz` **is** in the repository. The plain CSV is 123 MB,
+past GitHub's 100 MB per-file hard block, so the gzip is tracked instead at
+44.6 MB and the CSV itself stays ignored. It restores byte-identical:
 
 ```
-python harness/make_submission.py \
-    logs-1k/record-run-4/solutions/040_light_context_member.py \
-    --split test --out submission_1k.csv \
-    --data_dir rec_datasets/KuaiRand-1K/data
+gzip -dc submission_1k.csv.gz > submission_1k.csv
 ```
 
-**The 1k delta is ten times the Pure delta** (+0.0394 against +0.0042), which is
+Reducing score precision was the obvious alternative and does not work: four
+decimals is still 39 MB and already moves nDCG@5 in the fifth decimal
+(0.654932 against 0.654918). Only two decimals fits a 35 MB limit, and that
+costs 0.00027 by introducing ties. Changing a submission to satisfy an upload
+limit is the wrong trade.
+
+To rebuild it from scratch instead, follow the reproduction steps below - the
+winner needs its member caches present first, or it silently produces a
+different model.
+
+**The 1k delta is nine times the Pure delta** (+0.0394 against +0.0042), which is
 what the structural analysis predicts: 33.70% of 1k validation rows involve a
 (user, creator) pair seen in training, against 3.38% on Pure. Personalisation is
 available on 1k and very nearly unavailable on Pure.
