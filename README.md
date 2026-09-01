@@ -7,19 +7,29 @@ result, and decides what to try next — until the organisers' convergence rule
 stops it.
 
 ```
-                       valid     test
-official FM baseline   0.6016    0.5946
-our agent's result     0.6055    0.5985
-delta                  +0.0040   +0.0039
-the organisers' bar    +0.0020   (epsilon, ~2.5 sigma)
+KuaiRand-Pure (required)   valid      test
+official FM baseline       0.6016     0.5946
+our agent's result         0.605738   0.598847
+delta                      +0.0042    +0.0042
+the organisers' bar        +0.0020    (epsilon, ~2.5 sigma)
+
+KuaiRand-1k (bonus)        valid      test
+kit FM baseline            0.6451     0.6390
+our agent's result         0.682994   0.678305
+delta                      +0.0379    +0.0394
 ```
 
-Test was scored **once**, after the candidate was locked, and the gain
-transferred: +0.0040 on validation became +0.0039 on test.
+The gain transferred on both — it did not evaporate off validation. The test
+rows ship with the Starter Kit, so these are scored locally by discipline
+rather than withheld; final judging scores the submitted predictions.
 
 The agent found that gain on its own. It searched the literature, tried six of
 the seven suggested directions, diagnosed its own crashes, and stopped when it
-stopped making progress. **Zero human interventions during the run.**
+stopped making progress. **Zero human interventions during either run.**
+
+The 1k delta is nine times the Pure delta, from the same agent and the same
+harness. That gap is the most informative result here, and the reason is
+structural — see the limitations section.
 
 ---
 
@@ -156,30 +166,40 @@ Every run is archived under `logs/` with its solutions, its full per-iteration
 records, and its event log. Each has a matching immutable git tag
 (`record-run-4-code`) pointing at the exact code that produced it.
 
-`logs/record-run-3/README.md` is the most detailed write-up; the others record
-what each run was for and what it exposed.
+The submitted Pure run is `logs/record-run-9`; the submitted 1k run is
+`logs-1k/record-run-4`. `logs/record-run-1/README.md` and
+`logs/record-run-2/README.md` carry the most detailed narrative write-ups, from
+when the harness was still being shaken out.
 
 ---
 
 ## What the agent found
 
-Its best result is an ensemble of pairwise-ranking models with temporal context
-and a watch-time-weighted member. The path it took, with the delta over the
-official baseline at each step:
+The submitted result is a seed-bagged pairwise-ranking ensemble with temporal
+context, exposure counts and a global-CTR tie-break. The path `record-run-9`
+took, with the delta over the official baseline at each new best:
 
 ```
-#2   plain BPR, replacing pointwise BCE          +0.0014
-#8   average three independently seeded BPRs     +0.0022
-#10  extend that to seven members                +0.0030
-#17  hour/day temporal context (after 3 debugs)  +0.0036
-#24  a watch-time-weighted member added          +0.0040
+#2   plain BPR, replacing pointwise BCE            +0.0017
+#6   bag several seeded BPRs, blend by rank        +0.0030
+#8   a DIN-inspired behaviour summary              +0.0031
+#10  video content features on a sparse FM         +0.0036
+#15  hour and weekday temporal context             +0.0037
+#24  unlabeled sequential exposure counts          +0.0039
+#27  fix a seed realisation that was unlucky       +0.0042
+#31  global-CTR tie-break on close calls           +0.0042
 ```
 
 Every step was the agent's own choice, and the hypothesis in the ledger explains
-why it made each one. Note `#17` — the temporal feature took **three debugging
-iterations** to align correctly against the raw logs, dropping to 0.5829 at one
-point before the agent found that its lookup key included a field the raw logs
-do not carry.
+each one. Note `#27` and `#28`: the agent noticed a seed had landed badly,
+wrote a fixed-seed wrapper, found it was a **no-op** because its predictions were
+identical to the parent's, and said so in the next hypothesis before trying
+again. Recognising its own null result is the behaviour we most wanted to see.
+
+Record run 3 took a different route to nearly the same place — BPR bagging, then
+temporal context after three debugging iterations, then a watch-time-weighted
+member, ending at +0.0039. Four runs converging on the same score by four
+different mechanisms is the substance of the saturation argument below.
 
 Three findings worth stating, all of which the agent reached by measurement:
 
@@ -210,6 +230,37 @@ weight the training loss gained +0.0006.
 
 ---
 
+## Which run we submitted, and why
+
+Pure has sixteen record runs; the submitted one is `record-run-9`. Run 3 scored
+0.605493 on validation against run 9's 0.605738 — a gap of 0.000245, well inside
+the 0.0008 seed spread — so score is not the reason. Two other things are.
+
+**The hard caps.** Run 9's `run_start` event records
+`min_scored_before_convergence: 30`, `max_experiments: 50` and
+`max_wall_seconds: 21600`, and it converged in 2 h 34 m. Run 3's records
+`max_experiments: 80` with no wall-clock ceiling, and it ran 6 h 29 m — outside
+the 50-iteration and 6-hour limits. The organisers permit a team to declare its
+own epsilon, N and minimum-iteration floor provided the values are fixed before
+the run and recorded in the run log; run 9 satisfies that condition, which is
+why the floor is a declared parameter rather than a deviation.
+
+**Test labels.** Run 3's winner builds a raw-log lookup keyed on
+`(date, user, video, tab, dur, y)` where `y` is the label, and applies it to
+every split including test with no guard — so which raw record, and therefore
+which `hourmin`, attaches to a test row is conditioned on that row's label. The
+channel is narrow, biting only on the 3.06% of test pairs that are duplicated,
+but it is a test label being read. Run 9's lineage does the equivalent work and
+guards it: `row_feats(row, update_label=(sp=='train'))` in node 24, and
+`if sp == 'train'` around the label counters in node 28. It walks all three
+splits to accumulate exposure counts, which are label-free, and never updates
+label-derived state outside train.
+
+Run 3 stays in the repository. It is part of the run record, and removing a
+result because it was not submitted would be the wrong instinct.
+
+---
+
 ## Limitations, and what we would do with more time
 
 ### The task is close to saturated, and we can show why
@@ -217,7 +268,7 @@ weight the training loss gained +0.0006.
 ```
 oracle ceiling (valid)                  0.8484   requires the labels
 perfect knowledge of every video        0.6197   knowing nothing about the user
-our result                              0.6055
+our result                              0.6057
 official baseline                       0.6016
 ```
 
@@ -230,17 +281,18 @@ Four independent searches make the same point empirically. Four runs, four
 mechanism families, none able to read another's ledger:
 
 ```
+global-CTR tie-break on a seed ensemble  0.605738   <- submitted
 BPR ensemble + watch-time weighting      0.605493
 mixed tab/hour ensembles                 0.605368
 FM rank ensemble + DeepFM blend          0.605024
 same-user sampled softmax                0.604615
-                            mean 0.605002, sd 0.000498
+                            mean 0.605248, sd 0.000397
 ```
 
-0.610 sits ten standard deviations above that mean. This is not a search that
+0.610 sits twelve standard deviations above that mean. This is not a search that
 needs more attempts; it is a task that has run out of signal.
 
-The gap between 0.6055 and 0.8484 looks like room. It is not. **Only 1.62% of
+The gap between 0.6057 and 0.8484 looks like room. It is not. **Only 1.62% of
 validation rows involve a (user, video) pair the model has ever seen in
 training**, and the median user has 31 training rows covering 29 videos by 29
 different creators. There is almost no repetition from which to learn a person's
@@ -254,8 +306,8 @@ the same user shown the same video on a *different day* changes their mind
 
 ### What we would improve
 
-**Our own search wasted budget.** Run 3 committed to a 10-model ensemble by
-experiment 24, after which every new idea was tested as a 5% weighted addition
+**Our own search wasted budget.** Record run 3 — not the submitted run, but
+instructive — committed to a 10-model ensemble by experiment 24, after which every new idea was tested as a 5% weighted addition
 to it — arithmetically incapable of changing the outcome, at 13-16 minutes per
 attempt. Five genuinely different mechanisms were tested that way and none could
 be resolved. We have since added a policy requiring a mechanism to be validated
@@ -267,10 +319,23 @@ artefact of biased logging. It cannot be trained on — it spans the evaluation
 window — but it is the strongest available check on a result selected across
 thirty experiments on validation alone.
 
-**We never attempted the bonus benchmarks.** KuaiRand-1k has ~11,700
-interactions per user against Pure's 52 — roughly 226x more history per person,
-which is exactly the constraint identified above. It is the one place where
-personalisation would genuinely become learnable.
+**We did attempt the bonus benchmarks, and 1k confirmed the diagnosis above.**
+1k has ~11,700 interactions per user against Pure's 52, and **33.70%** of its
+validation rows involve a (user, creator) pair seen in training against Pure's
+**3.38%**. Same agent, same harness, same code — and nine times the delta.
+That is the cleanest evidence we have that Pure's ceiling is a property of the
+data rather than of our search.
+
+27k we measured a baseline for (0.665079 validation) but could not run the agent
+on. 322M rows as Python tuples need ~110 GB against a 116 GB container limit; the
+loader now discards the test split as it reads, which is enough for a baseline at
+71 GB but not for a solution doing real work on top. Six agent attempts were all
+OOM-killed with exit code -9. Making it viable needs the loader rewritten to
+numpy arrays rather than Python tuples — the streaming rewrite our own notes
+predicted from the start. We measured the alternative first: subsampling the
+training split by 10x costs 0.0329 on 1k, against an agent whose best gain on any
+dataset is 0.0379, so buying the speed that way costs almost everything it could
+win.
 
 **The agent writes everything from scratch.** Across four runs it hand-wrote
 DeepFM, DIN-style attention and multi-task heads from memory, never using an
@@ -285,7 +350,10 @@ directions.
 | | |
 | --- | --- |
 | **Bryan Tan** ([@Bryantan65](https://github.com/Bryantan65)) | Harness, ledger and guardrails; agent loop debugging; multi-seed scoring; convergence rule; robustness and run logging; submission tooling; benchmark analysis |
-| **Zheng** ([@sgzm2011](mailto:sgzm2011@gmail.com)) | Agent loop implementation; per-run output management; record run 3; test-scoring tool; ensemble solutions |
+| **Zheng** ([@sgzm2011](mailto:sgzm2011@gmail.com)) | Agent loop implementation; per-run output management; record runs 3 and 9; test-scoring tool; ensemble solutions |
+| **Kaibao** | KuaiRand-1k runs on GPU, including the submitted `logs-1k/record-run-4` |
+
+Submitted: `logs/record-run-9` for Pure, `logs-1k/record-run-4` for the 1k bonus.
 
 `src/` vendors the CWM reference implementation (hyz20/CWM, arXiv 2406.07932),
 ported to a modern stack. It is reference material and is not part of the
