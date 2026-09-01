@@ -1,0 +1,65 @@
+{
+  "iteration": 31,
+  "solution": "logs-1k/record-run-4/solutions/031_history_affinity_rrf.py",
+  "hypothesis": "draft user-history heuristic: change mechanism from learned history LightGBM to an explicit repeat/author/tab affinity scorer with recency-decayed train-label counts, then fuse it at a readable 22% through the node-30 RRF pipeline. This attacks top-5 ranking with a non-parametric personalized prior rather than another near-tie model variant.",
+  "parent": "30",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T21:03:46+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.657467,
+  "GAUC": 0.685636,
+  "nDCG@5": 0.629298,
+  "source_hash": "9d5b2f994033",
+  "stdout_tail": "{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "9620831981f2",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.685636,
+      "nDCG@5": 0.629298,
+      "primary": 0.657467
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.685636,
+      "nDCG@5": 0.629298,
+      "primary": 0.657467
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.685636,
+      "nDCG@5": 0.629298,
+      "primary": 0.657467
+    }
+  ],
+  "seconds": 241.9,
+  "verdict": "KEPT",
+  "delta": 0.012367,
+  "tokens_in": 57781,
+  "tokens_out": 4148,
+  "tokens_cached": 42880,
+  "cost_usd": 0.100172,
+  "model": "gpt-5.5",
+  "agent_iteration": 26,
+  "wall_seconds": 276.3,
+  "recovery_events": []
+}

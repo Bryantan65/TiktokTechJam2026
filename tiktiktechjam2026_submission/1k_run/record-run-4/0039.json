@@ -1,0 +1,33 @@
+{
+  "iteration": 39,
+  "solution": "logs-1k/record-run-4/solutions/039_candidate_context_v2.py",
+  "hypothesis": "improve 38: candidate-context is now carrying most of the score, so add a new readable candidate-context member with only non-label per-impression features (user row position, repeat positions, candidate-set duration/popularity context) instead of just nudging weights.",
+  "parent": "38",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T21:46:27+00:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "5298a593b741",
+  "seeds_completed": 0,
+  "seconds": 906.3,
+  "verdict": "failed",
+  "tokens_in": 67994,
+  "tokens_out": 7817,
+  "tokens_cached": 49024,
+  "cost_usd": 0.150107,
+  "model": "gpt-5.5",
+  "agent_iteration": 34,
+  "wall_seconds": 974.2,
+  "recovery_events": []
+}

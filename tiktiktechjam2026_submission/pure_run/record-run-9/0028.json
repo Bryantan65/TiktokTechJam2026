@@ -1,0 +1,57 @@
+{
+  "iteration": 28,
+  "solution": "logs/record-run-9/solutions/028_seed0_history_tiebreak.py",
+  "hypothesis": "debug 27: the fixed-seed wrapper was a no-op because it emitted exactly node-24 seed-0 predictions; add a 5% within-user chronological history/exposure prior as a real tie-breaker while preserving the strong fixed seed-0 ensemble.",
+  "parent": "27",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:26:36+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605721,
+  "GAUC": 0.673073,
+  "nDCG@5": 0.53837,
+  "source_hash": "3dceddaea365",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=fixed_seed0_node24_plus_history_tiebreak\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "08a18911634a",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.673073,
+      "nDCG@5": 0.53837,
+      "primary": 0.605721
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.673073,
+      "nDCG@5": 0.53837,
+      "primary": 0.605721
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.673073,
+      "nDCG@5": 0.53837,
+      "primary": 0.605721
+    }
+  ],
+  "seconds": 336.8,
+  "verdict": "KEPT",
+  "delta": 0.004221,
+  "tokens_in": 60401,
+  "tokens_out": 4861,
+  "tokens_cached": 42880,
+  "cost_usd": 0.113852,
+  "model": "gpt-5.5",
+  "agent_iteration": 14,
+  "wall_seconds": 402.6,
+  "recovery_events": []
+}

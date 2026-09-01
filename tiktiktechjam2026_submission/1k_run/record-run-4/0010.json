@@ -1,0 +1,65 @@
+{
+  "iteration": 10,
+  "solution": "logs-1k/record-run-4/solutions/010_lgbm_binary_base_debug.py",
+  "hypothesis": "debug 9: the pointwise LightGBM with historical stats is even below random, so remove all target/count stats and crosses and train only on the official FM fields plus duration transforms. This diagnoses whether the failure is LightGBM itself/categorical handling or the stat-feature pipeline.",
+  "parent": "9",
+  "uct_rank": null,
+  "by": "agent",
+  "split": "dev",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T17:54:53+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.64623,
+  "GAUC": 0.675169,
+  "nDCG@5": 0.617292,
+  "source_hash": "5db61a189b12",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 3302351, 'valid': 1753633} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 1,753,633 predictions for split=dev",
+  "predictions_hash": "4b77e4c4583b",
+  "users": 970,
+  "rows": 1753633,
+  "primary_std": 0.000918,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.675493,
+      "nDCG@5": 0.615953,
+      "primary": 0.645723
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.675354,
+      "nDCG@5": 0.616002,
+      "primary": 0.645678
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.674659,
+      "nDCG@5": 0.619921,
+      "primary": 0.64729
+    }
+  ],
+  "seconds": 360.1,
+  "verdict": "screen",
+  "delta": 0.00113,
+  "tokens_in": 79768,
+  "tokens_out": 3179,
+  "tokens_cached": 65920,
+  "cost_usd": 0.099375,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 586.0,
+  "recovery_events": []
+}

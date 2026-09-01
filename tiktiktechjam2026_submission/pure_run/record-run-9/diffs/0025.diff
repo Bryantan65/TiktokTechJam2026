@@ -1,0 +1,55 @@
+# iteration 25  (parent: 24)
+# hypothesis: improve 24: exposure-count features helped but raised seed variance; reuse the unchanged cached node-24 members across outer seeds 0/1/2 and give the exposure member 55% weight to denoise while preserving the new signal.
+# result: GAUC 0.672593 | nDCG@5 0.538061 | primary 0.605327 | verdict KEPT
+
+--- logs/record-run-9/solutions/024_time_exposure_counts.py
++++ logs/record-run-9/solutions/025_exposure_seedbag_55.py
+@@ -1,10 +1,9 @@
+-"""Improve node 15 by adding unlabeled sequential exposure-count features.
+-
+-Node 15 only used train-label history plus time/date/content.  This variant keeps
+-node-10 cached members unchanged and retrains the time/date member with features
+-available at prediction time: prior impressions of the same user-video,
+-user-author, user, video, and author in chronological row order.  No valid/test
+-labels are used to update these counts.
++"""Improve node 24 with cached outer-seed bagging and a slightly higher exposure-member weight.
++
++Node 24's exposure-count time member improved both metrics but had higher seed
++variance.  This script reuses unchanged cached node-24 members for outer seeds
++0/1/2, averages their within-user ranks, and gives the exposure time member 55%
++weight versus 45% for the node-10 base/content/history ensemble.
+ """
+ import argparse, csv, os, sys, time
+ from collections import defaultdict, deque
+@@ -255,21 +254,24 @@
+ 
+ def run_predict(splits,data_dir,split='valid',seed=0,device='cpu',verbose=False):
+     enc_base,dim_base=encode(splits); Xbase,_,uout=enc_base[split]
+-    base_rank=ensemble_rank(enc_base,dim_base,Xbase,uout,split,seed,device,verbose,'006','bpr','bce')
+     enc_hist,dim_hist=encode_history(splits,add_content=False); Xhist,_,uhist=enc_hist[split]
+-    hist_rank=ensemble_rank(enc_hist,dim_hist,Xhist,uhist,split,seed,device,verbose,'008','bprhist','bcehist')
+     vf=read_video_features(data_dir)
+     enc_cont,dim_cont=encode_history(splits,video_feats=vf,add_content=True); Xcont,_,ucont=enc_cont[split]
+-    cont_rank=ensemble_rank(enc_cont,dim_cont,Xcont,ucont,split,seed,device,verbose,'010','bprcont','bcecont')
+-    node10=0.35*base_rank+0.25*hist_rank+0.40*cont_rank
+     hour_qs=read_hour_queues(data_dir)
+     enc_time,dim_time=encode_history(splits,video_feats=vf,add_content=True,hour_qs=hour_qs,add_time=True,add_exposure=True); Xtime,_,utime=enc_time[split]
+-    time_rank=ensemble_rank(enc_time,dim_time,Xtime,utime,split,seed,device,verbose,'024','bprtimedateexpo','bcetimedateexpo')
+-    return 0.50*node10+0.50*time_rank
++    out=np.zeros(len(Xtime),dtype=np.float64)
++    for s in [0,1,2]:
++        base_rank=ensemble_rank(enc_base,dim_base,Xbase,uout,split,s,device,verbose,'006','bpr','bce')
++        hist_rank=ensemble_rank(enc_hist,dim_hist,Xhist,uhist,split,s,device,verbose,'008','bprhist','bcehist')
++        cont_rank=ensemble_rank(enc_cont,dim_cont,Xcont,ucont,split,s,device,verbose,'010','bprcont','bcecont')
++        node10=0.35*base_rank+0.25*hist_rank+0.40*cont_rank
++        time_rank=ensemble_rank(enc_time,dim_time,Xtime,utime,split,s,device,verbose,'024','bprtimedateexpo','bcetimedateexpo')
++        out += 0.45*node10 + 0.55*time_rank
++    return out/3.0
+ 
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date+exposure_counts')
++    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date+exposure_counts+seedbag55')
+     scores=run_predict(splits,a.data_dir,split=a.split,seed=a.seed,device=a.device,verbose=a.out is None)
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')

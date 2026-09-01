@@ -1,0 +1,57 @@
+{
+  "iteration": 9,
+  "solution": "logs/record-run-9/solutions/009_base_history_rankblend.py",
+  "hypothesis": "improve 8: node 8 only replaced the incumbent with history fields; blend cached node-6 base and node-8 history ensembles at 50/50 rank weight so any complementary per-user orderings get a readable vote instead of relying on a near-identical standalone score.",
+  "parent": "8",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:50:21+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604833,
+  "GAUC": 0.671903,
+  "nDCG@5": 0.537764,
+  "source_hash": "199fe5782712",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history blend\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "6443252b1346",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000342,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672641,
+      "nDCG@5": 0.5378,
+      "primary": 0.60522
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.671743,
+      "nDCG@5": 0.537672,
+      "primary": 0.604707
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.671326,
+      "nDCG@5": 0.537819,
+      "primary": 0.604572
+    }
+  ],
+  "seconds": 38.8,
+  "verdict": "KEPT",
+  "delta": 0.003333,
+  "tokens_in": 63980,
+  "tokens_out": 5549,
+  "tokens_cached": 44928,
+  "cost_usd": 0.125584,
+  "model": "gpt-5.5",
+  "agent_iteration": 7,
+  "wall_seconds": 92.3,
+  "recovery_events": []
+}

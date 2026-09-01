@@ -1,0 +1,225 @@
+# iteration 17  (parent: 12)
+# hypothesis: improve 12: the first LambdaMART draft was weak, but listwise tree rankers should capture nonlinear feature thresholds missed by FM; train LightGBM LambdaRank on the best history+content+time/date fields and blend at a readable 30%.
+# result: GAUC 0.67145 | nDCG@5 0.537421 | primary 0.604436 | verdict KEPT
+
+--- logs/record-run-9/solutions/012_lgbm_lambdarank_blend.py
++++ logs/record-run-9/solutions/017_lgbm_time_blend.py
+@@ -1,5 +1,12 @@
++"""Improve node 12: richer LambdaMART member blended with best node-15 FM ensemble.
++
++Uses the unchanged node-15 FM members/caches, and trains a LightGBM LambdaRank
++model on the same history+content+time/date encoded fields.  The new ranker is
++blended at 30% so its contribution is readable.
++"""
+ import argparse, csv, os, sys, time
+-from collections import defaultdict
++from collections import defaultdict, deque
++from datetime import datetime
+ import numpy as np
+ import torch
+ import lightgbm as lgb
+@@ -19,7 +26,8 @@
+     @torch.no_grad()
+     def predict(self,X,bs=200000,device='cpu'):
+         self.eval(); out=[]
+-        for i in range(0,len(X),bs): out.append(self(torch.from_numpy(X[i:i+bs].astype(np.int64)).to(device)).cpu().numpy())
++        for i in range(0,len(X),bs):
++            out.append(self(torch.from_numpy(X[i:i+bs].astype(np.int64)).to(device)).cpu().numpy())
+         return np.concatenate(out)
+ 
+ def pos_bucket(c):
+@@ -79,14 +87,59 @@
+                         size_bucket(rec.get('server_height')), norm_val(rec.get('music_type'))]
+     return feats
+ 
+-def build_history_raw_features(splits, video_feats=None, add_content=False):
++def _ival(rec, names, default=0):
++    for n in names:
++        if n in rec and rec[n] not in (None,''):
++            try: return int(float(rec[n]))
++            except Exception: pass
++    return default
++
++def read_hour_queues(data_dir):
++    qs=defaultdict(deque)
++    for fn in ['log_standard_4_08_to_4_21_pure.csv','log_standard_4_22_to_5_08_pure.csv']:
++        path=os.path.join(data_dir,fn)
++        if not os.path.isfile(path): continue
++        with open(path,newline='',encoding='utf-8') as f:
++            for rec in csv.DictReader(f):
++                date=_ival(rec,['date']); u=_ival(rec,['user_id','user']); v=_ival(rec,['video_id','photo_id','video'])
++                a=_ival(rec,['author_id']); tab=_ival(rec,['tab']); dur=_ival(rec,['duration_ms','duration'])
++                hm=_ival(rec,['hourmin','hour_min','time','timestamp'],0)
++                qs[(date,u,v,a,tab,dur)].append(hm)
++    return qs
++
++def _date_obj(d):
++    try: return datetime.strptime(str(int(d)),'%Y%m%d')
++    except Exception: return datetime.strptime('20220408','%Y%m%d')
++
++def time_date_feats(hm, date, tab):
++    try: hm=int(hm)
++    except Exception: hm=0
++    hour=hm//100 if hm>=100 else hm; minute=hm%100 if hm>=100 else 0
++    if hour<0 or hour>23: hour=0
++    mb=min(5, max(0, minute//10))
++    if hour<6: part=0
++    elif hour<11: part=1
++    elif hour<14: part=2
++    elif hour<18: part=3
++    elif hour<22: part=4
++    else: part=5
++    dt=_date_obj(date); base=datetime.strptime('20220408','%Y%m%d')
++    day_idx=max(0,(dt-base).days); week_idx=day_idx//7; weekday=dt.weekday(); dom=dt.day; weekend=1 if weekday>=5 else 0
++    return [hour, mb, part, weekday, day_idx, week_idx, dom, weekend,
++            f'tab{tab}_part{part}', f'tab{tab}_hour{hour}', f'w{weekday}_part{part}', f'd{day_idx}_tab{tab}']
++
++def build_history_raw_features(splits, video_feats=None, add_content=False, hour_qs=None, add_time=False):
+     up_v=defaultdict(int); un_v=defaultdict(int); up_a=defaultdict(int); un_a=defaultdict(int)
+     raw={}; labels={}; users={}; video_feats=video_feats or {}; unk=['unk']*7
+     def row_feats(row, update=False):
+-        date,u,v,a,tab,dur,y=row; kv=(u,v); ka=(u,a); pv,nv=up_v[kv],un_v[kv]; pa,na=up_a[ka],un_a[ka]
+-        # Include date as a coarse temporal context for the tree ranker; for the FM this is categorical too.
+-        feats=[u,v,a,tab,int(dur)//10000,int(date),pos_bucket(pv),neg_bucket(nv),pos_bucket(pa),neg_bucket(na),ratio_bucket(pa,na),ratio_bucket(pv,nv)]
++        date,u,v,a,tab,dur,y=row; dur_bucket=int(dur)//10000; kv=(u,v); ka=(u,a)
++        pv,nv=up_v[kv],un_v[kv]; pa,na=up_a[ka],un_a[ka]
++        feats=[u,v,a,tab,dur_bucket,pos_bucket(pv),neg_bucket(nv),pos_bucket(pa),neg_bucket(na),ratio_bucket(pa,na),ratio_bucket(pv,nv)]
+         if add_content: feats.extend(video_feats.get(v,unk))
++        if add_time:
++            key=(int(date),int(u),int(v),int(a),int(tab),int(dur))
++            hm=hour_qs[key].popleft() if hour_qs is not None and key in hour_qs and len(hour_qs[key]) else 0
++            feats.extend(time_date_feats(hm,date,tab))
+         if update:
+             if y>0.5: up_v[kv]+=1; up_a[ka]+=1
+             else: un_v[kv]+=1; un_a[ka]+=1
+@@ -98,8 +151,8 @@
+         raw[sp]=fs; labels[sp]=np.asarray(ys,dtype=np.float32); users[sp]=np.asarray(us,dtype=np.int64)
+     return raw,labels,users
+ 
+-def encode_history(splits, video_feats=None, add_content=False):
+-    raw,labels,users=build_history_raw_features(splits,video_feats,add_content); n=len(raw['train'][0]); maps=[]; off=0
++def encode_history(splits, video_feats=None, add_content=False, hour_qs=None, add_time=False):
++    raw,labels,users=build_history_raw_features(splits,video_feats,add_content,hour_qs,add_time); n=len(raw['train'][0]); maps=[]; off=0
+     for j in range(n):
+         vals=set()
+         for sp in ('train','valid','test'): vals.update(r[j] for r in raw[sp])
+@@ -112,21 +165,6 @@
+         enc[sp]=(X,labels[sp],users[sp])
+     return enc,off
+ 
+-def encode_lgbm_content(splits, data_dir):
+-    raw,labels,users=build_history_raw_features(splits, read_video_features(data_dir), True)
+-    n=len(raw['train'][0]); maps=[]
+-    for j in range(n):
+-        vals=set()
+-        for sp in ('train','valid','test'): vals.update(r[j] for r in raw[sp])
+-        maps.append({v:i for i,v in enumerate(sorted(vals,key=lambda x:str(x)))})
+-    enc={}
+-    for sp in ('train','valid','test'):
+-        X=np.empty((len(raw[sp]),n),dtype=np.int32)
+-        for i,r in enumerate(raw[sp]):
+-            for j,v in enumerate(r): X[i,j]=maps[j][v]
+-        enc[sp]=(X,labels[sp],users[sp])
+-    return enc
+-
+ def make_bpr_training_arrays(ytr,utr):
+     y=np.asarray(ytr); u=np.asarray(utr); order=np.argsort(u,kind='stable'); us=u[order]
+     cuts=np.r_[0,np.flatnonzero(us[1:]!=us[:-1])+1,len(order)]; neg_by_user={}; ep=[]; eu=[]
+@@ -139,9 +177,9 @@
+ 
+ def train_bce(enc,dim,k=16,lr=0.001,l2=1e-6,epochs=40,bs=8192,patience=4,seed=0,device='cpu',verbose=False):
+     Xtr,ytr,_=enc['train']; Xva,yva,uva=enc['valid']; model=TorchFM(dim,k,seed).to(device)
+-    opt=torch.optim.Adam([{'params':[model.V,model.W],'weight_decay':l2},{'params':[model.b],'weight_decay':0.0}],lr=lr)
+-    lossfn=torch.nn.BCEWithLogitsLoss(); Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); ytr_t=torch.from_numpy(ytr.astype(np.float32))
+-    rng=np.random.default_rng(seed); best=-1.; best_state=None; bad=0
++    opt=torch.optim.Adam([{'params':[model.V,model.W],'weight_decay':l2},{'params':[model.b],'weight_decay':0.0}],lr=lr); lossfn=torch.nn.BCEWithLogitsLoss()
++    Xtr_t=torch.from_numpy(Xtr.astype(np.int64)); ytr_t=torch.from_numpy(ytr.astype(np.float32)); rng=np.random.default_rng(seed)
++    best=-1.; best_state=None; bad=0
+     for ep in range(1,epochs+1):
+         idx=rng.permutation(len(ytr)); model.train(); t0=time.time()
+         for i in range(0,len(idx),bs):
+@@ -189,44 +227,59 @@
+ def member_pred(cache_prefix,name,train_fn,enc,dim,Xout,split,outer_seed,member_seed,device,verbose):
+     os.makedirs('pred_cache',exist_ok=True); path=os.path.join('pred_cache',f'{cache_prefix}_{name}_split{split}_outer{outer_seed}_mseed{member_seed}.npy')
+     if os.path.isfile(path): return np.load(path)
+-    torch.manual_seed(member_seed); model=train_fn(enc,dim,seed=member_seed,device=device,verbose=verbose); preds=model.predict(Xout,device=device).astype(np.float64); np.save(path,preds); return preds
++    torch.manual_seed(member_seed); model=train_fn(enc,dim,seed=member_seed,device=device,verbose=verbose)
++    preds=model.predict(Xout,device=device).astype(np.float64); np.save(path,preds); return preds
+ 
+ def ensemble_rank(enc,dim,Xout,uout,split,seed,device,verbose,cache_prefix,bpr_name,bce_name):
+-    s=np.zeros(len(Xout),dtype=np.float64)
+-    for ms in [seed,seed+101,seed+202]: s+=within_user_ranks(member_pred(cache_prefix,bpr_name,train_bpr,enc,dim,Xout,split,seed,ms,device,verbose),uout)
+-    bpr=s/3.0; bce=within_user_ranks(member_pred(cache_prefix,bce_name,train_bce,enc,dim,Xout,split,seed,seed+303,device,verbose),uout)
+-    return 0.70*bpr+0.30*bce
+-
+-def node10_rank(splits,data_dir,split,seed,device,verbose):
++    bpr_sum=np.zeros(len(Xout),dtype=np.float64)
++    for ms in [seed,seed+101,seed+202]:
++        bpr_sum+=within_user_ranks(member_pred(cache_prefix,bpr_name,train_bpr,enc,dim,Xout,split,seed,ms,device,verbose),uout)
++    bpr_rank=bpr_sum/3.0
++    bce_rank=within_user_ranks(member_pred(cache_prefix,bce_name,train_bce,enc,dim,Xout,split,seed,seed+303,device,verbose),uout)
++    return 0.70*bpr_rank+0.30*bce_rank
++
++def group_by_user(users_sorted):
++    us=np.asarray(users_sorted); cuts=np.r_[0,np.flatnonzero(us[1:]!=us[:-1])+1,len(us)]
++    return np.diff(cuts).astype(np.int32)
++
++def train_lgbm_ranker(enc, split, seed):
++    Xtr,ytr,utr=enc['train']; Xout,_,uout=enc[split]
++    order=np.argsort(utr,kind='stable')
++    Xs=Xtr[order].astype(np.int32); ys=ytr[order].astype(np.int32); groups=group_by_user(utr[order])
++    cache=os.path.join('pred_cache',f'017_lgbm_time_split{split}_seed{seed}.npy'); os.makedirs('pred_cache',exist_ok=True)
++    if os.path.isfile(cache): return np.load(cache)
++    ranker=lgb.LGBMRanker(objective='lambdarank', metric='ndcg', boosting_type='gbdt',
++                          n_estimators=260, learning_rate=0.045, num_leaves=63, max_depth=-1,
++                          min_child_samples=80, subsample=0.85, subsample_freq=1,
++                          colsample_bytree=0.85, reg_alpha=0.05, reg_lambda=2.0,
++                          random_state=seed, n_jobs=4, verbosity=-1, label_gain=[0,1])
++    ranker.fit(Xs, ys, group=groups, categorical_feature=list(range(Xs.shape[1])))
++    preds=ranker.predict(Xout.astype(np.int32), num_iteration=ranker.best_iteration_).astype(np.float64)
++    np.save(cache,preds); return preds
++
++def node15_rank(splits,data_dir,split,seed,device,verbose):
+     enc_base,dim_base=encode(splits); Xbase,_,uout=enc_base[split]
+     base_rank=ensemble_rank(enc_base,dim_base,Xbase,uout,split,seed,device,verbose,'006','bpr','bce')
+     enc_hist,dim_hist=encode_history(splits,add_content=False); Xhist,_,uhist=enc_hist[split]
+     hist_rank=ensemble_rank(enc_hist,dim_hist,Xhist,uhist,split,seed,device,verbose,'008','bprhist','bcehist')
+-    enc_cont,dim_cont=encode_history(splits,video_feats=read_video_features(data_dir),add_content=True); Xcont,_,ucont=enc_cont[split]
++    vf=read_video_features(data_dir)
++    enc_cont,dim_cont=encode_history(splits,video_feats=vf,add_content=True); Xcont,_,ucont=enc_cont[split]
+     cont_rank=ensemble_rank(enc_cont,dim_cont,Xcont,ucont,split,seed,device,verbose,'010','bprcont','bcecont')
+-    return 0.35*base_rank+0.25*hist_rank+0.40*cont_rank, uout
+-
+-def lgbm_lambdarank_pred(splits,data_dir,split,seed,verbose=False):
+-    os.makedirs('pred_cache',exist_ok=True); path=os.path.join('pred_cache',f'012_lgbm_lambdarank_split{split}_seed{seed}.npy')
+-    if os.path.isfile(path): return np.load(path)
+-    enc=encode_lgbm_content(splits,data_dir); Xtr,ytr,utr=enc['train']; Xout,_,_=enc[split]
+-    order=np.argsort(utr,kind='stable'); us=utr[order]; group=np.diff(np.r_[0,np.flatnonzero(us[1:]!=us[:-1])+1,len(order)]).astype(np.int32)
+-    model=lgb.LGBMRanker(objective='lambdarank', metric='None', n_estimators=180, learning_rate=0.05,
+-                         num_leaves=63, min_child_samples=80, subsample=0.85, colsample_bytree=0.9,
+-                         reg_lambda=2.0, random_state=seed, n_jobs=4, verbosity=-1, label_gain=[0,1])
+-    if verbose: print('  fitting LightGBM LambdaRank', Xtr.shape, 'groups', len(group))
+-    model.fit(Xtr[order], ytr[order].astype(np.int32), group=group, categorical_feature=list(range(Xtr.shape[1])))
+-    preds=model.predict(Xout).astype(np.float64); np.save(path,preds); return preds
++    node10=0.35*base_rank+0.25*hist_rank+0.40*cont_rank
++    hour_qs=read_hour_queues(data_dir)
++    enc_time,dim_time=encode_history(splits,video_feats=vf,add_content=True,hour_qs=hour_qs,add_time=True); Xtime,_,utime=enc_time[split]
++    time_rank=ensemble_rank(enc_time,dim_time,Xtime,utime,split,seed,device,verbose,'015','bprtimedate','bcetimedate')
++    return 0.50*node10+0.50*time_rank, enc_time, utime
+ 
+ def run_predict(splits,data_dir,split='valid',seed=0,device='cpu',verbose=False):
+-    best_rank,uout=node10_rank(splits,data_dir,split,seed,device,verbose)
+-    lgb_pred=lgbm_lambdarank_pred(splits,data_dir,split,seed,verbose)
++    fm_rank, enc_time, uout = node15_rank(splits,data_dir,split,seed,device,verbose)
++    lgb_pred=train_lgbm_ranker(enc_time, split, seed)
+     lgb_rank=within_user_ranks(lgb_pred,uout)
+-    return 0.60*best_rank + 0.40*lgb_rank
++    return 0.70*fm_rank+0.30*lgb_rank
+ 
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+content+LGBM_LambdaRank')
++    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date+lgbm')
+     scores=run_predict(splits,a.data_dir,split=a.split,seed=a.seed,device=a.device,verbose=a.out is None)
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')

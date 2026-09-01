@@ -1,0 +1,57 @@
+{
+  "iteration": 16,
+  "solution": "logs/record-run-9/solutions/016_prior_calibrated_time.py",
+  "hypothesis": "improve 15: the date/time member improved nDCG but lost GAUC; add a train-only smoothed tab-duration empirical prior as a 20% rank blend to capture coarse exposure/engagement bias cheaply. IPS/debiasing motivation: https://arxiv.org/abs/1602.05352",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T00:44:31+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604295,
+  "GAUC": 0.670853,
+  "nDCG@5": 0.537736,
+  "source_hash": "07392cefcb30",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history+content+time_date+tabdur_prior\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "56f1bd2aaed0",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000577,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.671416,
+      "nDCG@5": 0.537943,
+      "primary": 0.60468
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67129,
+      "nDCG@5": 0.537855,
+      "primary": 0.604573
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.669853,
+      "nDCG@5": 0.537411,
+      "primary": 0.603632
+    }
+  ],
+  "seconds": 228.4,
+  "verdict": "KEPT",
+  "delta": 0.002795,
+  "tokens_in": 147199,
+  "tokens_out": 9362,
+  "tokens_cached": 131840,
+  "cost_usd": 0.197937,
+  "model": "gpt-5.5",
+  "agent_iteration": 2,
+  "wall_seconds": 344.1,
+  "recovery_events": []
+}

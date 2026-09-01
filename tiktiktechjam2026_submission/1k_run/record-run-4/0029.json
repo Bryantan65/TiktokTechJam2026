@@ -1,0 +1,65 @@
+{
+  "iteration": 29,
+  "solution": "logs-1k/record-run-4/solutions/029_aux_soft_multitask.py",
+  "hypothesis": "draft multi-task: change mechanism by training a separate history LightGBM member on soft labels from auxiliary feedback (click/like/follow/comment/forward) while using long_view only from data.load and no raw feedback at prediction time. Auxiliary user actions often regularize CTR/ranking models; the search result was generic but cited the MTL idea as a common recipe (https://example-url.com), so test it readably at 30% rather than a tiny ensemble weight.",
+  "parent": "28",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T20:46:02+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.660384,
+  "GAUC": 0.685755,
+  "nDCG@5": 0.635013,
+  "source_hash": "d4bf93d4847a",
+  "stdout_tail": "{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "c20b135a21ad",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.685755,
+      "nDCG@5": 0.635013,
+      "primary": 0.660384
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.685755,
+      "nDCG@5": 0.635013,
+      "primary": 0.660384
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.685755,
+      "nDCG@5": 0.635013,
+      "primary": 0.660384
+    }
+  ],
+  "seconds": 796.2,
+  "verdict": "KEPT",
+  "delta": 0.015284,
+  "tokens_in": 131190,
+  "tokens_out": 8458,
+  "tokens_cached": 100864,
+  "cost_usd": 0.210827,
+  "model": "gpt-5.5",
+  "agent_iteration": 24,
+  "wall_seconds": 872.4,
+  "recovery_events": []
+}

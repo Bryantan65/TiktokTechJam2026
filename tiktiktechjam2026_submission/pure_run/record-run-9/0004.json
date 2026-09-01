@@ -1,0 +1,57 @@
+{
+  "iteration": 4,
+  "solution": "logs/record-run-9/solutions/004_bce_warm_bpr_fm.py",
+  "hypothesis": "improve 2: pure BPR helps but trains from random init on only mixed-label users; warm up the FM with pointwise BCE on all rows, then checkpoint only BPR fine-tuning so the ranking loss actually determines the submitted model.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:31:31+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.601297,
+  "GAUC": 0.667105,
+  "nDCG@5": 0.53549,
+  "source_hash": "a67989b1befb",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "6b76777cc7b8",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000256,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.667087,
+      "nDCG@5": 0.535704,
+      "primary": 0.601395
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.666876,
+      "nDCG@5": 0.535137,
+      "primary": 0.601007
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.667351,
+      "nDCG@5": 0.535628,
+      "primary": 0.601489
+    }
+  ],
+  "seconds": 86.0,
+  "verdict": "noise",
+  "delta": -0.000203,
+  "tokens_in": 41967,
+  "tokens_out": 3705,
+  "tokens_cached": 33152,
+  "cost_usd": 0.075668,
+  "model": "gpt-5.5",
+  "agent_iteration": 3,
+  "wall_seconds": 273.5,
+  "recovery_events": []
+}

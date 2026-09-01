@@ -1,0 +1,57 @@
+{
+  "iteration": 23,
+  "solution": "logs/record-run-9/solutions/023_hardneg_time_bpr.py",
+  "hypothesis": "improve 15: use hard same-user negative sampling for only the time/date BPR members, selecting the highest-scored of 4 sampled negatives to emphasize top-of-list errors; this follows the CWM/watch-time search citation context but tests a cheaper ranking-loss refinement before a full watch-time model (https://www.researchgate.net/publication/381372859_Counteracting_Duration_Bias_in_Video_Recommendation_via_Counterfactual_Watch_Time).",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:41:51+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.604045,
+  "GAUC": 0.670856,
+  "nDCG@5": 0.537235,
+  "source_hash": "76ae29e2bfb0",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history+content+time_date+hardneg\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "16b32eaaaac7",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000654,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672005,
+      "nDCG@5": 0.537409,
+      "primary": 0.604707
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.66979,
+      "nDCG@5": 0.537011,
+      "primary": 0.6034
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.670773,
+      "nDCG@5": 0.537285,
+      "primary": 0.604029
+    }
+  ],
+  "seconds": 827.9,
+  "verdict": "KEPT",
+  "delta": 0.002545,
+  "tokens_in": 98209,
+  "tokens_out": 6919,
+  "tokens_cached": 73216,
+  "cost_usd": 0.16828,
+  "model": "gpt-5.5",
+  "agent_iteration": 9,
+  "wall_seconds": 903.8,
+  "recovery_events": []
+}

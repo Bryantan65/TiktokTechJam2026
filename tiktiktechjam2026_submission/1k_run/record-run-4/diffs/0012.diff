@@ -1,0 +1,34 @@
+# iteration 12  (parent: 11)
+# hypothesis: improve 11: keep the same minimal LightGBM mechanism but reduce GBDT sampling variance by raising row subsampling to 0.95 and using all columns. If node 11's high +/- is mostly stochastic top-5 instability, this should preserve the mean and shrink spread.
+# result: GAUC 0.676805 | nDCG@5 0.620086 | primary 0.648446 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/011_lgbm_binary_base_valid.py
++++ logs-1k/record-run-4/solutions/012_lgbm_binary_less_stochastic.py
+@@ -1,10 +1,9 @@
+-"""Minimal LightGBM binary classifier on the official FM fields.
++"""LightGBM binary classifier with reduced sampling variance.
+ 
+-Node 10 showed on the train-only dev holdout that LightGBM itself is sane once
+-broken historical/stat features are removed.  This validates that minimal model
+-on the real valid split: encoded [user_id, video_id, author_id, tab,
+-dur_bucket] as categorical features, plus two raw duration transforms, trained
+-with binary logloss and early stopping on valid exactly as the FM baseline does.
++Node 11 beat the target but had high seed spread, mostly from nDCG@5.  This is
++node 11's same minimal no-stat feature pipeline, changing only the stochastic
++GBDT sampling: use nearly all rows per tree and all columns, so the model should
++keep the LightGBM gain while making top-5 rankings less seed-dependent.
+ """
+ import argparse
+ import os
+@@ -92,9 +91,9 @@
+         num_leaves=63,
+         max_depth=-1,
+         min_child_samples=500,
+-        subsample=0.85,
++        subsample=0.95,
+         subsample_freq=1,
+-        colsample_bytree=0.9,
++        colsample_bytree=1.0,
+         reg_alpha=0.1,
+         reg_lambda=2.0,
+         random_state=seed,

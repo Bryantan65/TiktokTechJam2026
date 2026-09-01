@@ -1,0 +1,61 @@
+# iteration 38  (parent: 37)
+# hypothesis: improve 37: inspired by recommender feature-engineering practice around context/repeated-impression signals (e.g. Kaggle docs https://www.kaggle.com/docs), node 37's 80% candidate blend gained nDCG but lost GAUC, so test a 75% rollback toward node 35 with the same cached members.
+# result: GAUC 0.702362 | nDCG@5 0.662837 | primary 0.682599 | verdict KEPT
+
+--- logs-1k/record-run-4/solutions/037_candidate_80pct.py
++++ logs-1k/record-run-4/solutions/038_candidate_75pct.py
+@@ -1,8 +1,8 @@
+-"""80% candidate-context fusion.
+-
+-Node 35 (about 70% candidate-context) beat the older ensemble, while node 36
+-(90% candidate-context) backed off.  This tests the midpoint using the same
+-cached members and candidate model code, so the signal is the blend weight.
++"""75% candidate-context fusion.
++
++Node 37's 80% candidate blend slightly improved nDCG but lost GAUC versus node 35.
++This rolls back only part-way from 80% toward the node-35 majority setting, using
++cached unchanged members whenever available.
+ """
+ import argparse, os, sys, math
+ from collections import defaultdict
+@@ -89,7 +89,7 @@
+     clf=lgb.LGBMClassifier(objective='binary',metric='binary_logloss',boosting_type='gbdt',n_estimators=220,learning_rate=0.05,num_leaves=63,min_child_samples=500,subsample=0.85,subsample_freq=1,colsample_bytree=0.9,reg_alpha=0.1,reg_lambda=2.0,random_state=int(seed),n_jobs=-1,verbose=-1,force_col_wise=True)
+     clf.fit(Ftr,ytr,eval_set=[(Fva,yva)],categorical_feature=list(range(5)),callbacks=[lgb.early_stopping(20,first_metric_only=True,verbose=False)])
+     p=clf.predict(Ft,num_iteration=clf.best_iteration_,raw_score=True).astype(np.float32)
+-    np.save(f'pred_cache/037_fallback_minimal_split{split_name}_seed{seed}.npy',p)
++    np.save(f'pred_cache/038_fallback_minimal_split{split_name}_seed{seed}.npy',p)
+     return p
+ 
+ 
+@@ -182,9 +182,11 @@
+     aux=load_first([f'029_aux_soft_seq_split{sp}_mseed10.npy'],n)
+     fallback=None
+     def fb(seed=0):
+-        global fallback
+-        if fallback is None: fallback=train_minimal(splits,target,sp,seed)
+-        return fallback
++        nonlocal_fallback = globals().get('_fallback_cache', None)
++        if nonlocal_fallback is None:
++            nonlocal_fallback=train_minimal(splits,target,sp,seed)
++            globals()['_fallback_cache']=nonlocal_fallback
++        return nonlocal_fallback
+     if exact0 is None: exact0=fb(0)
+     if exact2 is None: exact2=fb(2)
+     if fast is None: fast=fb(4)
+@@ -195,14 +197,11 @@
+     base=node30_score(exact0,exact2,fast,stat,seq,aux,users)
+     inc=node24(exact0,exact2,fast,users)
+ 
+-    # Midpoint between node 35's candidate-majority setting and node 36's
+-    # near-solo setting.  Keep small non-candidate diversity but let the
+-    # candidate-context member dominate both z-score and rank fusion.
+     arrs=[inc,stat,seq,aux,cand]
+-    weights=[0.06,0.02,0.06,0.06,0.80]
++    weights=[0.08,0.02,0.075,0.075,0.75]
+     zmain=z_per_user_blend(arrs,weights,users)
+     rrf=rrf_per_user(arrs,weights,users,k=45.0)
+-    scores=z_per_user_blend([base,zmain,rrf],[0.04,0.56,0.40],users).astype(np.float64)
++    scores=z_per_user_blend([base,zmain,rrf],[0.04,0.58,0.38],users).astype(np.float64)
+     if a.out:
+         np.save(a.out,scores); print(f'wrote {len(scores):,d} predictions for split={a.split}')
+     else:

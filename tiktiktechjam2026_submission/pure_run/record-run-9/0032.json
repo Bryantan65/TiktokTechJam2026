@@ -1,0 +1,58 @@
+{
+  "iteration": 32,
+  "solution": "logs/record-run-9/solutions/032_global_ctr_weight2.py",
+  "hypothesis": "improve 31: the 1% global CTR prior gave a small but monotone gain over node 28; test a slightly stronger 2% weight using the exact same cached seed-0 ensemble and prior to see whether the tie-breaker is underweighted.",
+  "parent": "31",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:52:14+08:00",
+  "status": "no-op",
+  "error": "no-op: identical GAUC and nDCG@5 as iteration 31 (031_global_ctr_tiebreak.py). Different code, same model - nothing was actually tested. Common cause: the new method ran but a \"keep the best checkpoint\" rule discarded its result, so the final model is the parent. Check that your change reaches the model that gets saved. This is NOT evidence about the technique.",
+  "valid_primary": 0.605738,
+  "GAUC": 0.67308,
+  "nDCG@5": 0.538397,
+  "source_hash": "f85d1d42514e",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=node28_plus_2pct_global_ctr_prior\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "8c971acf0e20",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67308,
+      "nDCG@5": 0.538397,
+      "primary": 0.605738
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67308,
+      "nDCG@5": 0.538397,
+      "primary": 0.605738
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67308,
+      "nDCG@5": 0.538397,
+      "primary": 0.605738
+    }
+  ],
+  "no_op_twin": 31,
+  "seconds": 309.9,
+  "verdict": "no-op",
+  "delta": 0.004238,
+  "tokens_in": 129019,
+  "tokens_out": 3947,
+  "tokens_cached": 106240,
+  "cost_usd": 0.149537,
+  "model": "gpt-5.5",
+  "agent_iteration": 18,
+  "wall_seconds": 376.6,
+  "recovery_events": []
+}

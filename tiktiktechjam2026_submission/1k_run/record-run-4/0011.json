@@ -1,0 +1,65 @@
+{
+  "iteration": 11,
+  "solution": "logs-1k/record-run-4/solutions/011_lgbm_binary_base_valid.py",
+  "hypothesis": "improve 10: the minimal LightGBM binary classifier recovered on dev, so validate that same stripped-down mechanism on the real valid split before adding back any features. This branches from node 10 despite UCT favoring #1 because node 10 is the only working diagnosis of the LightGBM direction and has not yet been measured on valid.",
+  "parent": "10",
+  "uct_rank": null,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T18:01:17+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.649853,
+  "GAUC": 0.67701,
+  "nDCG@5": 0.622695,
+  "source_hash": "91f0892acbd1",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "86315885ae7b",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": 0.004423,
+  "deterministic": false,
+  "seed_mode": "measured",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.676793,
+      "nDCG@5": 0.625787,
+      "primary": 0.65129
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.677012,
+      "nDCG@5": 0.612768,
+      "primary": 0.64489
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.677226,
+      "nDCG@5": 0.62953,
+      "primary": 0.653378
+    }
+  ],
+  "seconds": 595.7,
+  "verdict": "KEPT",
+  "delta": 0.004753,
+  "tokens_in": 64953,
+  "tokens_out": 2407,
+  "tokens_cached": 45952,
+  "cost_usd": 0.094548,
+  "model": "gpt-5.5",
+  "agent_iteration": 6,
+  "wall_seconds": 617.8,
+  "recovery_events": []
+}

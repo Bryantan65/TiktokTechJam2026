@@ -1,0 +1,65 @@
+{
+  "iteration": 21,
+  "solution": "logs-1k/record-run-4/solutions/021_lgbm_seedbag2_rankavg.py",
+  "hypothesis": "improve 20: test another cheap fusion on the same cached LightGBM members by averaging within-user percentile ranks rather than z-scored margins, directly matching the within-user nature of GAUC and nDCG.",
+  "parent": "20",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T19:47:36+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.651005,
+  "GAUC": 0.678495,
+  "nDCG@5": 0.623514,
+  "source_hash": "9e4f8810aa57",
+  "stdout_tail": "loading /TiktokTechJam2026/rec_datasets/KuaiRand-1K/data ...\n{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "1e76b227f0a9",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.678495,
+      "nDCG@5": 0.623514,
+      "primary": 0.651005
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.678495,
+      "nDCG@5": 0.623514,
+      "primary": 0.651005
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.678495,
+      "nDCG@5": 0.623514,
+      "primary": 0.651005
+    }
+  ],
+  "seconds": 186.0,
+  "verdict": "KEPT",
+  "delta": 0.005905,
+  "tokens_in": 48845,
+  "tokens_out": 3104,
+  "tokens_cached": 36736,
+  "cost_usd": 0.079681,
+  "model": "gpt-5.5",
+  "agent_iteration": 16,
+  "wall_seconds": 213.6,
+  "recovery_events": []
+}

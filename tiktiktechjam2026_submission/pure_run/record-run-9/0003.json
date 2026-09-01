@@ -1,0 +1,57 @@
+{
+  "iteration": 3,
+  "solution": "logs/record-run-9/solutions/003_bpr_4neg_fm.py",
+  "hypothesis": "improve 2: one random negative per positive is a noisy BPR estimate; averaging four same-user negatives per positive should make the ranking gradient less noisy and improve top-5 ordering.",
+  "parent": "2",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-28T23:28:35+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.602968,
+  "GAUC": 0.669533,
+  "nDCG@5": 0.536402,
+  "source_hash": "2c1590cca4f8",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "db0e3b853117",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.000228,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.669774,
+      "nDCG@5": 0.536274,
+      "primary": 0.603024
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.669396,
+      "nDCG@5": 0.536928,
+      "primary": 0.603162
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.66943,
+      "nDCG@5": 0.536003,
+      "primary": 0.602717
+    }
+  ],
+  "seconds": 145.7,
+  "verdict": "noise",
+  "delta": 0.001468,
+  "tokens_in": 51663,
+  "tokens_out": 2900,
+  "tokens_cached": 44544,
+  "cost_usd": 0.06907,
+  "model": "gpt-5.5",
+  "agent_iteration": 2,
+  "wall_seconds": 178.4,
+  "recovery_events": []
+}

@@ -1,0 +1,230 @@
+# iteration 8  (parent: 6)
+# hypothesis: draft 2: add a DIN-inspired behaviour summary as FM fields—prior user-video/user-author positive and negative buckets—so the BPR ranker can condition on recent user history without a full sequence model (DIN reference: https://arxiv.org/abs/1706.06978).
+# result: GAUC 0.67144 | nDCG@5 0.537742 | primary 0.604591 | verdict KEPT
+
+--- logs/record-run-9/solutions/006_bpr_bag_bce_rankblend.py
++++ logs/record-run-9/solutions/008_bpr_history_features.py
+@@ -1,21 +1,23 @@
+-"""Bagged same-user BPR FM blended with a pointwise BCE FM.
+-
+-Node 2 showed the best signal from BPR.  This keeps BPR as the dominant signal,
+-but reduces seed noise by averaging three independently initialized BPR FMs and
+-adds a 30% pointwise BCE rank signal so users/items with weak pairwise coverage
+-retain the stable baseline ordering.  Member split predictions are cached.
++"""BPR/BCE FM with simple user-behaviour history features.
++
++Adds row-level features summarising whether the user previously had positive or
++negative interactions with the candidate video/author.  Training rows use only
++prior train rows in file order; valid/test rows use histories accumulated from
++train only, so validation labels are not leaked.  Model/training follows node 6:
++three BPR FMs plus one BCE FM blended by within-user ranks.
+ """
+ import argparse
+ import os
+ import sys
+ import time
++from collections import defaultdict
+ 
+ import numpy as np
+ import torch
+ 
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 '..', 'kuairand-starter-kit'))
+-from data import load, encode, FIELDS          # noqa: E402
++from data import load, FIELDS                  # noqa: E402
+ from evaluate import evaluate                  # noqa: E402
+ 
+ 
+@@ -42,6 +44,123 @@
+             xb = torch.from_numpy(X[i:i + bs].astype(np.int64)).to(device)
+             out.append(self(xb).cpu().numpy())
+         return np.concatenate(out)
++
++
++def pos_bucket(c):
++    if c <= 0:
++        return 0
++    if c == 1:
++        return 1
++    if c == 2:
++        return 2
++    if c <= 5:
++        return 3
++    return 4
++
++
++def neg_bucket(c):
++    if c <= 0:
++        return 0
++    if c <= 2:
++        return 1
++    if c <= 5:
++        return 2
++    if c <= 10:
++        return 3
++    return 4
++
++
++def ratio_bucket(p, n):
++    t = p + n
++    if t <= 0:
++        return 0
++    r = p / t
++    if r < 0.20:
++        return 1
++    if r < 0.40:
++        return 2
++    if r < 0.60:
++        return 3
++    if r < 0.80:
++        return 4
++    return 5
++
++
++def build_history_raw_features(splits):
++    """Return raw categorical feature rows per split plus labels/users.
++
++    Tuple columns are (date,user,video,author,tab,duration_ms,label).  We include
++    baseline fields and six history fields: user-video pos/neg buckets,
++    user-author pos/neg buckets, and user-author/user-video positive-rate buckets.
++    """
++    # Build train features online from prior train rows only.
++    up_v = defaultdict(int); un_v = defaultdict(int)
++    up_a = defaultdict(int); un_a = defaultdict(int)
++    raw = {}
++    labels = {}
++    users = {}
++
++    def row_feats(row, update=False):
++        date, u, v, a, tab, dur, y = row
++        dur_bucket = int(dur) // 10000
++        kv = (u, v); ka = (u, a)
++        pv, nv = up_v[kv], un_v[kv]
++        pa, na = up_a[ka], un_a[ka]
++        feats = [u, v, a, tab, dur_bucket,
++                 pos_bucket(pv), neg_bucket(nv),
++                 pos_bucket(pa), neg_bucket(na),
++                 ratio_bucket(pa, na), ratio_bucket(pv, nv)]
++        if update:
++            if y > 0.5:
++                up_v[kv] += 1; up_a[ka] += 1
++            else:
++                un_v[kv] += 1; un_a[ka] += 1
++        return feats
++
++    tr_feats = []
++    tr_labels = []
++    tr_users = []
++    for row in splits['train']:
++        tr_feats.append(row_feats(row, update=True))
++        tr_labels.append(row[6]); tr_users.append(row[1])
++    raw['train'] = tr_feats
++    labels['train'] = np.asarray(tr_labels, dtype=np.float32)
++    users['train'] = np.asarray(tr_users, dtype=np.int64)
++
++    # Frozen train history for validation/test: do not update on their labels.
++    for sp in ('valid', 'test'):
++        feats = []
++        ys = []
++        us = []
++        for row in splits[sp]:
++            feats.append(row_feats(row, update=False))
++            ys.append(row[6]); us.append(row[1])
++        raw[sp] = feats
++        labels[sp] = np.asarray(ys, dtype=np.float32)
++        users[sp] = np.asarray(us, dtype=np.int64)
++    return raw, labels, users
++
++
++def encode_history(splits):
++    raw, labels, users = build_history_raw_features(splits)
++    n_fields = len(raw['train'][0])
++    maps = []
++    offset = 0
++    for j in range(n_fields):
++        vals = set()
++        for sp in ('train', 'valid', 'test'):
++            vals.update(r[j] for r in raw[sp])
++        mp = {v: offset + i for i, v in enumerate(sorted(vals))}
++        maps.append(mp)
++        offset += len(mp)
++    enc = {}
++    for sp in ('train', 'valid', 'test'):
++        X = np.empty((len(raw[sp]), n_fields), dtype=np.int64)
++        for i, r in enumerate(raw[sp]):
++            for j, v in enumerate(r):
++                X[i, j] = maps[j][v]
++        enc[sp] = (X, labels[sp], users[sp])
++    return enc, offset
+ 
+ 
+ def make_bpr_training_arrays(ytr, utr):
+@@ -94,7 +213,7 @@
+             opt.step()
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  BCE epoch {ep:2d} valid {va['primary']:.6f} {time.time()-t0:.1f}s")
++            print(f"  BCE hist seed {seed} epoch {ep:2d} valid {va['primary']:.6f} {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -137,7 +256,7 @@
+             opt.step()
+         va = evaluate(uva, yva, model.predict(Xva, device=device))
+         if verbose:
+-            print(f"  BPR seed {seed} epoch {ep:2d} valid {va['primary']:.6f} {time.time()-t0:.1f}s")
++            print(f"  BPR hist seed {seed} epoch {ep:2d} valid {va['primary']:.6f} {time.time()-t0:.1f}s")
+         if va['primary'] > best + 1e-5:
+             best, bad = va['primary'], 0
+             best_state = {k_: v.detach().clone() for k_, v in model.state_dict().items()}
+@@ -162,7 +281,6 @@
+         if n == 1:
+             out[idx] = 0.5
+         else:
+-            # Higher model score should receive a higher blended score.
+             ord2 = np.argsort(scores[idx], kind='mergesort')
+             r = np.empty(n, dtype=np.float64)
+             r[ord2] = np.arange(n, dtype=np.float64) / (n - 1.0)
+@@ -174,7 +292,7 @@
+                        device, verbose):
+     os.makedirs('pred_cache', exist_ok=True)
+     cache_path = os.path.join('pred_cache',
+-                              f'006_{name}_split{split}_outer{outer_seed}_mseed{member_seed}.npy')
++                              f'008_{name}_split{split}_outer{outer_seed}_mseed{member_seed}.npy')
+     if os.path.isfile(cache_path):
+         return np.load(cache_path)
+     torch.manual_seed(member_seed)
+@@ -185,21 +303,20 @@
+ 
+ 
+ def run_predict(splits, split='valid', seed=0, device='cpu', verbose=False):
+-    enc, dim = encode(splits)
++    enc, dim = encode_history(splits)
+     Xout, _, uout = enc[split]
+ 
+     bpr_seeds = [seed, seed + 101, seed + 202]
+     bpr_rank_sum = np.zeros(len(Xout), dtype=np.float64)
+     for ms in bpr_seeds:
+-        p = cached_member_pred('bpr', train_bpr, enc, dim, Xout, split, seed, ms,
++        p = cached_member_pred('bprhist', train_bpr, enc, dim, Xout, split, seed, ms,
+                                device, verbose)
+         bpr_rank_sum += within_user_ranks(p, uout)
+     bpr_rank = bpr_rank_sum / len(bpr_seeds)
+ 
+-    bce_pred = cached_member_pred('bce', train_bce, enc, dim, Xout, split, seed,
++    bce_pred = cached_member_pred('bcehist', train_bce, enc, dim, Xout, split, seed,
+                                   seed + 303, device, verbose)
+     bce_rank = within_user_ranks(bce_pred, uout)
+-
+     return 0.70 * bpr_rank + 0.30 * bce_rank
+ 
+ 
+@@ -214,7 +331,7 @@
+ 
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}")
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+history")
+ 
+     scores = run_predict(splits, split=a.split, seed=a.seed, device=a.device,
+                          verbose=a.out is None)

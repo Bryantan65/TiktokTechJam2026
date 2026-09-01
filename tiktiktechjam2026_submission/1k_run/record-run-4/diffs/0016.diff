@@ -1,0 +1,141 @@
+# iteration 16  (parent: 11)
+# hypothesis: draft watch-time modelling: from best node 11, keep the minimal LightGBM but reweight positive training rows by log play_time_ms, following dwell-time reweighting as engagement strength (https://arxiv.org/abs/2209.09000). This tests watch-time as a training signal only, not a prediction feature or label reconstruction.
+# result: GAUC 0.675509 | nDCG@5 0.616701 | primary 0.646105 | verdict noise
+
+--- logs-1k/record-run-4/solutions/011_lgbm_binary_base_valid.py
++++ logs-1k/record-run-4/solutions/016_lgbm_watch_weight.py
+@@ -1,12 +1,12 @@
+-"""Minimal LightGBM binary classifier on the official FM fields.
+-
+-Node 10 showed on the train-only dev holdout that LightGBM itself is sane once
+-broken historical/stat features are removed.  This validates that minimal model
+-on the real valid split: encoded [user_id, video_id, author_id, tab,
+-dur_bucket] as categorical features, plus two raw duration transforms, trained
+-with binary logloss and early stopping on valid exactly as the FM baseline does.
++"""Minimal LightGBM with dwell/play-time sample weights for training.
++
++Builds on node 11: same features and logloss early stopping, but training rows
++are weighted by raw play_time_ms (read only as an auxiliary training signal, not
++as a prediction feature).  Raw long_view is never read.
+ """
+ import argparse
++import csv
++import glob
+ import os
+ import sys
+ import time
+@@ -21,6 +21,61 @@
+ 
+ def duration_array(rows):
+     return np.asarray([float(r[5]) for r in rows], dtype=np.float32)
++
++
++def find_log_files(data_dir):
++    # Correct KuaiRand-1K files end in _1k; keep a fallback for portability.
++    p1 = glob.glob(os.path.join(data_dir, 'log_standard_4_08_to_4_21*_1k.csv'))
++    p2 = glob.glob(os.path.join(data_dir, 'log_standard_4_22_to_5_08*_1k.csv'))
++    if not p1:
++        p1 = glob.glob(os.path.join(data_dir, 'log_standard_4_08_to_4_21*.csv'))
++    if not p2:
++        p2 = glob.glob(os.path.join(data_dir, 'log_standard_4_22_to_5_08*.csv'))
++    return sorted(p1)[:1] + sorted(p2)[:1]
++
++
++def read_play_times(data_dir, need_total):
++    """Read play_time_ms in data.load row order; never read raw labels."""
++    files = find_log_files(data_dir)
++    vals = np.zeros(need_total, dtype=np.float32)
++    if len(files) < 2:
++        print('raw log files not found; using unit sample weights')
++        return vals
++    n = 0
++    for path in files:
++        if n >= need_total:
++            break
++        print('reading play_time_ms from', os.path.basename(path))
++        with open(path, 'r', newline='') as f:
++            reader = csv.reader(f)
++            header = next(reader)
++            try:
++                pidx = header.index('play_time_ms')
++            except ValueError:
++                print('play_time_ms column absent; using unit sample weights')
++                return np.zeros(need_total, dtype=np.float32)
++            for row in reader:
++                if n >= need_total:
++                    break
++                try:
++                    v = float(row[pidx])
++                    if not np.isfinite(v) or v < 0:
++                        v = 0.0
++                except Exception:
++                    v = 0.0
++                vals[n] = v
++                n += 1
++    if n < need_total:
++        print('raw logs shorter than expected; padding play_time_ms with zero')
++    return vals
++
++
++def train_play_times(data_dir, splits):
++    ntr = len(splits.get('train', []))
++    nva = len(splits.get('valid', []))
++    nte = len(splits.get('test', []))
++    allp = read_play_times(data_dir, ntr + nva + nte)
++    return allp[:ntr]
+ 
+ 
+ def factorize_cols(Xtr, Xva, Xt, target_is_valid):
+@@ -76,12 +131,33 @@
+             finish(Xt_cat, dt))
+ 
+ 
+-def train_classifier(splits, target, seed=0, verbose=True):
++def make_sample_weight(ytr, play_ms):
++    y = ytr.astype(np.int32)
++    pt = np.asarray(play_ms, dtype=np.float32)
++    w = np.ones(len(y), dtype=np.float32)
++    pos = (y == 1)
++    if np.any(pos):
++        lp = np.log1p(np.maximum(pt[pos], 0.0))
++        scale = np.percentile(lp, 95) if lp.size else 1.0
++        if not np.isfinite(scale) or scale <= 1e-6:
++            scale = 1.0
++        strength = np.clip(lp / scale, 0.0, 1.0)
++        # Moderate dwell-time emphasis: positives range from 1x to 3x.
++        w[pos] = 1.0 + 2.0 * strength
++    # Keep average Hessian scale close to the unweighted parent.
++    w *= (float(len(w)) / float(np.sum(w)))
++    return w
++
++
++def train_classifier(splits, target, data_dir, seed=0, verbose=True):
+     t0 = time.time()
+     Ftr, ytr, Fva, yva, Ft = build_feature_matrices(splits, target)
++    play_tr = train_play_times(data_dir, splits)
++    sw = make_sample_weight(ytr, play_tr)
+     if verbose:
+         print(f"features train={Ftr.shape} valid={Fva.shape} target={Ft.shape} build {time.time() - t0:.1f}s")
+         print(f"train pos={float(np.mean(ytr)):.4f} valid pos={float(np.mean(yva)):.4f}")
++        print(f"sample_weight mean={float(np.mean(sw)):.4f} min={float(np.min(sw)):.4f} max={float(np.max(sw)):.4f}")
+ 
+     clf = lgb.LGBMClassifier(
+         objective='binary',
+@@ -104,7 +180,7 @@
+     )
+     callbacks = [lgb.early_stopping(30, first_metric_only=True, verbose=verbose),
+                  lgb.log_evaluation(50 if verbose else 0)]
+-    clf.fit(Ftr, ytr, eval_set=[(Fva, yva)],
++    clf.fit(Ftr, ytr, sample_weight=sw, eval_set=[(Fva, yva)],
+             categorical_feature=list(range(5)), callbacks=callbacks)
+     if verbose:
+         print(f"best_iteration={clf.best_iteration_} total {time.time() - t0:.1f}s")
+@@ -131,7 +207,7 @@
+         target = a.split
+     print({k: len(v) for k, v in splits.items()}, f"fields={FIELDS}")
+ 
+-    scores = train_classifier(splits, target=target, seed=a.seed, verbose=a.out is None)
++    scores = train_classifier(splits, target=target, data_dir=a.data_dir, seed=a.seed, verbose=a.out is None)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")

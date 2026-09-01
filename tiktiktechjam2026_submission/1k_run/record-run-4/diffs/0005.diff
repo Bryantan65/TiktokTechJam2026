@@ -1,0 +1,134 @@
+# iteration 5  (parent: 4)
+# hypothesis: debug 4: encoded categorical values include -1 for missing/unseen values, so shift codes to non-negative before bincount and LightGBM categorical handling. This retests the same LambdaMART/statistics mechanism on dev after fixing the feature-builder crash.
+# result: GAUC None | nDCG@5 None | primary None | verdict failed
+
+--- logs-1k/record-run-4/solutions/004_lgbm_lambdarank_stats.py
++++ logs-1k/record-run-4/solutions/005_lgbm_lambdarank_nonneg.py
+@@ -1,8 +1,9 @@
+ """LightGBM LambdaMART ranker with train-only historical statistics.
+ 
+-Draft model direction: tree LambdaRank directly optimises nDCG@5 within user
+-queries, using LightGBM's categorical handling plus smoothed count/CTR features
+-computed from the training split only.  Docs: https://lightgbm.readthedocs.io/en/v4.4.0/Advanced-Topics.html
++Debug of node 4: encode() can emit -1 for missing/unseen categorical values, but
++np.bincount and LightGBM categorical features require non-negative integer codes.
++Shift all encoded fields by +1 before computing counts/crosses so missing becomes
++category 0.
+ """
+ import argparse
+ import os
+@@ -21,15 +22,22 @@
+     return np.asarray([float(r[5]) for r in rows], dtype=np.float32)
+ 
+ 
++def shift_nonneg(X):
++    X = X.astype(np.int64, copy=False)
++    return X + 1  # encode() may use -1 for missing/unseen; make it category 0
++
++
+ def add_crosses(X, n_tab):
+-    X = X.astype(np.int64, copy=False)
++    X = shift_nonneg(X)
+     vt = X[:, 1] * n_tab + X[:, 3]
+     at = X[:, 2] * n_tab + X[:, 3]
+     ut = X[:, 0] * n_tab + X[:, 3]
+     return np.column_stack([X, vt, at, ut]).astype(np.int32, copy=False)
+ 
+ 
+-def loo_stat_features(train_codes, train_y, codes, is_train, prior, m=50.0):
++def stat_features(train_codes, train_y, codes, is_train, prior, m=50.0):
++    train_codes = train_codes.astype(np.int64, copy=False)
++    codes = codes.astype(np.int64, copy=False)
+     max_code = int(max(train_codes.max(initial=0), codes.max(initial=0)))
+     cnt = np.bincount(train_codes, minlength=max_code + 1).astype(np.float32)
+     sm = np.bincount(train_codes, weights=train_y.astype(np.float32),
+@@ -51,28 +59,28 @@
+     enc, _ = encode(splits)
+     Xtr_base, ytr, _ = enc['train']
+     Xva_base, yva, _ = enc['valid']
+-    Xt_base, yt, _ = enc[target]
++    Xt_base, _, _ = enc[target]
+ 
+-    n_tab = int(max(Xtr_base[:, 3].max(), Xva_base[:, 3].max(), Xt_base[:, 3].max()) + 1)
++    tabs = np.concatenate([shift_nonneg(Xtr_base)[:, 3], shift_nonneg(Xva_base)[:, 3], shift_nonneg(Xt_base)[:, 3]])
++    n_tab = int(tabs.max(initial=0) + 1)
+     Xtr_cat = add_crosses(Xtr_base, n_tab)
+     Xva_cat = add_crosses(Xva_base, n_tab)
+-    Xt_cat = add_crosses(Xt_base, n_tab)
++    Xt_cat = Xva_cat if target == 'valid' else add_crosses(Xt_base, n_tab)
+ 
+     prior = float(np.mean(ytr))
+     stat_cols_tr = []
+     stat_cols_va = []
+     stat_cols_t = []
+-    # base fields plus three useful within-tab crosses: video_tab, author_tab, user_tab
+     for j in range(Xtr_cat.shape[1]):
+-        mn, ct = loo_stat_features(Xtr_cat[:, j], ytr, Xtr_cat[:, j], True, prior)
++        mn, ct = stat_features(Xtr_cat[:, j], ytr, Xtr_cat[:, j], True, prior)
+         stat_cols_tr.extend([mn, ct])
+-        mn, ct = loo_stat_features(Xtr_cat[:, j], ytr, Xva_cat[:, j], False, prior)
++        mn, ct = stat_features(Xtr_cat[:, j], ytr, Xva_cat[:, j], False, prior)
+         stat_cols_va.extend([mn, ct])
+-        if target == 'valid':
+-            stat_cols_t = stat_cols_va
+-        else:
+-            mn, ct = loo_stat_features(Xtr_cat[:, j], ytr, Xt_cat[:, j], False, prior)
++        if target != 'valid':
++            mn, ct = stat_features(Xtr_cat[:, j], ytr, Xt_cat[:, j], False, prior)
+             stat_cols_t.extend([mn, ct])
++    if target == 'valid':
++        stat_cols_t = stat_cols_va
+ 
+     dtr = duration_array(splits['train'])
+     dva = duration_array(splits['valid'])
+@@ -108,15 +116,15 @@
+     if verbose:
+         print(f"features train={Ftr_s.shape} valid={Fva_s.shape} target={Ft.shape} build {time.time()-t0:.1f}s")
+ 
+-    cat_idx = list(range(8))  # 5 encoded fields + video_tab/author_tab/user_tab
++    cat_idx = list(range(8))
+     ranker = lgb.LGBMRanker(
+         objective='lambdarank',
+         metric='ndcg',
+         eval_at=[5],
+         label_gain=[0, 1],
+         boosting_type='gbdt',
+-        n_estimators=450,
+-        learning_rate=0.045,
++        n_estimators=350,
++        learning_rate=0.05,
+         num_leaves=63,
+         max_depth=-1,
+         min_child_samples=200,
+@@ -130,19 +138,14 @@
+         verbose=-1,
+         force_col_wise=True,
+     )
+-    callbacks = [lgb.early_stopping(35, first_metric_only=True, verbose=verbose)]
+-    if verbose:
+-        callbacks.append(lgb.log_evaluation(20))
+-    else:
+-        callbacks.append(lgb.log_evaluation(0))
+-
++    callbacks = [lgb.early_stopping(30, first_metric_only=True, verbose=verbose)]
++    callbacks.append(lgb.log_evaluation(20 if verbose else 0))
+     ranker.fit(Ftr_s, ytr_s, group=gtr,
+                eval_set=[(Fva_s, yva_s)], eval_group=[gva], eval_at=[5],
+                categorical_feature=cat_idx, callbacks=callbacks)
+     if verbose:
+         print(f"best_iteration={ranker.best_iteration_} total {time.time()-t0:.1f}s")
+-    preds = ranker.predict(Ft, num_iteration=ranker.best_iteration_)
+-    return preds
++    return ranker.predict(Ft, num_iteration=ranker.best_iteration_)
+ 
+ 
+ if __name__ == '__main__':
+@@ -151,7 +154,7 @@
+     ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test', 'dev'])
+     ap.add_argument('--out', default=None)
+     ap.add_argument('--seed', type=int, default=0)
+-    ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])  # accepted for contract; unused
++    ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+ 
+     np.random.seed(a.seed)

@@ -1,0 +1,116 @@
+"""Improve node 28 with a slightly richer deterministic tie-break prior.
+
+Keeps the strong fixed seed-0 node-24 ensemble, but replaces the 5% history-only
+prior with a 6% prior that combines train-only user history, repeat exposure, and
+train-only global video/author/tab-duration CTR backoffs.  All components are
+converted to within-user ranks before blending, so only within-user order matters.
+"""
+import argparse
+import importlib.util
+import os
+from collections import defaultdict
+import numpy as np
+
+_here = os.path.dirname(os.path.abspath(__file__))
+_spec = importlib.util.spec_from_file_location('node24_impl', os.path.join(_here, '024_time_exposure_counts.py'))
+impl = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(impl)
+
+
+def _ctr(pos, neg, prior=0.37, alpha=8.0):
+    return (pos + alpha * prior) / (pos + neg + alpha)
+
+
+def _global_ctr(pos, neg, prior, alpha):
+    return (pos + alpha * prior) / (pos + neg + alpha)
+
+
+def enhanced_prior(splits, split):
+    # Train-only global backoff tables.  These are not updated from valid/test.
+    gp = defaultdict(int); gn = defaultdict(int)
+    ap = defaultdict(int); an = defaultdict(int)
+    tp = defaultdict(int); tn = defaultdict(int)
+    dp = defaultdict(int); dn = defaultdict(int)
+    tdp = defaultdict(int); tdn = defaultdict(int)
+    total_p = total_n = 0
+    for row in splits['train']:
+        date, u, v, a, tab, dur, y = row
+        d = int(dur) // 10000
+        if y > 0.5:
+            gp[v] += 1; ap[a] += 1; tp[tab] += 1; dp[d] += 1; tdp[(tab, d)] += 1; total_p += 1
+        else:
+            gn[v] += 1; an[a] += 1; tn[tab] += 1; dn[d] += 1; tdn[(tab, d)] += 1; total_n += 1
+    prior = total_p / max(1, total_p + total_n)
+
+    # Chronological user-specific histories use train labels only; exposure counts
+    # are safe to advance through valid/test because they are unlabeled impressions.
+    up_v = defaultdict(int); un_v = defaultdict(int)
+    up_a = defaultdict(int); un_a = defaultdict(int)
+    up_u = defaultdict(int); un_u = defaultdict(int)
+    up_tab = defaultdict(int); un_tab = defaultdict(int)
+    up_dur = defaultdict(int); un_dur = defaultdict(int)
+    seen_uv = defaultdict(int); seen_ua = defaultdict(int)
+    seen_v = defaultdict(int); seen_a = defaultdict(int)
+    out = None
+    for sp in ('train', 'valid', 'test'):
+        vals = []
+        for row in splits[sp]:
+            date, u, v, a, tab, dur, y = row
+            d = int(dur) // 10000
+            kv = (u, v); ka = (u, a); kt = (u, tab); kd = (u, d)
+            # User-history backoffs.
+            sv = _ctr(up_v[kv], un_v[kv], prior, 8.0)
+            sa = _ctr(up_a[ka], un_a[ka], prior, 8.0)
+            su = _ctr(up_u[u], un_u[u], prior, 12.0)
+            st = _ctr(up_tab[kt], un_tab[kt], prior, 8.0)
+            sd = _ctr(up_dur[kd], un_dur[kd], prior, 8.0)
+            # Global item/context popularity-quality backoffs from train labels.
+            gv = _global_ctr(gp[v], gn[v], prior, 25.0)
+            ga = _global_ctr(ap[a], an[a], prior, 25.0)
+            gt = _global_ctr(tp[tab], tn[tab], prior, 50.0)
+            gd = _global_ctr(dp[d], dn[d], prior, 50.0)
+            gtd = _global_ctr(tdp[(tab, d)], tdn[(tab, d)], prior, 50.0)
+            # Repeat exposure backoffs, capped to avoid dominating.
+            euv = min(1.0, np.log1p(seen_uv[kv]) / np.log(6.0))
+            eua = min(1.0, np.log1p(seen_ua[ka]) / np.log(10.0))
+            ev = min(1.0, np.log1p(seen_v[v]) / np.log(50.0))
+            ea = min(1.0, np.log1p(seen_a[a]) / np.log(80.0))
+            vals.append(0.30 * sa + 0.18 * sv + 0.15 * su + 0.07 * st + 0.04 * sd +
+                        0.08 * gv + 0.05 * ga + 0.025 * gtd + 0.0125 * gt + 0.0125 * gd +
+                        0.025 * eua + 0.0125 * euv + 0.0075 * ea + 0.0075 * ev)
+            seen_uv[kv] += 1; seen_ua[ka] += 1; seen_v[v] += 1; seen_a[a] += 1
+            if sp == 'train':
+                if y > 0.5:
+                    up_v[kv] += 1; up_a[ka] += 1; up_u[u] += 1; up_tab[kt] += 1; up_dur[kd] += 1
+                else:
+                    un_v[kv] += 1; un_a[ka] += 1; un_u[u] += 1; un_tab[kt] += 1; un_dur[kd] += 1
+        if sp == split:
+            out = np.asarray(vals, dtype=np.float64)
+    return out
+
+
+def run_predict(splits, data_dir, split='valid', seed=0, device='cpu', verbose=False):
+    base = impl.run_predict(splits, data_dir, split=split, seed=0, device=device, verbose=verbose).astype(np.float64)
+    users = np.asarray([r[1] for r in splits[split]], dtype=np.int64)
+    br = impl.within_user_ranks(base, users)
+    pr = impl.within_user_ranks(enhanced_prior(splits, split), users)
+    return 0.94 * br + 0.06 * pr
+
+
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--data_dir', default='./KuaiRand-Pure/data')
+    ap.add_argument('--split', default='valid', choices=['train', 'valid', 'test'])
+    ap.add_argument('--out', default=None)
+    ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+    a = ap.parse_args()
+    print(f'loading {a.data_dir} ...')
+    splits = impl.load(a.data_dir)
+    print({k: len(v) for k, v in splits.items()}, 'fields=fixed_seed0_node24_plus_enhanced_prior')
+    scores = run_predict(splits, a.data_dir, split=a.split, seed=a.seed, device=a.device, verbose=a.out is None)
+    if a.out:
+        np.save(a.out, scores.astype(np.float64))
+        print(f'wrote {len(scores):,d} predictions for split={a.split}')
+    else:
+        print(scores[:10])

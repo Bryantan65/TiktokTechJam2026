@@ -1,0 +1,57 @@
+{
+  "iteration": 30,
+  "solution": "logs/record-run-9/solutions/030_watchtime_prior_tiebreak.py",
+  "hypothesis": "draft 4: censored/watch-time modeling is a standard video-recommendation signal (survival-analysis framing; search summary above); add a readable 5% within-user train-only completion-ratio prior to current best rather than retraining a full ensemble.",
+  "parent": "28",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:40:10+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605707,
+  "GAUC": 0.673057,
+  "nDCG@5": 0.538356,
+  "source_hash": "bbaf44689506",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=node28_plus_train_watchtime_prior\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "47c0e4c92a15",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.673057,
+      "nDCG@5": 0.538356,
+      "primary": 0.605707
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.673057,
+      "nDCG@5": 0.538356,
+      "primary": 0.605707
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.673057,
+      "nDCG@5": 0.538356,
+      "primary": 0.605707
+    }
+  ],
+  "seconds": 334.9,
+  "verdict": "KEPT",
+  "delta": 0.004207,
+  "tokens_in": 77025,
+  "tokens_out": 4384,
+  "tokens_cached": 59904,
+  "cost_usd": 0.116595,
+  "model": "gpt-5.5",
+  "agent_iteration": 16,
+  "wall_seconds": 401.5,
+  "recovery_events": []
+}

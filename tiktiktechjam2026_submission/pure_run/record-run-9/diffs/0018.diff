@@ -1,0 +1,67 @@
+# iteration 18  (parent: 15)
+# hypothesis: improve 15: since node 15's gain is mainly nDCG@5, keep all cached FM members unchanged but change only the combiner to a top-heavy rank fusion (rank^1.5) blended at 30% to reward agreement at the head of each user list.
+# result: GAUC 0.672242 | nDCG@5 0.538127 | primary 0.605185 | verdict KEPT
+
+--- logs/record-run-9/solutions/015_time_date_blend.py
++++ logs/record-run-9/solutions/018_topheavy_rank_fusion.py
+@@ -1,9 +1,9 @@
+-"""Improve node 13 by adding absolute date/drift buckets to the time-aware FM.
+-
+-This keeps node-10 cached members unchanged, but retrains only the time member
+-with richer temporal fields: hour/minute/daypart plus day index, week index,
+-day-of-month, weekend, and tab-time crosses.  The new time member is blended at
+-50% so its signal is readable.
++"""Improve node 15 with a top-heavy rank fusion.
++
++All FM members and training code are unchanged from node 15, so existing member
++prediction caches remain valid.  Only the deterministic combiner is changed:
++blend the node-15 linear rank fusion with a power-transformed component fusion
++that gives more leverage to items placed near the top of a user's list.
+ """
+ import argparse, csv, os, sys, time
+ from collections import defaultdict, deque
+@@ -126,15 +126,13 @@
+     else: part=5
+     dt=_date_obj(date); base=datetime.strptime('20220408','%Y%m%d')
+     day_idx=max(0,(dt-base).days); week_idx=day_idx//7; weekday=dt.weekday(); dom=dt.day; weekend=1 if weekday>=5 else 0
+-    # Include crosses as categorical strings so the FM can model tab-specific temporal policy drift.
+     return [hour, mb, part, weekday, day_idx, week_idx, dom, weekend,
+             f'tab{tab}_part{part}', f'tab{tab}_hour{hour}', f'w{weekday}_part{part}', f'd{day_idx}_tab{tab}']
+ 
+ def build_history_raw_features(splits, video_feats=None, add_content=False, hour_qs=None, add_time=False):
+     up_v=defaultdict(int); un_v=defaultdict(int); up_a=defaultdict(int); un_a=defaultdict(int)
+-    raw={}; labels={}; users={}; video_feats=video_feats or {}; unk=['unk']*7; missing=0
++    raw={}; labels={}; users={}; video_feats=video_feats or {}; unk=['unk']*7
+     def row_feats(row, update=False):
+-        nonlocal missing
+         date,u,v,a,tab,dur,y=row; dur_bucket=int(dur)//10000; kv=(u,v); ka=(u,a)
+         pv,nv=up_v[kv],un_v[kv]; pa,na=up_a[ka],un_a[ka]
+         feats=[u,v,a,tab,dur_bucket,pos_bucket(pv),neg_bucket(nv),pos_bucket(pa),neg_bucket(na),ratio_bucket(pa,na),ratio_bucket(pv,nv)]
+@@ -142,7 +140,7 @@
+         if add_time:
+             key=(int(date),int(u),int(v),int(a),int(tab),int(dur))
+             if hour_qs is not None and key in hour_qs and len(hour_qs[key]): hm=hour_qs[key].popleft()
+-            else: hm=0; missing+=1
++            else: hm=0
+             feats.extend(time_date_feats(hm,date,tab))
+         if update:
+             if y>0.5: up_v[kv]+=1; up_a[ka]+=1
+@@ -254,11 +252,16 @@
+     hour_qs=read_hour_queues(data_dir)
+     enc_time,dim_time=encode_history(splits,video_feats=vf,add_content=True,hour_qs=hour_qs,add_time=True); Xtime,_,utime=enc_time[split]
+     time_rank=ensemble_rank(enc_time,dim_time,Xtime,utime,split,seed,device,verbose,'015','bprtimedate','bcetimedate')
+-    return 0.50*node10+0.50*time_rank
++    linear=0.50*node10+0.50*time_rank
++    # Top-heavy component fusion: p>1 emphasizes strong top agreement, intended to help nDCG@5.
++    p=1.5
++    node10_top=0.35*np.power(base_rank,p)+0.25*np.power(hist_rank,p)+0.40*np.power(cont_rank,p)
++    topheavy=0.50*node10_top+0.50*np.power(time_rank,p)
++    return 0.70*linear+0.30*topheavy
+ 
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date')
++    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date+topheavy')
+     scores=run_predict(splits,a.data_dir,split=a.split,seed=a.seed,device=a.device,verbose=a.out is None)
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')

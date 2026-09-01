@@ -1,0 +1,32 @@
+{
+  "iteration": 19,
+  "solution": "logs/record-run-9/solutions/019_ips_debiased_time.py",
+  "hypothesis": "draft 8: use randomized exposure data to estimate clipped inverse-propensity weights for logged train rows, following IPS debiasing for recommender exposure bias (https://dl.acm.org/doi/10.1145/3125486.3125497); blend the new IPS-weighted content+time FM at 35% so its signal is readable.",
+  "parent": "15",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T01:04:27+08:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "034c1ba3f12c",
+  "seeds_completed": 0,
+  "seconds": 903.5,
+  "verdict": "failed",
+  "tokens_in": 84095,
+  "tokens_out": 7845,
+  "tokens_cached": 61952,
+  "cost_usd": 0.164783,
+  "model": "gpt-5.5",
+  "agent_iteration": 5,
+  "wall_seconds": 984.5,
+  "recovery_events": []
+}

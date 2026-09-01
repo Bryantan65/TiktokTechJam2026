@@ -1,0 +1,57 @@
+{
+  "iteration": 25,
+  "solution": "logs/record-run-9/solutions/025_exposure_seedbag_55.py",
+  "hypothesis": "improve 24: exposure-count features helped but raised seed variance; reuse the unchanged cached node-24 members across outer seeds 0/1/2 and give the exposure member 55% weight to denoise while preserving the new signal.",
+  "parent": "24",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:09:43+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605327,
+  "GAUC": 0.672593,
+  "nDCG@5": 0.538061,
+  "source_hash": "9c32778ec4cf",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']+history+content+time_date+exposure_counts+seedbag55\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "27a4156d9e60",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672593,
+      "nDCG@5": 0.538061,
+      "primary": 0.605327
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672593,
+      "nDCG@5": 0.538061,
+      "primary": 0.605327
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672593,
+      "nDCG@5": 0.538061,
+      "primary": 0.605327
+    }
+  ],
+  "seconds": 296.2,
+  "verdict": "KEPT",
+  "delta": 0.003827,
+  "tokens_in": 77455,
+  "tokens_out": 6563,
+  "tokens_cached": 53120,
+  "cost_usd": 0.153028,
+  "model": "gpt-5.5",
+  "agent_iteration": 11,
+  "wall_seconds": 352.8,
+  "recovery_events": []
+}

@@ -1,0 +1,33 @@
+{
+  "iteration": 18,
+  "solution": "logs-1k/record-run-4/solutions/018_lgbm_seedbag_node11.py",
+  "hypothesis": "improve 11: node 11's mean is strong but nDCG swings heavily by LightGBM seed, so bag the exact node 11 model over member seeds 0/1/2 and average raw margins to reduce variance without changing the mechanism. Member predictions are cached, and the outer --seed intentionally only remeasures the same deterministic bag.",
+  "parent": "11",
+  "uct_rank": 1,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T19:17:25+00:00",
+  "status": "error",
+  "error": "timeout after 900s (seed 0)",
+  "valid_primary": null,
+  "GAUC": null,
+  "nDCG@5": null,
+  "source_hash": "5a0bdedc6701",
+  "seeds_completed": 0,
+  "seconds": 904.8,
+  "verdict": "failed",
+  "tokens_in": 121951,
+  "tokens_out": 4859,
+  "tokens_cached": 103808,
+  "cost_usd": 0.145851,
+  "model": "gpt-5.5",
+  "agent_iteration": 13,
+  "wall_seconds": 960.5,
+  "recovery_events": []
+}

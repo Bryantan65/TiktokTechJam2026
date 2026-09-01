@@ -1,0 +1,197 @@
+# iteration 10  (parent: 9)
+# hypothesis: draft 9: FMs are designed to exploit sparse side information through feature interactions (https://www.csie.ntu.edu.tw/~b97053/paper/Rendle2010FM.pdf); append KuaiRand video music/tag/type/upload/size fields to the history FM and blend it at 40% with cached base/history rankers.
+# result: GAUC 0.672271 | nDCG@5 0.537852 | primary 0.605061 | verdict KEPT
+
+--- logs/record-run-9/solutions/009_base_history_rankblend.py
++++ logs/record-run-9/solutions/010_video_content_blend.py
+@@ -1,10 +1,12 @@
+-"""Blend node-6 base BPR/BCE ensemble with node-8 history-feature ensemble.
+-
+-Both components are strong but not identical.  This keeps the new history signal
+-readable by giving it half the vote, while loading node-6/node-8 member caches
+-when available.  If caches are absent, all members are trained from scratch.
++"""Add video content side features to the cached base/history rank blend.
++
++Content fields come from video_features_basic_pure.csv and are appended to the
++node-8 history FM fields.  Base and history ensemble members use node-6/node-8
++cache keys; content members use a new cache key because their feature space is
++changed.
+ """
+ import argparse
++import csv
+ import os
+ import sys
+ import time
+@@ -71,10 +73,72 @@
+     return 5
+ 
+ 
+-def build_history_raw_features(splits):
++def size_bucket(x):
++    try:
++        v = int(float(x))
++    except Exception:
++        return 'unk'
++    if v <= 0: return 'unk'
++    if v <= 360: return '<=360'
++    if v <= 540: return '<=540'
++    if v <= 720: return '<=720'
++    if v <= 1080: return '<=1080'
++    return '>1080'
++
++
++def norm_val(v):
++    if v is None or v == '':
++        return 'unk'
++    return str(v)
++
++
++def first_tag(v):
++    s = norm_val(v)
++    if s == 'unk':
++        return s
++    # Tags in KuaiRand are stored as a delimited string; using the whole string
++    # can be too sparse, so keep a stable coarse tag token.
++    for sep in [';', ',', '|', ' ']:
++        if sep in s:
++            return s.split(sep)[0]
++    return s
++
++
++def read_video_features(data_dir):
++    path = os.path.join(data_dir, 'video_features_basic_pure.csv')
++    feats = {}
++    if not os.path.isfile(path):
++        return feats
++    with open(path, newline='', encoding='utf-8') as f:
++        rdr = csv.DictReader(f)
++        for rec in rdr:
++            vid = rec.get('video_id') or rec.get('video') or rec.get('photo_id')
++            if vid is None or vid == '':
++                continue
++            try:
++                vid = int(vid)
++            except Exception:
++                pass
++            w = rec.get('server_width')
++            h = rec.get('server_height')
++            feats[vid] = [
++                norm_val(rec.get('music_id')),
++                first_tag(rec.get('tag')),
++                norm_val(rec.get('video_type')),
++                norm_val(rec.get('upload_type')),
++                size_bucket(w),
++                size_bucket(h),
++                norm_val(rec.get('music_type')),
++            ]
++    return feats
++
++
++def build_history_raw_features(splits, video_feats=None, add_content=False):
+     up_v = defaultdict(int); un_v = defaultdict(int)
+     up_a = defaultdict(int); un_a = defaultdict(int)
+     raw, labels, users = {}, {}, {}
++    unk_content = ['unk'] * 7
++    video_feats = video_feats or {}
+ 
+     def row_feats(row, update=False):
+         date, u, v, a, tab, dur, y = row
+@@ -86,6 +150,8 @@
+                  pos_bucket(pv), neg_bucket(nv),
+                  pos_bucket(pa), neg_bucket(na),
+                  ratio_bucket(pa, na), ratio_bucket(pv, nv)]
++        if add_content:
++            feats.extend(video_feats.get(v, unk_content))
+         if update:
+             if y > 0.5:
+                 up_v[kv] += 1; up_a[ka] += 1
+@@ -93,34 +159,31 @@
+                 un_v[kv] += 1; un_a[ka] += 1
+         return feats
+ 
+-    feats, ys, us = [], [], []
+-    for row in splits['train']:
+-        feats.append(row_feats(row, update=True))
+-        ys.append(row[6]); us.append(row[1])
+-    raw['train'] = feats
+-    labels['train'] = np.asarray(ys, dtype=np.float32)
+-    users['train'] = np.asarray(us, dtype=np.int64)
+-
+-    for sp in ('valid', 'test'):
++    for sp in ('train', 'valid', 'test'):
+         feats, ys, us = [], [], []
+-        for row in splits[sp]:
+-            feats.append(row_feats(row, update=False))
+-            ys.append(row[6]); us.append(row[1])
++        if sp == 'train':
++            for row in splits[sp]:
++                feats.append(row_feats(row, update=True))
++                ys.append(row[6]); us.append(row[1])
++        else:
++            for row in splits[sp]:
++                feats.append(row_feats(row, update=False))
++                ys.append(row[6]); us.append(row[1])
+         raw[sp] = feats
+         labels[sp] = np.asarray(ys, dtype=np.float32)
+         users[sp] = np.asarray(us, dtype=np.int64)
+     return raw, labels, users
+ 
+ 
+-def encode_history(splits):
+-    raw, labels, users = build_history_raw_features(splits)
++def encode_history(splits, video_feats=None, add_content=False):
++    raw, labels, users = build_history_raw_features(splits, video_feats, add_content)
+     n_fields = len(raw['train'][0])
+     maps, offset = [], 0
+     for j in range(n_fields):
+         vals = set()
+         for sp in ('train', 'valid', 'test'):
+             vals.update(r[j] for r in raw[sp])
+-        mp = {v: offset + i for i, v in enumerate(sorted(vals))}
++        mp = {v: offset + i for i, v in enumerate(sorted(vals, key=lambda x: str(x)))}
+         maps.append(mp)
+         offset += len(mp)
+     enc = {}
+@@ -278,18 +341,25 @@
+     return 0.70 * bpr_rank + 0.30 * bce_rank
+ 
+ 
+-def run_predict(splits, split='valid', seed=0, device='cpu', verbose=False):
++def run_predict(splits, data_dir, split='valid', seed=0, device='cpu', verbose=False):
+     enc_base, dim_base = encode(splits)
+     Xbase, _, uout = enc_base[split]
+     base_rank = ensemble_rank(enc_base, dim_base, Xbase, uout, split, seed, device,
+                               verbose, '006', 'bpr', 'bce')
+ 
+-    enc_hist, dim_hist = encode_history(splits)
++    enc_hist, dim_hist = encode_history(splits, add_content=False)
+     Xhist, _, uhist = enc_hist[split]
+     hist_rank = ensemble_rank(enc_hist, dim_hist, Xhist, uhist, split, seed, device,
+                               verbose, '008', 'bprhist', 'bcehist')
+-    # Equal weight: the history-feature mechanism has a readable 50% vote.
+-    return 0.50 * base_rank + 0.50 * hist_rank
++
++    video_feats = read_video_features(data_dir)
++    enc_cont, dim_cont = encode_history(splits, video_feats=video_feats, add_content=True)
++    Xcont, _, ucont = enc_cont[split]
++    cont_rank = ensemble_rank(enc_cont, dim_cont, Xcont, ucont, split, seed, device,
++                              verbose, '010', 'bprcont', 'bcecont')
++    # Give the new content-feature mechanism a readable 40% vote while keeping
++    # the strong cached base/history rankers as anchors.
++    return 0.35 * base_rank + 0.25 * hist_rank + 0.40 * cont_rank
+ 
+ 
+ if __name__ == '__main__':
+@@ -303,9 +373,9 @@
+ 
+     print(f"loading {a.data_dir} ...")
+     splits = load(a.data_dir)
+-    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+history blend")
+-    scores = run_predict(splits, split=a.split, seed=a.seed, device=a.device,
+-                         verbose=a.out is None)
++    print({k_: len(v) for k_, v in splits.items()}, f"fields={FIELDS}+history+video_content")
++    scores = run_predict(splits, a.data_dir, split=a.split, seed=a.seed,
++                         device=a.device, verbose=a.out is None)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))
+         print(f"wrote {len(scores):,d} predictions for split={a.split}")

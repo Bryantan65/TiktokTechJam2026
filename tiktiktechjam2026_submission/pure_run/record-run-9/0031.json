@@ -1,0 +1,57 @@
+{
+  "iteration": 31,
+  "solution": "logs/record-run-9/solutions/031_global_ctr_tiebreak.py",
+  "hypothesis": "improve 28: node 28's best gains came from deterministic close-call tie-breaking; add a tiny 1% within-user train-only global video/author/tab CTR rank prior to fix close item-quality/context mistakes while preserving the seed-0 ensemble.",
+  "parent": "28",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:46:48+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605738,
+  "GAUC": 0.67308,
+  "nDCG@5": 0.538397,
+  "source_hash": "0f46fa1de47e",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=node28_plus_tiny_global_ctr_prior\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "f0de5ba2ebc1",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.67308,
+      "nDCG@5": 0.538397,
+      "primary": 0.605738
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.67308,
+      "nDCG@5": 0.538397,
+      "primary": 0.605738
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.67308,
+      "nDCG@5": 0.538397,
+      "primary": 0.605738
+    }
+  ],
+  "seconds": 258.5,
+  "verdict": "KEPT",
+  "delta": 0.004238,
+  "tokens_in": 103255,
+  "tokens_out": 4475,
+  "tokens_cached": 84736,
+  "cost_usd": 0.133415,
+  "model": "gpt-5.5",
+  "agent_iteration": 17,
+  "wall_seconds": 321.2,
+  "recovery_events": []
+}

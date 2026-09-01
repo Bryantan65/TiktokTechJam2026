@@ -1,0 +1,65 @@
+{
+  "iteration": 32,
+  "solution": "logs-1k/record-run-4/solutions/032_negative_history_debug.py",
+  "hypothesis": "debug 31: the explicit history-affinity member caused a large nDCG drop, so test whether it is a systematic anti-signal by subtracting its per-user z-score residual from the unchanged node-30 ensemble. If this recovers or improves top-5, the bug is sign/miscalibration of the heuristic rather than the history signal being useless.",
+  "parent": "31",
+  "uct_rank": 13,
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-30T21:08:52+00:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.654861,
+  "GAUC": 0.679056,
+  "nDCG@5": 0.630667,
+  "source_hash": "21514dfaa1f0",
+  "stdout_tail": "{'train': 5055984, 'valid': 2524980, 'test': 4132081} fields=['user_id', 'video_id', 'author_id', 'tab', 'dur_bucket']\nwrote 2,524,980 predictions for split=valid",
+  "predictions_hash": "741e071a55b7",
+  "users": 978,
+  "rows": 2524980,
+  "primary_std": null,
+  "deterministic": true,
+  "seed_mode": "deterministic",
+  "seeds_run": [
+    0,
+    1,
+    2
+  ],
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.679056,
+      "nDCG@5": 0.630667,
+      "primary": 0.654861
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.679056,
+      "nDCG@5": 0.630667,
+      "primary": 0.654861
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.679056,
+      "nDCG@5": 0.630667,
+      "primary": 0.654861
+    }
+  ],
+  "seconds": 181.1,
+  "verdict": "KEPT",
+  "delta": 0.009761,
+  "tokens_in": 136500,
+  "tokens_out": 6304,
+  "tokens_cached": 112384,
+  "cost_usd": 0.179522,
+  "model": "gpt-5.5",
+  "agent_iteration": 27,
+  "wall_seconds": 245.3,
+  "recovery_events": []
+}

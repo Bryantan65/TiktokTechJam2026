@@ -1,0 +1,57 @@
+{
+  "iteration": 26,
+  "solution": "logs/record-run-9/solutions/026_exposure_seedbag_50.py",
+  "hypothesis": "improve 25: node 25's seed-bagging improved GAUC but 55% exposure weight hurt nDCG; keep the deterministic cached seed bag and restore a 50/50 node10-vs-exposure blend to recover top-5 quality.",
+  "parent": "25",
+  "by": "agent",
+  "split": "valid",
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "timestamp": "2026-08-29T02:15:12+08:00",
+  "status": "ok",
+  "error": null,
+  "valid_primary": 0.605118,
+  "GAUC": 0.672314,
+  "nDCG@5": 0.537922,
+  "source_hash": "0a1ff6e92611",
+  "stdout_tail": "loading C:\\github_repository\\hackatons\\TiktokTechJam2026\\rec_datasets\\KuaiRand-Pure\\data ...\n{'train': 1141112, 'valid': 124909, 'test': 170588} fields=seedbag50 exposure-count blend\nwrote 124,909 predictions for split=valid",
+  "predictions_hash": "30892bf3045b",
+  "users": 22377,
+  "rows": 124909,
+  "primary_std": 0.0,
+  "per_seed": [
+    {
+      "seed": 0,
+      "GAUC": 0.672314,
+      "nDCG@5": 0.537922,
+      "primary": 0.605118
+    },
+    {
+      "seed": 1,
+      "GAUC": 0.672314,
+      "nDCG@5": 0.537922,
+      "primary": 0.605118
+    },
+    {
+      "seed": 2,
+      "GAUC": 0.672314,
+      "nDCG@5": 0.537922,
+      "primary": 0.605118
+    }
+  ],
+  "seconds": 271.8,
+  "verdict": "KEPT",
+  "delta": 0.003618,
+  "tokens_in": 59913,
+  "tokens_out": 2214,
+  "tokens_cached": 47616,
+  "cost_usd": 0.07669,
+  "model": "gpt-5.5",
+  "agent_iteration": 12,
+  "wall_seconds": 305.2,
+  "recovery_events": []
+}

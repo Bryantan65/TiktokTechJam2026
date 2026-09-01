@@ -1,0 +1,105 @@
+# iteration 32  (parent: 31)
+# hypothesis: improve 31: the 1% global CTR prior gave a small but monotone gain over node 28; test a slightly stronger 2% weight using the exact same cached seed-0 ensemble and prior to see whether the tie-breaker is underweighted.
+# result: GAUC 0.67308 | nDCG@5 0.538397 | primary 0.605738 | verdict no-op
+
+--- logs/record-run-9/solutions/031_global_ctr_tiebreak.py
++++ logs/record-run-9/solutions/032_global_ctr_weight2.py
+@@ -1,74 +1,28 @@
+-"""Improve node 28 with a tiny train-only global CTR tie-breaker.
++"""Improve node 31 by slightly increasing the global CTR tie-breaker weight.
+ 
+-The current best is fixed seed-0 node24 plus a 5% user-history prior.  This
+-keeps that full predictor unchanged and adds only a 1% within-user rank prior
+-from smoothed train-label video/author/context CTRs.  The aim is to resolve close
+-within-user calls using item/context quality that is available before valid/test
+-without using their labels.
++Node 31 showed that a train-only global video/author/tab CTR prior corrects a few
++close within-user mistakes at 1% weight.  This keeps the identical fixed seed-0
++node-28 ensemble and the same prior, but tests whether 2% is closer to the
++post-hoc tie-breaker optimum before this branch is exhausted.
+ """
+ import argparse
+ import importlib.util
+ import os
+-from collections import defaultdict
+ import numpy as np
+ 
+ _here = os.path.dirname(os.path.abspath(__file__))
+-_spec = importlib.util.spec_from_file_location('node28_impl', os.path.join(_here, '028_seed0_history_tiebreak.py'))
+-node28 = importlib.util.module_from_spec(_spec)
+-_spec.loader.exec_module(node28)
+-
+-
+-def _ctr(pos, cnt, prior=0.37, alpha=20.0):
+-    return (pos + alpha * prior) / (cnt + alpha)
+-
+-
+-def _dur_bucket(d):
+-    try:
+-        return int(d) // 10000
+-    except Exception:
+-        return 0
+-
+-
+-def global_ctr_prior(splits, split):
+-    pv = defaultdict(float); cv = defaultdict(int)
+-    pa = defaultdict(float); ca = defaultdict(int)
+-    pt = defaultdict(float); ct = defaultdict(int)
+-    pd = defaultdict(float); cd = defaultdict(int)
+-    pat = defaultdict(float); cat = defaultdict(int)
+-    ptd = defaultdict(float); ctd = defaultdict(int)
+-
+-    # Fit only on train labels.
+-    for row in splits['train']:
+-        date, u, v, a, tab, dur, y = row
+-        y = float(y > 0.5); db = _dur_bucket(dur)
+-        pv[v] += y; cv[v] += 1
+-        pa[a] += y; ca[a] += 1
+-        pt[tab] += y; ct[tab] += 1
+-        pd[db] += y; cd[db] += 1
+-        pat[(a, tab)] += y; cat[(a, tab)] += 1
+-        ptd[(tab, db)] += y; ctd[(tab, db)] += 1
+-
+-    vals = []
+-    for row in splits[split]:
+-        date, u, v, a, tab, dur, y = row
+-        db = _dur_bucket(dur)
+-        # Strong shrinkage: this is only a close-score tie-breaker, not a second model.
+-        rv = _ctr(pv[v], cv[v], 0.37, 30.0)
+-        ra = _ctr(pa[a], ca[a], 0.37, 30.0)
+-        rt = _ctr(pt[tab], ct[tab], 0.37, 50.0)
+-        rd = _ctr(pd[db], cd[db], 0.37, 50.0)
+-        rat = _ctr(pat[(a, tab)], cat[(a, tab)], 0.37, 40.0)
+-        rtd = _ctr(ptd[(tab, db)], ctd[(tab, db)], 0.37, 40.0)
+-        vals.append(0.30 * rat + 0.24 * ra + 0.18 * rv + 0.12 * rtd + 0.10 * rt + 0.06 * rd)
+-    return np.asarray(vals, dtype=np.float64)
++_spec31 = importlib.util.spec_from_file_location('node31_impl', os.path.join(_here, '031_global_ctr_tiebreak.py'))
++node31 = importlib.util.module_from_spec(_spec31)
++_spec31.loader.exec_module(node31)
+ 
+ 
+ def run_predict(splits, data_dir, split='valid', seed=0, device='cpu', verbose=False):
+-    base = node28.run_predict(splits, data_dir, split=split, seed=seed, device=device, verbose=verbose).astype(np.float64)
++    # Reconstruct node31's components but change only the global-CTR prior weight.
++    base = node31.node28.run_predict(splits, data_dir, split=split, seed=seed, device=device, verbose=verbose).astype(np.float64)
+     users = np.asarray([r[1] for r in splits[split]], dtype=np.int64)
+-    br = node28.impl.within_user_ranks(base, users)
+-    gr = node28.impl.within_user_ranks(global_ctr_prior(splits, split), users)
+-    return 0.99 * br + 0.01 * gr
++    br = node31.node28.impl.within_user_ranks(base, users)
++    gr = node31.node28.impl.within_user_ranks(node31.global_ctr_prior(splits, split), users)
++    return 0.98 * br + 0.02 * gr
+ 
+ 
+ if __name__ == '__main__':
+@@ -80,8 +34,8 @@
+     ap.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+     a = ap.parse_args()
+     print(f'loading {a.data_dir} ...')
+-    splits = node28.impl.load(a.data_dir)
+-    print({k: len(v) for k, v in splits.items()}, 'fields=node28_plus_tiny_global_ctr_prior')
++    splits = node31.node28.impl.load(a.data_dir)
++    print({k: len(v) for k, v in splits.items()}, 'fields=node28_plus_2pct_global_ctr_prior')
+     scores = run_predict(splits, a.data_dir, split=a.split, seed=a.seed, device=a.device, verbose=a.out is None)
+     if a.out:
+         np.save(a.out, scores.astype(np.float64))

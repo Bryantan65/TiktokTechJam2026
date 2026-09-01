@@ -1,0 +1,132 @@
+# iteration 21  (parent: 15)
+# hypothesis: improve 15: all node-15 members are cached and unchanged; blend in 30% per-user z-score fusion of raw logits so the combiner can exploit confidence margins that rank averaging discards.
+# result: GAUC 0.671726 | nDCG@5 0.537921 | primary 0.604824 | verdict KEPT
+
+--- logs/record-run-9/solutions/015_time_date_blend.py
++++ logs/record-run-9/solutions/021_zscore_rank_fusion.py
+@@ -1,9 +1,10 @@
+-"""Improve node 13 by adding absolute date/drift buckets to the time-aware FM.
+-
+-This keeps node-10 cached members unchanged, but retrains only the time member
+-with richer temporal fields: hour/minute/daypart plus day index, week index,
+-day-of-month, weekend, and tab-time crosses.  The new time member is blended at
+-50% so its signal is readable.
++"""Improve node 15 with per-user z-score fusion of unchanged cached members.
++
++All FM members and features are identical to node 15.  The only change is the
++combiner: in addition to Borda/rank averaging, combine each member's raw logits
++after per-user z-normalisation, then blend that z-fusion rank at 30%.  This can
++use margin information that pure ranks discard while preserving within-user
++comparability.
+ """
+ import argparse, csv, os, sys, time
+ from collections import defaultdict, deque
+@@ -126,15 +127,13 @@
+     else: part=5
+     dt=_date_obj(date); base=datetime.strptime('20220408','%Y%m%d')
+     day_idx=max(0,(dt-base).days); week_idx=day_idx//7; weekday=dt.weekday(); dom=dt.day; weekend=1 if weekday>=5 else 0
+-    # Include crosses as categorical strings so the FM can model tab-specific temporal policy drift.
+     return [hour, mb, part, weekday, day_idx, week_idx, dom, weekend,
+             f'tab{tab}_part{part}', f'tab{tab}_hour{hour}', f'w{weekday}_part{part}', f'd{day_idx}_tab{tab}']
+ 
+ def build_history_raw_features(splits, video_feats=None, add_content=False, hour_qs=None, add_time=False):
+     up_v=defaultdict(int); un_v=defaultdict(int); up_a=defaultdict(int); un_a=defaultdict(int)
+-    raw={}; labels={}; users={}; video_feats=video_feats or {}; unk=['unk']*7; missing=0
++    raw={}; labels={}; users={}; video_feats=video_feats or {}; unk=['unk']*7
+     def row_feats(row, update=False):
+-        nonlocal missing
+         date,u,v,a,tab,dur,y=row; dur_bucket=int(dur)//10000; kv=(u,v); ka=(u,a)
+         pv,nv=up_v[kv],un_v[kv]; pa,na=up_a[ka],un_a[ka]
+         feats=[u,v,a,tab,dur_bucket,pos_bucket(pv),neg_bucket(nv),pos_bucket(pa),neg_bucket(na),ratio_bucket(pa,na),ratio_bucket(pv,nv)]
+@@ -142,7 +141,7 @@
+         if add_time:
+             key=(int(date),int(u),int(v),int(a),int(tab),int(dur))
+             if hour_qs is not None and key in hour_qs and len(hour_qs[key]): hm=hour_qs[key].popleft()
+-            else: hm=0; missing+=1
++            else: hm=0
+             feats.extend(time_date_feats(hm,date,tab))
+         if update:
+             if y>0.5: up_v[kv]+=1; up_a[ka]+=1
+@@ -218,9 +217,13 @@
+             if bad>=patience: break
+     model.load_state_dict(best_state); return model
+ 
++def user_cuts(users):
++    users=np.asarray(users); order=np.argsort(users,kind='stable'); us=users[order]
++    cuts=np.r_[0,np.flatnonzero(us[1:]!=us[:-1])+1,len(order)]
++    return order,cuts
++
+ def within_user_ranks(scores,users):
+-    scores=np.asarray(scores); users=np.asarray(users); out=np.empty(len(scores),dtype=np.float64); order=np.argsort(users,kind='stable'); us=users[order]
+-    cuts=np.r_[0,np.flatnonzero(us[1:]!=us[:-1])+1,len(order)]
++    scores=np.asarray(scores); out=np.empty(len(scores),dtype=np.float64); order,cuts=user_cuts(users)
+     for a,b in zip(cuts[:-1],cuts[1:]):
+         idx=order[a:b]; n=len(idx)
+         if n==1: out[idx]=0.5
+@@ -228,37 +231,53 @@
+             ord2=np.argsort(scores[idx],kind='mergesort'); r=np.empty(n,dtype=np.float64); r[ord2]=np.arange(n,dtype=np.float64)/(n-1.0); out[idx]=r
+     return out
+ 
++def within_user_z(scores,users):
++    scores=np.asarray(scores,dtype=np.float64); out=np.empty(len(scores),dtype=np.float64); order,cuts=user_cuts(users)
++    for a,b in zip(cuts[:-1],cuts[1:]):
++        idx=order[a:b]; s=scores[idx]
++        sd=s.std()
++        if sd<1e-9: out[idx]=0.0
++        else: out[idx]=(s-s.mean())/sd
++    return out
++
+ def member_pred(cache_prefix,name,train_fn,enc,dim,Xout,split,outer_seed,member_seed,device,verbose):
+     os.makedirs('pred_cache',exist_ok=True); path=os.path.join('pred_cache',f'{cache_prefix}_{name}_split{split}_outer{outer_seed}_mseed{member_seed}.npy')
+     if os.path.isfile(path): return np.load(path)
+     torch.manual_seed(member_seed); model=train_fn(enc,dim,seed=member_seed,device=device,verbose=verbose)
+     preds=model.predict(Xout,device=device).astype(np.float64); np.save(path,preds); return preds
+ 
+-def ensemble_rank(enc,dim,Xout,uout,split,seed,device,verbose,cache_prefix,bpr_name,bce_name):
+-    bpr_sum=np.zeros(len(Xout),dtype=np.float64)
++def ensemble_rank_and_z(enc,dim,Xout,uout,split,seed,device,verbose,cache_prefix,bpr_name,bce_name):
++    bpr_rank_sum=np.zeros(len(Xout),dtype=np.float64); bpr_z_sum=np.zeros(len(Xout),dtype=np.float64)
+     for ms in [seed,seed+101,seed+202]:
+-        bpr_sum+=within_user_ranks(member_pred(cache_prefix,bpr_name,train_bpr,enc,dim,Xout,split,seed,ms,device,verbose),uout)
+-    bpr_rank=bpr_sum/3.0
+-    bce_rank=within_user_ranks(member_pred(cache_prefix,bce_name,train_bce,enc,dim,Xout,split,seed,seed+303,device,verbose),uout)
+-    return 0.70*bpr_rank+0.30*bce_rank
++        p=member_pred(cache_prefix,bpr_name,train_bpr,enc,dim,Xout,split,seed,ms,device,verbose)
++        bpr_rank_sum+=within_user_ranks(p,uout); bpr_z_sum+=within_user_z(p,uout)
++    bpr_rank=bpr_rank_sum/3.0; bpr_z=bpr_z_sum/3.0
++    p=member_pred(cache_prefix,bce_name,train_bce,enc,dim,Xout,split,seed,seed+303,device,verbose)
++    bce_rank=within_user_ranks(p,uout); bce_z=within_user_z(p,uout)
++    rank_combo=0.70*bpr_rank+0.30*bce_rank
++    z_combo_rank=within_user_ranks(0.70*bpr_z+0.30*bce_z,uout)
++    return rank_combo,z_combo_rank
+ 
+ def run_predict(splits,data_dir,split='valid',seed=0,device='cpu',verbose=False):
+     enc_base,dim_base=encode(splits); Xbase,_,uout=enc_base[split]
+-    base_rank=ensemble_rank(enc_base,dim_base,Xbase,uout,split,seed,device,verbose,'006','bpr','bce')
++    base_rank,base_z=ensemble_rank_and_z(enc_base,dim_base,Xbase,uout,split,seed,device,verbose,'006','bpr','bce')
+     enc_hist,dim_hist=encode_history(splits,add_content=False); Xhist,_,uhist=enc_hist[split]
+-    hist_rank=ensemble_rank(enc_hist,dim_hist,Xhist,uhist,split,seed,device,verbose,'008','bprhist','bcehist')
++    hist_rank,hist_z=ensemble_rank_and_z(enc_hist,dim_hist,Xhist,uhist,split,seed,device,verbose,'008','bprhist','bcehist')
+     vf=read_video_features(data_dir)
+     enc_cont,dim_cont=encode_history(splits,video_feats=vf,add_content=True); Xcont,_,ucont=enc_cont[split]
+-    cont_rank=ensemble_rank(enc_cont,dim_cont,Xcont,ucont,split,seed,device,verbose,'010','bprcont','bcecont')
+-    node10=0.35*base_rank+0.25*hist_rank+0.40*cont_rank
++    cont_rank,cont_z=ensemble_rank_and_z(enc_cont,dim_cont,Xcont,ucont,split,seed,device,verbose,'010','bprcont','bcecont')
++    node10_rank=0.35*base_rank+0.25*hist_rank+0.40*cont_rank
++    node10_z=within_user_ranks(0.35*base_z+0.25*hist_z+0.40*cont_z,uout)
+     hour_qs=read_hour_queues(data_dir)
+     enc_time,dim_time=encode_history(splits,video_feats=vf,add_content=True,hour_qs=hour_qs,add_time=True); Xtime,_,utime=enc_time[split]
+-    time_rank=ensemble_rank(enc_time,dim_time,Xtime,utime,split,seed,device,verbose,'015','bprtimedate','bcetimedate')
+-    return 0.50*node10+0.50*time_rank
++    time_rank,time_z=ensemble_rank_and_z(enc_time,dim_time,Xtime,utime,split,seed,device,verbose,'015','bprtimedate','bcetimedate')
++    node15_rank=0.50*node10_rank+0.50*time_rank
++    node15_z=within_user_ranks(0.50*node10_z+0.50*time_z,utime)
++    return 0.70*node15_rank+0.30*node15_z
+ 
+ if __name__=='__main__':
+     ap=argparse.ArgumentParser(); ap.add_argument('--data_dir',default='./KuaiRand-Pure/data'); ap.add_argument('--split',default='valid',choices=['train','valid','test']); ap.add_argument('--out',default=None); ap.add_argument('--seed',type=int,default=0); ap.add_argument('--device',default='cpu',choices=['cpu','cuda']); a=ap.parse_args()
+-    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date')
++    print(f'loading {a.data_dir} ...'); splits=load(a.data_dir); print({k:len(v) for k,v in splits.items()}, f'fields={FIELDS}+history+content+time_date+zfusion')
+     scores=run_predict(splits,a.data_dir,split=a.split,seed=a.seed,device=a.device,verbose=a.out is None)
+     if a.out:
+         np.save(a.out,scores.astype(np.float64)); print(f'wrote {len(scores):,d} predictions for split={a.split}')
