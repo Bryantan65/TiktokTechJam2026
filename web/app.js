@@ -1,4 +1,4 @@
-/* agent console - replay recorded runs, edit the prompt, launch a new one. */
+/* MeLearn console - replay recorded runs, edit the prompt, launch a new one. */
 'use strict';
 
 const $ = (s, r) => (r || document).querySelector(s);

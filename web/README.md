@@ -1,4 +1,4 @@
-# The agent console
+# The MeLearn console
 
 A local page for driving and replaying the agent. Stdlib only — no Flask, no
 node, no build step, nothing added to `requirements.txt`.

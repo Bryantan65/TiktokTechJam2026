@@ -511,7 +511,7 @@ RUNNER = Runner()
 
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
-    server_version = 'agent-console'
+    server_version = 'melearn-console'
 
     def log_message(self, fmt, *args):
         pass
@@ -637,7 +637,7 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
 def main():
     httpd = Server(('127.0.0.1', PORT), Handler)
     url = 'http://127.0.0.1:%d' % PORT
-    print('agent console  ->  %s' % url)
+    print('MeLearn console  ->  %s' % url)
     print('serving records from %s' % ROOT)
     print('Ctrl-C to stop')
     try:
