@@ -27,6 +27,10 @@ The agent found that gain on its own. It searched the literature, tried six of
 the seven suggested directions, diagnosed its own crashes, and stopped when it
 stopped making progress. **Zero human interventions during either run.**
 
+## Demo
+
+https://github.com/user-attachments/assets/caa2dd3d-ed48-4b82-ae48-2f87aaf36bc1
+
 The 1k delta is nine times the Pure delta, from the same agent and the same
 harness. That gap is the most informative result here, and the reason is
 structural — see the limitations section.
